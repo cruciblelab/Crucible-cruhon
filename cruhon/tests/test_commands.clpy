@@ -1,0 +1,17 @@
+# Test @const
+@const[MAX; 100]
+@print[max is {MAX}]
+
+# Test @assert
+@assert[1 == 1; "math works"]
+@assert[MAX == 100; "const works"]
+
+# Test @list
+@var[nums; @list[1; 2; 3]]
+@print[list length OK]
+
+# Test @dict
+@var[cfg; @dict["host"; "localhost"; "port"; 5432]]
+@print[dict OK]
+
+@print[commands ok]

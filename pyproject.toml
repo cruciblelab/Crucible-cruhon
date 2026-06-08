@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cruhon"
+version = "0.9.2"
+description = "A modern, extensible scripting language built on Python — by CrucibleLab"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "CrucibleLab", email = "hello@cruciblelab.dev" }]
+keywords = ["language", "dsl", "scripting", "transpiler", "cruhon"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Software Development :: Compilers",
+]
+requires-python = ">=3.10"
+
+# No core dependencies — the user must have the relevant
+# library installed when using @import
+dependencies = []
+
+[project.optional-dependencies]
+# Optional — for common library integrations
+requests = ["requests>=2.28"]
+discord  = ["discord.py>=2.0"]
+async    = ["httpx>=0.24"]
+full     = ["requests>=2.28", "discord.py>=2.0", "httpx>=0.24"]
+
+[project.scripts]
+cruhon = "cruhon.cli:main"
+
+[project.entry-points."cruhon.mods"]
+# pip install cruhon-* modları buraya kendini kaydeder
+# cruhon-db = "cruhon_db:register"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cruhon*"]
+
+[project.urls]
+Homepage   = "https://github.com/cruciblelab/cruhon"
+Repository = "https://github.com/cruciblelab/cruhon"
+Issues     = "https://github.com/cruciblelab/cruhon/issues"

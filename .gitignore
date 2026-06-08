@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+*.whl
+.venv/
+venv/
+.env
+.cruhon_store.json
+*.pyc
+.pytest_cache/
+.mypy_cache/
+*.py.bak

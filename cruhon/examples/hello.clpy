@@ -1,0 +1,15 @@
+# hello.clpy — Cruhon Hello World
+
+@print[Hello, World!]
+
+@var[name; "Cruhon"]
+@print[Welcome to {name}!]
+
+@var[x; 10]
+@var[y; 20]
+
+@if[x < y]
+    @print[x is smaller]
+@else
+    @print[y is smaller]
+@end

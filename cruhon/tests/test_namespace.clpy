@@ -1,0 +1,8 @@
+# This test requires cruhon-discord-example mod to be loaded
+# Run with: cruhon run tests/test_namespace.clpy
+# (mods/cruhon-discord-example must be present)
+
+@discord.send["Hello, World!"]
+@discord.reply["Got your message!"]
+@discord.ban["user123"; "spam"]
+@print[namespace test ok]

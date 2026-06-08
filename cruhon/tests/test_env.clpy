@@ -1,0 +1,4 @@
+# Test @env with default
+@var[token; @env[MY_TEST_VAR; "default_value"]]
+@assert[token == "default_value"; "env default works"]
+@print[env ok]

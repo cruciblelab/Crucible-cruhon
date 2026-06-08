@@ -1,0 +1,7 @@
+{
+    "name": "cruhon-discord-example",
+    "version": "0.1.0",
+    "author": "CrucibleLab",
+    "description": "Example namespace mod — shows how to write @discord.* commands",
+    "cruhon": ">=0.8.0"
+}

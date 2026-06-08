@@ -1,0 +1,36 @@
+{
+  "current": "0.9.2",
+  "spec_version": "0.9",
+  "frozen": false,
+  "semantic_freeze": {
+    "active_from": "0.5.0",
+    "rule": "No new syntax until regression suite is 100% stable",
+    "eval_model": "_eval_value(value, context) — single truth function",
+    "contexts": ["expr", "display"]
+  },
+  "history": [
+    {"version": "0.1.0",   "status": "released", "summary": "MVP — lexer, parser, transpiler, runner, mod system, CLI"},
+    {"version": "0.2.0",   "status": "released", "summary": "Bug fixes, @const, @env, @include, @assert, @list, @dict"},
+    {"version": "0.3.0",   "status": "released", "summary": "Deterministic plugin loader, middleware override chain, --show-python, version checks"},
+    {"version": "0.4.0",   "status": "released", "summary": "All missing commands, @http.*, @store.*, inline @commands, auto-imports, line numbers"},
+    {"version": "0.5.0",   "status": "released", "summary": "Semantic stabilization: unified _eval_value, ; enforcement, semantics.md, line map fix"},
+    {"version": "0.6.0",   "status": "released", "summary": "SyntaxEngine: unified argument parsing. Fixed list/dict literals in @var. spec/architecture.md"},
+    {"version": "0.7.0",   "status": "released", "summary": "Stdlib: @file @time @math @json @color. SyntaxWarning fix."},
+    {"version": "0.8.0",   "status": "released", "summary": "Namespace runtime system. NamespaceCallNode. ModAPI.namespace()/require(). DependencyResolver. __ns__ in exec(). Example discord mod."},
+    {"version": "0.9.0a1", "status": "released", "summary": "v0.9a: Namespace isolation. access_state/write_state/allow_peer. No AST/parser/transpiler changes."},
+    {"version": "0.9.0",   "status": "released", "summary": "v0.9b: Minimal async runtime. Runner detects async def main and appends asyncio.run(). @http.async_get/post/json added via httpx."},
+    {
+      "version": "0.9.1",
+      "status": "released",
+      "summary": "v0.9.1: Fix @raw (was never implemented — parser, ast_nodes, transpiler). Fix dict literal false positive in _eval_value (added _is_python_expression/_is_fstring_template helpers). No new features. No architecture changes."
+    },
+    {
+      "version": "0.9.2",
+      "status": "released",
+      "summary": "v0.9.2: Pre-release cleanup. Namespace conflict fix (first wins, second gets existing ns back). Path traversal guard in @file.* and @json.read/write. HTTP timeout=30 on all sync requests. SSRF guard in @http.*. Version consistency across all files. Docs updated to v0.9 Stable. library.md translated to English."
+    },
+    {"version": "1.0.0",   "status": "planned",  "summary": "Spec freeze, compatibility lock, stable plugin API, full documentation"}
+  ],
+  "frozen_at": null,
+  "breaking_change_policy": "major version bump required"
+}

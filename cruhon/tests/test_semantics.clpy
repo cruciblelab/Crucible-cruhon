@@ -1,0 +1,29 @@
+# Test display context — bare words are strings
+@repeat[1]
+    @print[hello]
+@end
+
+# Test expr context — identifier stays identifier
+@var[name; "Alice"]
+@print[{name}]
+
+# Test const interpolation
+@const[GREETING; "Hi"]
+@print[{GREETING} world]
+
+# Test list in var
+@var[nums; @list[1; 2; 3]]
+@assert[len(nums) == 3; "list length ok"]
+
+# Test dict in var
+@var[d; @dict["x"; 1; "y"; 2]]
+@assert[d["x"] == 1; "dict access ok"]
+
+# Test func with comma args
+@func[add; a; b]
+    @return[a + b]
+@end
+@var[r; add(3, 4)]
+@assert[r == 7; "func call ok"]
+
+@print[semantics ok]

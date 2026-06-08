@@ -1,0 +1,38 @@
+# math
+@var[r; @math.sqrt[25]]
+@assert[r == 5.0; "sqrt 25"]
+@var[p; @math.pow[2; 8]]
+@assert[p == 256.0; "pow 2 8"]
+@var[f; @math.floor[3.9]]
+@assert[f == 3; "floor"]
+@var[c; @math.ceil[3.1]]
+@assert[c == 4; "ceil"]
+@print[math ok]
+
+# json — use a pre-assigned dict variable to avoid inline dict literal
+@var[jobj; {"a": 1}]
+@var[s; @json.stringify[jobj]]
+@assert[len(s) > 0; "stringify"]
+@var[d; @json.parse[s]]
+@assert[d["a"] == 1; "parse"]
+@print[json ok]
+
+# file
+@file.write["./cruhon_stdlib_test.txt"; "cruhon stdlib"]
+@var[txt; @file.read["./cruhon_stdlib_test.txt"]]
+@assert[txt == "cruhon stdlib"; "file roundtrip"]
+@var[ex; @file.exists["./cruhon_stdlib_test.txt"]]
+@assert[ex; "file exists"]
+@file.delete["./cruhon_stdlib_test.txt"]
+@print[file ok]
+
+# time
+@var[ts; @time.timestamp]
+@assert[ts > 0; "timestamp"]
+@print[time ok]
+
+# color (just verify runs)
+@var[msg; @color.green["hello"]]
+@print[color ok]
+
+@print[all stdlib tests passed]

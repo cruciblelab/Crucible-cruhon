@@ -1,0 +1,16 @@
+# Dict literal in @var — use Python comma syntax inside dict
+@var[d; {"name": "cruhon", "version": "0.9.1"}]
+@assert[d["name"] == "cruhon"; "dict key access"]
+@print[dict ok]
+
+# @json with variable (not inline dict)
+@var[obj; {"x": 1}]
+@var[s; @json.stringify[obj]]
+@assert[len(s) > 0; "json stringify"]
+@print[json ok]
+
+# String interpolation still works
+@var[name; "Cruhon"]
+@print[Hello {name}]
+
+@print[dict literal ok]

@@ -1,0 +1,5 @@
+@store.set["name"; "cruhon"]
+@var[val; @store.get["name"]]
+@assert[val == "cruhon"; "store works"]
+@store.delete["name"]
+@print[store ok]

@@ -1,0 +1,29 @@
+# functions.clpy — Function and loop examples
+
+@func[greet; name]
+    @print[Hello, {name}!]
+    @return[name]
+@end
+
+@func[add; a; b]
+    @return[a + b]
+@end
+
+@var[result; add(5, 3)]
+@print[5 + 3 = {result}]
+
+@for[i; range(5)]
+    @print[Iteration: {i}]
+@end
+
+@var[count; 0]
+@while[count < 3]
+    @print[Count: {count}]
+    @var[count; count + 1]
+@end
+
+@try
+    @var[x; int("not a number")]
+@catch[e]
+    @print[Error caught: {e}]
+@end

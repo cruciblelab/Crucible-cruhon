@@ -1,0 +1,40 @@
+# Test: list literal in @var
+@var[nums; [1, 2, 3]]
+@assert[len(nums) == 3; "list in var works"]
+@print[list ok]
+
+# Test: list indexing in @var
+@var[first; nums[0]]
+@assert[first == 1; "list index works"]
+@print[index ok]
+
+# Test: nested list in @if condition
+@if[2 in [1, 2, 3]]
+    @print[nested list ok]
+@end
+
+# Test: semicolon inside string is preserved
+@var[msg; "hello; world"]
+@assert[msg == "hello; world"; "semicolon in string"]
+@print[semicolon ok]
+
+# Test: dict literal
+@var[d; {"key": 1}]
+@assert[d["key"] == 1; "dict literal works"]
+@print[dict ok]
+
+# Test: dict access in @if condition
+@var[data; {"name": "cruhon"}]
+@if[data["name"] == "cruhon"]
+    @print[dict access ok]
+@end
+
+# Test: function call with comma inside @var
+@func[add; a; b]
+    @return[a + b]
+@end
+@var[r; add(3, 4)]
+@assert[r == 7; "func call with comma"]
+@print[func ok]
+
+@print[all syntax engine tests passed]

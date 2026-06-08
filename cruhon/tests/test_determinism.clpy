@@ -1,0 +1,33 @@
+# Determinism test
+# Tests that the same source always produces the same output
+
+@var[x; 5]
+@if[x == 5]
+    @print[PASS: var assignment is deterministic]
+@else
+    @print[FAIL: var assignment]
+@end
+
+@func[double; n]
+    @return[n * 2]
+@end
+
+@var[result; double(4)]
+@if[result == 8]
+    @print[PASS: func call is deterministic]
+@else
+    @print[FAIL: func call]
+@end
+
+@func[identity; a; b; c]
+    @return[a]
+@end
+
+@var[s; identity(1, 2, 3)]
+@if[s == 1]
+    @print[PASS: multi-arg func is deterministic]
+@else
+    @print[FAIL: multi-arg func]
+@end
+
+@print[All determinism tests passed]

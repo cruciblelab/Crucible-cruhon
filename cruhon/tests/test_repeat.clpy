@@ -1,0 +1,6 @@
+@var[count; 0]
+@repeat[3]
+    @var[count; count + 1]
+@end
+@assert[count == 3; "repeat ran 3 times"]
+@print[repeat ok]

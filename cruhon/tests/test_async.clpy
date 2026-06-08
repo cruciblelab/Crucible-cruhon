@@ -1,0 +1,13 @@
+# Test async function with @async block
+@async[fetch_test]
+    @var[result; "async_worked"]
+    @return[result]
+@end
+
+# Test that async def main runs via asyncio.run()
+# Runner detects async def main and wraps it
+@async[main]
+    @var[val; "hello from async"]
+    @print[{val}]
+    @print[async test ok]
+@end
