@@ -1,13 +1,13 @@
 """
 cruhon/core/dependency_resolver.py
 ====================================
-Mod dependency checking for v0.8.
-Full topological sort planned for v0.9.
+Mod dependency resolution and load order.
 
-v0.8 behavior:
-  - Check that required mods are loaded
-  - Warn if dependency not satisfied
-  - Determine load order (alphabetical + requirements first)
+Behavior:
+  - Check that required mods are loaded before dependents
+  - Version-aware constraint checking (>=, ==, <, etc.)
+  - Topological load ordering with circular dependency fallback
+  - Warn if any dependency is unsatisfied after full load
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ class DependencyResolver:
     """
     Resolves mod load order based on api.require() declarations.
 
-    v0.8: simple check — required mod must be loaded first.
-    v0.9: full topological sort with conflict resolution.
+    Uses topological ordering: dependencies are loaded before dependents.
+    Circular or unresolvable dependencies are placed at the end with a warning.
     """
 
     def __init__(self):
@@ -65,7 +65,7 @@ class DependencyResolver:
     def ordered_load(self, mods: list[str]) -> list[str]:
         """
         Return mods in a load order that satisfies dependencies.
-        v0.8: requirements first, then rest alphabetically.
+        Dependencies are placed before dependents. Circular deps go last.
         """
         result = []
         remaining = list(mods)

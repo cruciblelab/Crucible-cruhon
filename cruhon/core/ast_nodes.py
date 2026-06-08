@@ -262,12 +262,6 @@ class RaiseNode(Node):
 
 
 @dataclass
-class AsyncNode(Node):
-    """@async[func_call]"""
-    call: str = ""
-
-
-@dataclass
 class AwaitNode(Node):
     """@await[expr]"""
     expr: str = ""
