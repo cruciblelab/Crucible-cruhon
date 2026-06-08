@@ -7,15 +7,17 @@ cruhon check main.clpy
 cruhon mods
 cruhon libs
 cruhon new <name>
+cruhon new --plugin <name>
 """
 
 import sys
 import os
+import json
 import argparse
 from pathlib import Path
 
 
-CRUHON_VERSION = "1.3.0"
+CRUHON_VERSION = "1.4.0"
 
 BANNER = f"""
   \033[36m╔═══════════════════════════╗
@@ -65,6 +67,8 @@ def cmd_mods(args):
         get_load_order,
         get_override_chains,
         get_warnings,
+        list_exposed_apis,
+        list_block_commands,
     )
     load_all_mods()
     order = get_load_order()
@@ -89,11 +93,26 @@ def cmd_mods(args):
 
         print(f"    {i:>2}. {name:<20} {label}")
 
+    # ── Plugin block commands ─────────────────────────────────
+    block_cmds = list_block_commands()
+    if block_cmds:
+        print("\n  \033[36mPlugin block commands:\033[0m")
+        for plugin, cmds in sorted(block_cmds.items()):
+            cmds_str = "  ".join(f"@{c}" for c in cmds)
+            print(f"    {plugin:<20} {cmds_str}")
+
+    # ── Exposed APIs ─────────────────────────────────────────
+    exposed = list_exposed_apis()
+    if exposed:
+        print("\n  \033[36mExposed APIs:\033[0m")
+        for plugin, keys in sorted(exposed.items()):
+            keys_str = "  ".join(keys)
+            print(f"    {plugin:<20} {keys_str}")
+
     # ── Active overrides ─────────────────────────────────────
     if chains:
         print("\n  \033[36mActive overrides:\033[0m")
         for node_name, chain in sorted(chains.items()):
-            # Convert PrintNode → @print etc.
             cmd = node_name.replace("Node", "").lower()
             chain_str = " → ".join(chain)
             print(f"    @{cmd:<12} →  {chain_str}")
@@ -106,7 +125,7 @@ def cmd_mods(args):
         for w in warnings:
             print(f"    {w}")
 
-    print("\n  To create a mod: see mods/README.md\n")
+    print("\n  To create a plugin: cruhon new --plugin <name>\n")
 
 
 def cmd_libs(args):
@@ -119,8 +138,14 @@ def cmd_libs(args):
 
 
 def cmd_new(args):
-    """Create a new Cruhon project."""
-    name = args.name
+    """Create a new Cruhon project or plugin scaffold."""
+    if getattr(args, "plugin", False):
+        _cmd_new_plugin(args.name)
+    else:
+        _cmd_new_project(args.name)
+
+
+def _cmd_new_project(name: str):
     path = Path(name)
     if path.exists():
         print(f"  \033[31m✗ Directory already exists: {name}\033[0m")
@@ -141,6 +166,38 @@ def cmd_new(args):
 
     print(f"  \033[32m✓ Created project: {name}\033[0m")
     print(f"  \033[90mcd {name} && cruhon run src/main.clpy\033[0m")
+
+
+def _cmd_new_plugin(name: str):
+    path = Path("mods") / name
+    if path.exists():
+        print(f"  \033[31m✗ Plugin already exists: mods/{name}/\033[0m")
+        sys.exit(1)
+
+    path.mkdir(parents=True)
+
+    manifest = {
+        "name": name,
+        "version": "0.1.0",
+        "description": f"Cruhon plugin: {name}",
+        "cruhon": f">={CRUHON_VERSION}",
+    }
+    (path / "mod.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    (path / "__init__.py").write_text(
+        f'"""\n{name} — Cruhon plugin\n"""\n\n\ndef register(api):\n'
+        '    """Plugin entry point. Called by Cruhon\'s mod loader."""\n\n'
+        '    # Register a block command:\n'
+        '    # api.block_command("my_block", visit_my_block)\n\n'
+        '    # Expose a utility for other plugins:\n'
+        '    # api.expose("my_util", lambda x: x)\n\n'
+        '    pass\n',
+        encoding="utf-8"
+    )
+
+    print(f"  \033[32m✓ Plugin scaffold created: mods/{name}/\033[0m")
+    print(f"  \033[90m  mod.json + __init__.py ready\033[0m")
+    print(f"  \033[90m  Edit mods/{name}/__init__.py to add commands\033[0m")
 
 
 def main():
@@ -180,8 +237,9 @@ def main():
     p_libs.set_defaults(fn=cmd_libs)
 
     # new
-    p_new = sub.add_parser("new", help="Create a new Cruhon project")
-    p_new.add_argument("name", help="Project name")
+    p_new = sub.add_parser("new", help="Create a new Cruhon project or plugin scaffold")
+    p_new.add_argument("name", help="Project or plugin name")
+    p_new.add_argument("--plugin", action="store_true", help="Create a plugin skeleton in mods/<name>/")
     p_new.set_defaults(fn=cmd_new)
 
     args = parser.parse_args()

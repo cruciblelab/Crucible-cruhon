@@ -194,6 +194,11 @@ class Parser:
 
         # Namespace command: @requests.get[...]
         if self.current.type == "NAMESPACE":
+            # @async.for / @async.with are block commands
+            if self.current.value == "async" and self.peek(2).type == "AT_CMD":
+                method = self.peek(2).value
+                if method in ("for", "with"):
+                    return self._parse_async_block()
             return self._parse_namespace_call()
 
         # @ command
@@ -781,6 +786,60 @@ class Parser:
             self.advance()
 
         return WithNode(expr=expr, var=var, body=body, line=line)
+
+    def _parse_async_block(self) -> Node:
+        """Dispatch @async.for / @async.with to their respective parsers."""
+        line = self.current.line
+        self.advance()  # NAMESPACE "async"
+        self.advance()  # DOT
+        method = self.advance().value  # AT_CMD "for" or "with"
+
+        if method == "for":
+            return self._parse_async_for_block(line)
+        elif method == "with":
+            return self._parse_async_with_block(line)
+        raise ParseError(f"Unknown @async.{method}", line)
+
+    def _parse_async_for_block(self, line: int) -> "AsyncForNode":
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@async.for requires [var; iterable]", line)
+        var = args[0].strip()
+        iterable = args[1].strip()
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        body = self._parse_block()
+
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+
+        return AsyncForNode(var=var, iterable=iterable, body=body, line=line)
+
+    def _parse_async_with_block(self, line: int) -> "AsyncWithNode":
+        args = self.parse_args()
+        raw = args[0] if args else ""
+
+        var = None
+        if " as " in raw:
+            expr_part, var_part = raw.split(" as ", 1)
+            expr = expr_part.strip()
+            var = var_part.strip()
+        else:
+            expr = raw.strip()
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        body = self._parse_block()
+
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+
+        return AsyncWithNode(expr=expr, var=var, body=body, line=line)
 
     def _parse_match(self) -> "MatchNode":
         line = self.current.line

@@ -4,7 +4,22 @@ All notable changes are documented here.
 
 ---
 
-## v1.3.0 (current)
+## v1.4.0 (current)
+
+### Plugin System Hardening
+
+- **`api.ast_hook(node_type, fn)`** — parse-time AST hook; `fn(node) → node` fires on every matching node after parse, before transpile. Plugins can inspect, mutate, or replace any AST node.
+- **`@async.for[var; iterable] ... @end`** — async iteration inside `@async func` blocks
+- **`@async.with[expr as var] ... @end`** — async context manager
+- **Plugin error attribution** — `api.command()` visitors now include the owning plugin name in error messages
+- **`list_block_commands()`** — returns `{plugin_name: [cmd, ...]}` for all registered block commands
+- **`cruhon mods` enrichment** — now shows Exposed APIs and Plugin block commands sections
+- **`cruhon new --plugin <name>`** — scaffolds `mods/<name>/mod.json` + `__init__.py` with register skeleton
+- Test suite: 172 → 194 tests (`TestAsyncFor`, `TestAsyncWith`, `TestAsyncForWithRun`, `TestAstHooks`, `TestModEnrichment`, `TestVisitorOwner`)
+
+---
+
+## v1.3.0
 
 ### Dil Tamamlama — Language Completion
 

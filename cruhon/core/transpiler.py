@@ -39,10 +39,12 @@ class Transpiler:
     def __init__(self):
         self._indent = 0
         self._custom_visitors: dict = {}
+        self._visitor_owners: dict = {}        # node_name → plugin_name
         self._block_visitors: dict = {}        # plugin_name → visitor_fn
         self._scoped_blocks: set = set()       # plugin names with auto ctx save/restore
         self._node_transforms: dict = {}       # plugin_name → [transform_fn, ...]
         self._block_hooks: dict = {}           # "enter"|"exit" → [fn, ...]
+        self._ast_hooks: dict = {}             # node_type_name → [fn(node) → node, ...]
         self._pre_hooks: list = []
         self._post_hooks: list = []
         # Line map: python_line (1-based) → cruhon_line
@@ -71,10 +73,49 @@ class Transpiler:
 
     # ── Main transpile ────────────────────────────────────────
 
+    def _apply_ast_hooks(self, ast: ProgramNode) -> ProgramNode:
+        """Walk the AST and apply registered ast_hooks to matching nodes."""
+
+        def transform_node(node):
+            node_type = node.__class__.__name__
+            for fn in self._ast_hooks.get(node_type, []):
+                node = fn(node)
+            return node
+
+        def transform_body(nodes):
+            if not nodes:
+                return nodes
+            result = []
+            for node in nodes:
+                node = transform_node(node)
+                for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
+                    children = getattr(node, attr, None)
+                    if children:
+                        setattr(node, attr, transform_body(children))
+                if hasattr(node, "elif_branches") and node.elif_branches:
+                    node.elif_branches = [
+                        (cond, transform_body(body))
+                        for cond, body in node.elif_branches
+                    ]
+                if hasattr(node, "cases") and node.cases:
+                    node.cases = [
+                        (pattern, transform_body(body))
+                        for pattern, body in node.cases
+                    ]
+                result.append(node)
+            return result
+
+        ast.body = transform_body(ast.body)
+        return ast
+
     def transpile(self, ast: ProgramNode) -> str:
         self._indent = 0
         self._line_map = {}
         self._python_line = 1
+
+        # AST hooks — parse-time transforms registered by plugins
+        if self._ast_hooks:
+            ast = self._apply_ast_hooks(ast)
 
         # Pre-hooks
         for hook in self._pre_hooks:
@@ -323,11 +364,12 @@ class Transpiler:
         """Unknown node — check mod visitors."""
         node_name = node.__class__.__name__
         if node_name in self._custom_visitors:
+            owner = self._visitor_owners.get(node_name, "unknown plugin")
             try:
                 return self._custom_visitors[node_name](self, node)
             except Exception as e:
                 raise TranspileError(
-                    f"Plugin visitor for '{node_name}' raised {type(e).__name__}: {e}",
+                    f"Plugin '{owner}' visitor for '{node_name}' raised {type(e).__name__}: {e}",
                     node.line
                 ) from e
         return self._line(f"# Unknown node: {node_name}")
@@ -471,6 +513,18 @@ class Transpiler:
             header = self._line(f"with {node.expr} as {node.var}:", node.line)
         else:
             header = self._line(f"with {node.expr}:", node.line)
+        return "\n".join([header, self._block(node.body)])
+
+    def visit_AsyncForNode(self, node) -> str:
+        lines = [self._line(f"async for {node.var} in {node.iterable}:", node.line)]
+        lines.append(self._block(node.body))
+        return "\n".join(lines)
+
+    def visit_AsyncWithNode(self, node) -> str:
+        if node.var:
+            header = self._line(f"async with {node.expr} as {node.var}:", node.line)
+        else:
+            header = self._line(f"async with {node.expr}:", node.line)
         return "\n".join([header, self._block(node.body)])
 
     def visit_MatchNode(self, node) -> str:

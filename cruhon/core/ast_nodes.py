@@ -246,6 +246,22 @@ class AwaitNode(Node):
     expr: str = ""
 
 
+@dataclass
+class AsyncForNode(Node):
+    """@async.for[var; iterable] ... @end"""
+    var: str = ""
+    iterable: str = ""
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class AsyncWithNode(Node):
+    """@async.with[expr as var] ... @end  or  @async.with[expr] ... @end"""
+    expr: str = ""
+    var: Optional[str] = None
+    body: List[Node] = field(default_factory=list)
+
+
 # ─────────────────────────────────────────────────────────────
 # IMPORT / LIB NODES
 # ─────────────────────────────────────────────────────────────

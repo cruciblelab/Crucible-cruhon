@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "1.3.0"
+CRUHON_VERSION = "1.4.0"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -65,7 +65,8 @@ _CLAIMED_ALIASES: dict[str, str] = {}      # alias    → first claimant mod nam
 _OVERRIDE_CHAINS: dict[str, list[str]] = {}  # command → [mod names in chain order]
 _WARNINGS: list[str] = []                  # collected warnings for `cruhon mods`
 
-_EXPOSED_APIS: dict[str, dict] = {}   # plugin_name → {key: value}
+_EXPOSED_APIS: dict[str, dict] = {}              # plugin_name → {key: value}
+_REGISTERED_BLOCK_COMMANDS: dict[str, list] = {} # plugin_name → [cmd, ...]
 _MISSING = object()  # sentinel for consume() default
 
 
@@ -171,6 +172,7 @@ class ModAPI:
 
         node_name = f"{name.replace('.', '_').title()}Node"
         self._transpiler._custom_visitors[node_name] = visitor_fn
+        self._transpiler._visitor_owners[node_name] = self.mod_name
 
     def block_command(self, name: str, visitor_fn, *, scoped: bool = False):
         """
@@ -197,6 +199,9 @@ class ModAPI:
         self._transpiler._block_visitors[name] = visitor_fn
         if scoped:
             self._transpiler._scoped_blocks.add(name)
+        if self.mod_name not in _REGISTERED_BLOCK_COMMANDS:
+            _REGISTERED_BLOCK_COMMANDS[self.mod_name] = []
+        _REGISTERED_BLOCK_COMMANDS[self.mod_name].append(name)
         _log(f"[{self.mod_name}] Block command registered: @{name}" + (" (scoped)" if scoped else ""))
 
     def transform(self, target: str, fn):
@@ -245,6 +250,33 @@ class ModAPI:
             self._transpiler._block_hooks[event] = []
         self._transpiler._block_hooks[event].append(fn)
         _log(f"[{self.mod_name}] Block hook registered: {event}")
+
+    def ast_hook(self, node_type: str, fn):
+        """
+        Register a parse-time AST hook.
+
+        Fires on every node of the given type after parsing and before
+        transpilation. fn receives the node and must return a node
+        (the same or a modified one).
+
+        node_type: class name of the node (e.g. "ForNode", "VarNode")
+        fn(node) → node
+
+        Multiple hooks for the same type fire in registration order.
+        Hooks can read, modify, or replace nodes entirely.
+
+        Usage:
+            def register(api):
+                api.ast_hook("ForNode", inject_profiling)
+
+            def inject_profiling(node):
+                node.var = node.var  # inspect or mutate
+                return node
+        """
+        if node_type not in self._transpiler._ast_hooks:
+            self._transpiler._ast_hooks[node_type] = []
+        self._transpiler._ast_hooks[node_type].append(fn)
+        _log(f"[{self.mod_name}] AST hook registered for {node_type}")
 
     def override(self, command: str, fn, warn: bool = True):
         """
@@ -730,3 +762,8 @@ def get_warnings() -> list[str]:
 def list_exposed_apis() -> dict[str, list[str]]:
     """Return {plugin_name: [key, ...]} for all exposed plugin APIs."""
     return {name: list(apis.keys()) for name, apis in _EXPOSED_APIS.items()}
+
+
+def list_block_commands() -> dict[str, list[str]]:
+    """Return {plugin_name: [cmd, ...]} for all registered plugin block commands."""
+    return {name: list(cmds) for name, cmds in _REGISTERED_BLOCK_COMMANDS.items()}

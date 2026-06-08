@@ -1257,3 +1257,368 @@ class TestBlockHooks:
 
         run_source('@exitblock[]\n@end')
         assert "exitblock" in exited
+
+
+# ─────────────────────────────────────────────────────────────
+# PLUGIN SYSTEM v1.4.0 — AST hooks, async for/with, mod enrichment
+# ─────────────────────────────────────────────────────────────
+
+class TestAstHooks:
+    def test_ast_hook_fires_for_matching_node(self):
+        """api.ast_hook fires on every matching node type."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.parser import parse
+        from cruhon.core.transpiler import get_transpiler
+
+        api = ModAPI("ast-hook-test-mod")
+        seen = []
+
+        def hook_var(node):
+            seen.append(node.name)
+            return node
+
+        api.ast_hook("VarNode", hook_var)
+
+        t = get_transpiler()
+        ast = parse("@var[x; 1]\n@var[y; 2]")
+        t.transpile(ast)
+
+        assert "x" in seen
+        assert "y" in seen
+
+    def test_ast_hook_can_mutate_node(self, capsys):
+        """ast_hook can modify a node's fields before transpilation."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("ast-hook-mutate-mod")
+
+        def rename_var(node):
+            if node.name == "secret":
+                node.name = "renamed"
+            return node
+
+        api.ast_hook("VarNode", rename_var)
+
+        run_source('@var[secret; "hello"]\n@print[{renamed}]')
+        assert "hello" in capsys.readouterr().out
+
+    def test_ast_hook_multiple_hooks_chain(self):
+        """Multiple hooks for the same type fire in registration order."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.parser import parse
+        from cruhon.core.transpiler import get_transpiler
+
+        api = ModAPI("ast-hook-chain-mod")
+        order = []
+
+        def hook_a(node):
+            order.append("A")
+            return node
+
+        def hook_b(node):
+            order.append("B")
+            return node
+
+        api.ast_hook("PrintNode", hook_a)
+        api.ast_hook("PrintNode", hook_b)
+
+        t = get_transpiler()
+        ast = parse("@print[hello]")
+        t.transpile(ast)
+
+        assert order.index("A") < order.index("B")
+
+    def test_ast_hook_nested_nodes(self):
+        """AST hooks recurse into nested block bodies."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.parser import parse
+        from cruhon.core.transpiler import get_transpiler
+
+        api = ModAPI("ast-hook-nested-mod")
+        seen = []
+
+        def hook_print(node):
+            seen.append(str(node.value))
+            return node
+
+        api.ast_hook("PrintNode", hook_print)
+
+        t = get_transpiler()
+        ast = parse("@if[True]\n    @print[inside]\n@end")
+        t.transpile(ast)
+
+        assert "inside" in seen
+
+    def test_ast_hook_no_hooks_no_change(self, capsys):
+        """Without hooks, program runs normally."""
+        run_source('@var[z; 99]\n@print[{z}]')
+        assert "99" in capsys.readouterr().out
+
+
+class TestAsyncFor:
+    def test_async_for_transpiles(self):
+        """@async.for generates 'async for' Python."""
+        code = _transpile(
+            "@async[main]\n"
+            "    @async.for[item; aiter]\n"
+            "        @print[{item}]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "async for item in aiter:" in code
+
+    def test_async_for_body_indented(self):
+        """@async.for body is indented inside the loop."""
+        code = _transpile(
+            "@async[main]\n"
+            "    @async.for[x; items]\n"
+            "        @var[y; x]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "async for x in items:" in code
+        assert "y = x" in code
+
+    def test_async_for_parse_node_type(self):
+        """@async.for produces AsyncForNode."""
+        from cruhon.core.ast_nodes import AsyncForNode, FuncNode
+        ast = parse(
+            "@async[main]\n"
+            "    @async.for[n; nums]\n"
+            "        @print[{n}]\n"
+            "    @end\n"
+            "@end"
+        )
+        func = ast.body[0]
+        assert isinstance(func, FuncNode)
+        assert isinstance(func.body[0], AsyncForNode)
+        assert func.body[0].var == "n"
+        assert func.body[0].iterable == "nums"
+
+    def test_async_for_missing_iterable_raises(self):
+        """@async.for with only one arg raises ParseError."""
+        from cruhon.core.parser import ParseError
+        with pytest.raises(ParseError):
+            parse("@async[main]\n    @async.for[x]\n    @end\n@end")
+
+
+class TestAsyncWith:
+    def test_async_with_transpiles(self):
+        """@async.with generates 'async with' Python."""
+        code = _transpile(
+            "@async[main]\n"
+            "    @async.with[aopen(\"f.txt\") as f]\n"
+            "        @print[opened]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "async with" in code
+        assert "as f:" in code
+
+    def test_async_with_no_var(self):
+        """@async.with without 'as var' generates plain 'async with'."""
+        code = _transpile(
+            "@async[main]\n"
+            "    @async.with[lock]\n"
+            "        @print[locked]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "async with lock:" in code
+
+    def test_async_with_parse_node_type(self):
+        """@async.with produces AsyncWithNode."""
+        from cruhon.core.ast_nodes import AsyncWithNode, FuncNode
+        ast = parse(
+            "@async[main]\n"
+            "    @async.with[ctx as c]\n"
+            "        @print[ok]\n"
+            "    @end\n"
+            "@end"
+        )
+        func = ast.body[0]
+        assert isinstance(func, FuncNode)
+        assert isinstance(func.body[0], AsyncWithNode)
+        assert func.body[0].expr == "ctx"
+        assert func.body[0].var == "c"
+
+    def test_async_with_body_indented(self):
+        """@async.with body is indented under the with block."""
+        code = _transpile(
+            "@async[main]\n"
+            "    @async.with[mgr as m]\n"
+            "        @var[v; m]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "async with mgr as m:" in code
+        assert "v = m" in code
+
+
+class TestModEnrichment:
+    def test_list_block_commands_tracks_registration(self):
+        """block_command() registers in list_block_commands()."""
+        from cruhon.core.mod_loader import ModAPI, list_block_commands
+
+        api = ModAPI("enrichment-test-mod")
+
+        def visit_enrichcmd(transpiler, node):
+            return transpiler._line("pass")
+
+        api.block_command("enrichcmd", visit_enrichcmd)
+
+        result = list_block_commands()
+        assert "enrichment-test-mod" in result
+        assert "enrichcmd" in result["enrichment-test-mod"]
+
+    def test_list_block_commands_multiple_cmds(self):
+        """Multiple block_command calls accumulate in the plugin's list."""
+        from cruhon.core.mod_loader import ModAPI, list_block_commands
+
+        api = ModAPI("multi-cmd-mod")
+        noop = lambda t, n: t._line("pass")
+        api.block_command("cmd_one", noop)
+        api.block_command("cmd_two", noop)
+
+        result = list_block_commands()
+        assert "multi-cmd-mod" in result
+        assert "cmd_one" in result["multi-cmd-mod"]
+        assert "cmd_two" in result["multi-cmd-mod"]
+
+    def test_list_exposed_apis_returns_keys(self):
+        """list_exposed_apis returns plugin → [key, ...] mapping."""
+        from cruhon.core.mod_loader import ModAPI, list_exposed_apis
+
+        api = ModAPI("expose-keys-mod")
+        api.expose("helper_fn", lambda x: x)
+        api.expose("version", "1.0")
+
+        result = list_exposed_apis()
+        assert "expose-keys-mod" in result
+        assert "helper_fn" in result["expose-keys-mod"]
+        assert "version" in result["expose-keys-mod"]
+
+    def test_visitor_owner_in_error_message(self):
+        """api.command() visitor errors include the owning plugin name."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.transpiler import TranspileError, get_transpiler
+        from cruhon.core.parser import parse
+        from cruhon.core.ast_nodes import Node
+        from dataclasses import dataclass
+
+        @dataclass
+        class BadCmdNode(Node):
+            pass
+
+        api = ModAPI("owner-error-mod")
+
+        def bad_visitor(transpiler, node):
+            raise RuntimeError("something broke")
+
+        def bad_parser(parser):
+            parser.advance()
+            return BadCmdNode(line=1)
+
+        api.command("badcmd", bad_parser, bad_visitor)
+
+        t = get_transpiler()
+        t._custom_visitors["BadCmdNode"] = bad_visitor
+        t._visitor_owners["BadCmdNode"] = "owner-error-mod"
+
+        with pytest.raises(TranspileError) as exc_info:
+            t.visit_unknown(BadCmdNode(line=1))
+
+        assert "owner-error-mod" in str(exc_info.value)
+
+
+class TestVisitorOwner:
+    def test_api_command_records_owner(self):
+        """api.command() stores plugin name in _visitor_owners."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.transpiler import get_transpiler
+        from cruhon.core.ast_nodes import Node
+        from dataclasses import dataclass
+
+        @dataclass
+        class OwnerTestNode(Node):
+            pass
+
+        api = ModAPI("owner-record-mod")
+
+        def parser_fn(parser):
+            parser.advance()
+            return OwnerTestNode(line=1)
+
+        def visitor_fn(transpiler, node):
+            return transpiler._line("pass")
+
+        api.command("ownercmd", parser_fn, visitor_fn)
+
+        t = get_transpiler()
+        assert t._visitor_owners.get("OwnercmdNode") == "owner-record-mod"
+
+    def test_error_message_includes_plugin_name(self):
+        """visit_unknown error includes plugin name from _visitor_owners."""
+        from cruhon.core.transpiler import get_transpiler, TranspileError
+        from cruhon.core.ast_nodes import Node
+        from dataclasses import dataclass
+
+        @dataclass
+        class TraceableNode(Node):
+            pass
+
+        t = get_transpiler()
+        t._custom_visitors["TraceableNode"] = lambda _t, _n: (_ for _ in ()).throw(ValueError("boom"))
+        t._visitor_owners["TraceableNode"] = "traceable-plugin"
+
+        with pytest.raises(TranspileError) as exc:
+            t.visit_unknown(TraceableNode(line=5))
+
+        assert "traceable-plugin" in str(exc.value)
+
+    def test_block_command_owner_not_in_visitor_owners(self):
+        """block_command does NOT go through _visitor_owners — it uses _block_visitors."""
+        from cruhon.core.mod_loader import ModAPI
+        from cruhon.core.transpiler import get_transpiler
+
+        api = ModAPI("block-owner-mod")
+        api.block_command("noowner", lambda t, n: t._line("pass"))
+
+        t = get_transpiler()
+        assert "noowner" in t._block_visitors
+        assert "NoownerNode" not in t._visitor_owners
+
+
+class TestAsyncForWithRun:
+    def test_async_for_runs(self, capsys):
+        """@async.for executes correctly at runtime with an async generator."""
+        run_source(
+            "@raw\n"
+            "async def _agen():\n"
+            "    for i in [1, 2, 3]:\n"
+            "        yield i\n"
+            "@end\n"
+            "@async[main]\n"
+            "    @var[results; []]\n"
+            "    @async.for[x; _agen()]\n"
+            "        results.append(x)\n"
+            "    @end\n"
+            "    @print[{len(results)}]\n"
+            "@end"
+        )
+        assert "3" in capsys.readouterr().out
+
+    def test_async_with_runs(self, capsys):
+        """@async.with executes correctly at runtime using asyncio.Lock."""
+        run_source(
+            "@raw\n"
+            "import asyncio\n"
+            "@end\n"
+            "@async[main]\n"
+            "    @var[lock; asyncio.Lock()]\n"
+            "    @async.with[lock]\n"
+            "        @print[locked]\n"
+            "    @end\n"
+            "@end"
+        )
+        assert "locked" in capsys.readouterr().out
