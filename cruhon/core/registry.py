@@ -128,6 +128,11 @@ def _setup_ctx_lib_calls():
         lambda args: '__ctx__.clear()')
     register_lib_call("ctx", "delete",
         lambda args: f'__ctx__.pop({args[0]}, None)')
+    # Stack-based scope operations — push/pop a snapshot frame
+    register_lib_call("ctx", "push",
+        lambda args: '__ctx_stack__.append(dict(__ctx__))')
+    register_lib_call("ctx", "pop",
+        lambda args: '__ctx__.clear(); __ctx__.update(__ctx_stack__.pop() if __ctx_stack__ else {})')
 
 
 _setup_core_lib_calls()

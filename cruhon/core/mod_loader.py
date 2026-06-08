@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "1.1.0"
+CRUHON_VERSION = "1.2.0"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -172,24 +172,21 @@ class ModAPI:
         node_name = f"{name.replace('.', '_').title()}Node"
         self._transpiler._custom_visitors[node_name] = visitor_fn
 
-    def block_command(self, name: str, visitor_fn):
+    def block_command(self, name: str, visitor_fn, *, scoped: bool = False):
         """
-        Register a plugin block command — the simple path.
+        Register a plugin block command.
+
+        scoped=True: __ctx__ is automatically saved before the block body
+        runs and restored afterward — changes inside the block don't leak out.
 
         Usage:
-            def register(api):
-                api.block_command("route", visit_route)
+            api.block_command("route", visit_route)
+            api.block_command("withuser", visit_withuser, scoped=True)
 
-            def visit_route(transpiler, node):
-                # node.args    — positional args from @route[path; method=GET]
-                # node.kwargs  — keyword args  (e.g. {"method": "GET"})
-                # node.body    — child nodes between @route[...] and @end
-                path = node.args[0]
-                body_code = transpiler._block(node.body)
-                return transpiler._line(f"@app.route({path}):") + "\\n" + body_code
-
-        The command is available as @{name}[...] ... @end in .clpy files.
-        No custom AST node class needed — body lands in PluginBlockNode.
+        visitor_fn(transpiler, node) → str
+          node.args   — positional args
+          node.kwargs — keyword args
+          node.body   — child AST nodes
         """
         _name = name
 
@@ -198,7 +195,56 @@ class ModAPI:
 
         self._parser.register_block_command(name, _block_parser)
         self._transpiler._block_visitors[name] = visitor_fn
-        _log(f"[{self.mod_name}] Block command registered: @{name}")
+        if scoped:
+            self._transpiler._scoped_blocks.add(name)
+        _log(f"[{self.mod_name}] Block command registered: @{name}" + (" (scoped)" if scoped else ""))
+
+    def transform(self, target: str, fn):
+        """
+        Register a code transform for another plugin's block output.
+
+        fn(transpiler, node, python_code: str) → str
+
+        Transforms run after the primary visitor and before ctx restore.
+        Multiple transforms chain in registration order.
+
+        Usage (e.g. a logging plugin wrapping every @route block):
+            def register(api):
+                api.transform("route", wrap_with_timing)
+
+            def wrap_with_timing(transpiler, node, code):
+                path = node.args[0] if node.args else "unknown"
+                before = transpiler._line(f'__t0__ = __import__("time").monotonic()')
+                after  = transpiler._line(f'print(f"route {path} took {{__import__(\"time\").monotonic()-__t0__:.3f}}s")')
+                return before + "\\n" + code + "\\n" + after
+        """
+        if target not in self._transpiler._node_transforms:
+            self._transpiler._node_transforms[target] = []
+        self._transpiler._node_transforms[target].append(fn)
+        _log(f"[{self.mod_name}] Transform registered for @{target}")
+
+    def block_hook(self, event: str, fn):
+        """
+        Register a runtime hook for plugin block enter/exit events.
+
+        event: "enter" | "exit"
+        fn(plugin_name: str, args: list) → None
+
+        Fires at runtime when any plugin block starts or ends.
+        Only active for blocks that have at least one hook registered.
+
+        Usage:
+            def register(api):
+                api.block_hook("enter", on_block_enter)
+                api.block_hook("exit",  on_block_exit)
+
+            def on_block_enter(plugin_name, args):
+                print(f"Block @{plugin_name} starting with args {args}")
+        """
+        if event not in self._transpiler._block_hooks:
+            self._transpiler._block_hooks[event] = []
+        self._transpiler._block_hooks[event].append(fn)
+        _log(f"[{self.mod_name}] Block hook registered: {event}")
 
     def override(self, command: str, fn, warn: bool = True):
         """

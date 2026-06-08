@@ -4,7 +4,20 @@ All notable changes are documented here.
 
 ---
 
-## v1.1.0 (current)
+## v1.2.0 (current)
+
+### Plugin System — Scope, Transforms, Block Hooks
+
+- **`api.block_command(..., scoped=True)`** — `__ctx__` otomatik save/restore, block içindeki değişiklikler dışarı sızmaz
+- **`@ctx.push[]` / `@ctx.pop[]`** — manuel stack-based ctx scope (iç içe bloklar için)
+- **`api.transform(target, fn)`** — başka plugin'in block çıktısını fn(transpiler, node, code) ile sarıp dönüştür
+- **`api.block_hook("enter" | "exit", fn)`** — runtime block lifecycle: fn(plugin_name, args) her block girişinde/çıkışında çalışır
+- `__ctx_stack__` ve `__ph__` exec namespace'e inject edildi
+- Test suite: 149 → 156 tests
+
+---
+
+## v1.1.0
 
 ### Plugin Foundation System
 

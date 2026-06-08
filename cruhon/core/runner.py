@@ -227,14 +227,28 @@ def run_source(
         if _is_async_code(python_code):
             python_code = _make_async_runner(python_code)
 
-        # Execute — inject __ns__ so namespace calls resolve at runtime
+        # Execute — inject runtime globals
         from .namespace_runtime import get_namespace_registry
         ns_registry = get_namespace_registry()
         ns_registry.init_all()  # fire init hooks before exec
+
+        # Build __ph__ (plugin hook runner) from registered block hooks
+        _block_hooks = get_transpiler()._block_hooks
+
+        def _ph(event: str, plugin_name: str, args=None):
+            for fn in _block_hooks.get(event, []):
+                fn(plugin_name, args or [])
+
         try:
             exec(
                 compile(python_code, f"<cruhon:{filename}>", "exec"),
-                {"__name__": "__main__", "__ns__": ns_registry, "__ctx__": {}}
+                {
+                    "__name__": "__main__",
+                    "__ns__": ns_registry,
+                    "__ctx__": {},
+                    "__ctx_stack__": [],
+                    "__ph__": _ph,
+                }
             )
         finally:
             ns_registry.destroy_all()  # fire destroy hooks after exec

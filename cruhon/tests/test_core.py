@@ -985,3 +985,169 @@ class TestPluginFoundation:
         assert "list-test-plugin" in exposed
         assert "foo" in exposed["list-test-plugin"]
         assert "bar" in exposed["list-test-plugin"]
+
+
+# ─────────────────────────────────────────────────────────────
+# PLUGIN SYSTEM v1.2.0 — scoped ctx, transforms, block hooks
+# ─────────────────────────────────────────────────────────────
+
+class TestScopedCtx:
+    def test_scoped_block_isolates_ctx(self, capsys):
+        """scoped=True: changes inside block don't leak out."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("scoped-test-mod")
+
+        def visit_scope(transpiler, node):
+            lines = [transpiler._line('__ctx__["inside"] = "yes"')]
+            for child in node.body:
+                r = child.accept(transpiler)
+                if r:
+                    lines.append(r)
+            return "\n".join(lines)
+
+        api.block_command("scopeblock", visit_scope, scoped=True)
+
+        run_source(
+            '@ctx.set["inside"; "no"]\n'
+            '@scopeblock[]\n'
+            '    @var[v; @ctx["inside"]]\n'   # read ctx into var
+            '    @print[{v}]\n'              # print it
+            '@end\n'
+            '@var[after; @ctx["inside"; "no"]]\n'
+            '@print[{after}]'
+        )
+        captured = capsys.readouterr()
+        assert "yes" in captured.out      # inside block: __ctx__ was "yes"
+        assert "no" in captured.out       # outside block: original value restored
+
+    def test_ctx_push_pop_manual(self, capsys):
+        """@ctx.push / @ctx.pop manual stack operations."""
+        run_source(
+            '@ctx.set["x"; "outer"]\n'
+            '@ctx.push[]\n'
+            '@ctx.set["x"; "inner"]\n'
+            '@var[v1; @ctx["x"]]\n'
+            '@print[{v1}]\n'
+            '@ctx.pop[]\n'
+            '@var[v2; @ctx["x"]]\n'
+            '@print[{v2}]'
+        )
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "inner"
+        assert lines[1] == "outer"
+
+    def test_unscoped_block_leaks_ctx(self, capsys):
+        """Without scoped=True, ctx changes persist after block."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("unscoped-test-mod")
+
+        def visit_leak(transpiler, node):
+            lines = [transpiler._line('__ctx__["leaked"] = "yes"')]
+            for child in node.body:
+                r = child.accept(transpiler)
+                if r:
+                    lines.append(r)
+            return "\n".join(lines)
+
+        api.block_command("leakblock", visit_leak, scoped=False)
+
+        run_source('@leakblock[]\n@end\n@var[v; @ctx["leaked"; "no"]]\n@print[{v}]')
+        captured = capsys.readouterr()
+        assert "yes" in captured.out  # leak is expected for unscoped
+
+
+class TestNodeTransform:
+    def test_transform_wraps_block_output(self, capsys):
+        """api.transform() post-processes another plugin's block output."""
+        from cruhon.core.mod_loader import ModAPI
+
+        # Primary plugin — emits a print
+        api_primary = ModAPI("primary-transform-mod")
+
+        def visit_primary(transpiler, node):
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p)
+
+        api_primary.block_command("tblock", visit_primary)
+
+        # Secondary plugin — wraps the output with before/after prints
+        api_secondary = ModAPI("wrapping-transform-mod")
+
+        def wrap_fn(transpiler, node, code):
+            before = transpiler._line('print("BEFORE")')
+            after = transpiler._line('print("AFTER")')
+            return before + "\n" + code + "\n" + after
+
+        api_secondary.transform("tblock", wrap_fn)
+
+        run_source('@tblock[]\n    @print["MIDDLE"]\n@end')
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().splitlines() if l]
+        assert lines == ["BEFORE", "MIDDLE", "AFTER"]
+
+    def test_multiple_transforms_chain(self, capsys):
+        """Multiple transforms run in registration order."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("chain-transform-mod")
+
+        def visit_chain(transpiler, node):
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p)
+
+        api.block_command("chainblock", visit_chain)
+
+        def add_prefix(transpiler, node, code):
+            return transpiler._line('print("A")') + "\n" + code
+
+        def add_suffix(transpiler, node, code):
+            return code + "\n" + transpiler._line('print("B")')
+
+        api.transform("chainblock", add_prefix)
+        api.transform("chainblock", add_suffix)
+
+        run_source('@chainblock[]\n    @print["X"]\n@end')
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().splitlines() if l]
+        assert lines == ["A", "X", "B"]
+
+
+class TestBlockHooks:
+    def test_block_enter_hook_fires(self):
+        """api.block_hook("enter") fires at runtime when a block starts."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("hook-enter-mod")
+
+        def visit_hookable(transpiler, node):
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p) or transpiler._line("pass")
+
+        api.block_command("hookable", visit_hookable)
+
+        entered = []
+        api.block_hook("enter", lambda name, args: entered.append(name))
+
+        run_source('@hookable[]\n@end')
+        assert "hookable" in entered
+
+    def test_block_exit_hook_fires(self):
+        """api.block_hook("exit") fires at runtime when a block ends."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("hook-exit-mod")
+
+        def visit_exitblock(transpiler, node):
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p) or transpiler._line("pass")
+
+        api.block_command("exitblock", visit_exitblock)
+
+        exited = []
+        api.block_hook("exit", lambda name, args: exited.append(name))
+
+        run_source('@exitblock[]\n@end')
+        assert "exitblock" in exited

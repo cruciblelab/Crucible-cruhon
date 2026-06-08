@@ -39,7 +39,10 @@ class Transpiler:
     def __init__(self):
         self._indent = 0
         self._custom_visitors: dict = {}
-        self._block_visitors: dict = {}   # plugin_name → visitor_fn for PluginBlockNode
+        self._block_visitors: dict = {}        # plugin_name → visitor_fn
+        self._scoped_blocks: set = set()       # plugin names with auto ctx save/restore
+        self._node_transforms: dict = {}       # plugin_name → [transform_fn, ...]
+        self._block_hooks: dict = {}           # "enter"|"exit" → [fn, ...]
         self._pre_hooks: list = []
         self._post_hooks: list = []
         # Line map: python_line (1-based) → cruhon_line
@@ -484,19 +487,58 @@ class Transpiler:
 
     def visit_PluginBlockNode(self, node) -> str:
         """
-        Dispatch to the plugin's registered visitor.
-        If no visitor is registered, emit a comment so the program still runs.
+        Dispatch to the plugin's registered visitor with optional:
+          - ctx scope isolation (scoped=True saves/restores __ctx__)
+          - node transforms   (post-process generated Python code)
+          - block lifecycle   (emit __ph__("enter"/"exit", name) calls)
         """
         visitor = self._block_visitors.get(node.plugin_name)
-        if visitor:
-            try:
-                return visitor(self, node)
-            except Exception as e:
-                raise TranspileError(
-                    f"Block plugin '@{node.plugin_name}' raised {type(e).__name__}: {e}",
+        if not visitor:
+            return self._line(f"# @{node.plugin_name} block (no visitor registered)", node.line)
+
+        try:
+            parts = []
+
+            # Block enter hook
+            if self._block_hooks.get("enter"):
+                parts.append(self._line(
+                    f'__ph__("enter", {node.plugin_name!r}, {node.args!r})',
                     node.line
-                ) from e
-        return self._line(f"# @{node.plugin_name} block (no visitor registered)", node.line)
+                ))
+
+            # Ctx scope: save before body
+            scoped = node.plugin_name in self._scoped_blocks
+            if scoped:
+                parts.append(self._line("__ctx_stack__.append(dict(__ctx__))", node.line))
+
+            # Primary visitor
+            result = visitor(self, node)
+
+            # Apply registered transforms (other plugins can wrap this output)
+            for transform_fn in self._node_transforms.get(node.plugin_name, []):
+                result = transform_fn(self, node, result)
+
+            parts.append(result)
+
+            # Ctx scope: restore after body
+            if scoped:
+                parts.append(self._line(
+                    "__ctx__.clear(); __ctx__.update(__ctx_stack__.pop() if __ctx_stack__ else {})"
+                ))
+
+            # Block exit hook
+            if self._block_hooks.get("exit"):
+                parts.append(self._line(f'__ph__("exit", {node.plugin_name!r})'))
+
+            return "\n".join(p for p in parts if p)
+
+        except TranspileError:
+            raise
+        except Exception as e:
+            raise TranspileError(
+                f"Block plugin '@{node.plugin_name}' raised {type(e).__name__}: {e}",
+                node.line
+            ) from e
 
     def visit_NamespaceCallNode(self, node) -> str:
         """
