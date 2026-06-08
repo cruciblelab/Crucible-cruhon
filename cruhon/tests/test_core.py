@@ -702,3 +702,200 @@ class TestModSystem:
         ns = Namespace("myns")
         with pytest.raises(RuntimeError):
             ns.write_state("x", 1, "other_ns")
+
+
+# ─────────────────────────────────────────────────────────────
+# NAMED PARAMETERS
+# ─────────────────────────────────────────────────────────────
+
+class TestNamedArgs:
+    def setup_method(self):
+        from cruhon.core.syntax_engine import SyntaxEngine
+        self.engine = SyntaxEngine()
+
+    def test_positional_only(self):
+        args, kwargs = self.engine.split_named_args("a ; b ; c")
+        assert args == ["a", "b", "c"]
+        assert kwargs == {}
+
+    def test_kwargs_only(self):
+        args, kwargs = self.engine.split_named_args("reason=spam ; delete_days=7")
+        assert args == []
+        assert kwargs == {"reason": "spam", "delete_days": "7"}
+
+    def test_mixed_positional_and_kwargs(self):
+        args, kwargs = self.engine.split_named_args("url ; reason=spam ; delete_days=7")
+        assert args == ["url"]
+        assert kwargs == {"reason": "spam", "delete_days": "7"}
+
+    def test_kwarg_value_with_spaces(self):
+        args, kwargs = self.engine.split_named_args('msg=hello world ; n=5')
+        assert args == []
+        assert kwargs["msg"] == "hello world"
+        assert kwargs["n"] == "5"
+
+    def test_positional_after_kwarg_raises(self):
+        from cruhon.core.parser import ParseError
+        with pytest.raises(ParseError):
+            self.engine.split_named_args("key=val ; positional")
+
+    def test_equals_inside_string_is_not_kwarg(self):
+        args, kwargs = self.engine.split_named_args('"x=y"')
+        assert args == ['"x=y"']
+        assert kwargs == {}
+
+    def test_no_args(self):
+        args, kwargs = self.engine.split_named_args("")
+        assert args == []
+        assert kwargs == {}
+
+
+# ─────────────────────────────────────────────────────────────
+# HINT ENGINE
+# ─────────────────────────────────────────────────────────────
+
+class TestHints:
+    def test_nameerror_hint_suggests_quotes(self):
+        with pytest.raises(RunError) as exc_info:
+            run_source("@var[x; Cruhon]")
+        msg = str(exc_info.value)
+        assert "Hint" in msg
+        assert "quotes" in msg.lower() or "quote" in msg.lower()
+
+    def test_nameerror_hint_includes_variable_name(self):
+        with pytest.raises(RunError) as exc_info:
+            run_source("@var[x; SomeMissingName]")
+        assert "SomeMissingName" in str(exc_info.value)
+
+    def test_zerodivision_hint(self):
+        with pytest.raises(RunError) as exc_info:
+            run_source("@var[x; 1 / 0]")
+        assert "zero" in str(exc_info.value).lower()
+
+    def test_indexerror_hint(self):
+        with pytest.raises(RunError) as exc_info:
+            run_source("@var[lst; [1, 2]]\n@var[x; lst[99]]")
+        assert "index" in str(exc_info.value).lower() or "range" in str(exc_info.value).lower()
+
+    def test_no_false_positive_hint_on_valid_code(self, capsys):
+        run_source('@var[x; "hello"]\n@print[{x}]')
+        captured = capsys.readouterr()
+        assert "hello" in captured.out
+
+
+# ─────────────────────────────────────────────────────────────
+# BLOCK PLUGIN COMMANDS
+# ─────────────────────────────────────────────────────────────
+
+class TestBlockPlugin:
+    def test_block_command_basic(self, capsys):
+        """api.block_command registers a block that runs its body."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("test_block_mod")
+
+        collected = {}
+
+        def visit_section(transpiler, node):
+            collected["args"] = node.args
+            collected["kwargs"] = node.kwargs
+            # Emit body at current indent level (section is a transparent wrapper)
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p)
+
+        api.block_command("section", visit_section)
+
+        run_source('@section["intro"]\n    @print["inside block"]\n@end')
+        captured = capsys.readouterr()
+        assert "inside block" in captured.out
+        assert collected["args"] == ['"intro"']
+
+    def test_block_command_named_args(self):
+        """Block command receives named args in node.kwargs."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("test_block_kwargs")
+
+        received_kwargs = {}
+
+        def visit_cmd(transpiler, node):
+            received_kwargs.update(node.kwargs)
+            parts = [child.accept(transpiler) for child in node.body]
+            return "\n".join(p for p in parts if p)
+
+        api.block_command("mblock", visit_cmd)
+
+        run_source('@mblock["hello"; priority=high]\n    @print["x"]\n@end')
+        assert received_kwargs.get("priority") == "high"
+
+    def test_block_command_empty_body(self, capsys):
+        """Block command with no body should not crash."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("test_empty_block")
+
+        def visit_empty(transpiler, node):
+            return transpiler._line("pass")
+
+        api.block_command("emptyblock", visit_empty)
+        run_source('@emptyblock[]\n@end')  # no error
+
+    def test_plugin_block_node_fields(self):
+        """PluginBlockNode has the expected fields."""
+        from cruhon.core.ast_nodes import PluginBlockNode
+        node = PluginBlockNode(plugin_name="test", args=["a"], kwargs={"k": "v"}, body=[])
+        assert node.plugin_name == "test"
+        assert node.args == ["a"]
+        assert node.kwargs == {"k": "v"}
+
+
+# ─────────────────────────────────────────────────────────────
+# CONTEXT VARIABLES
+# ─────────────────────────────────────────────────────────────
+
+class TestContextVars:
+    def test_ctx_set_and_read(self, capsys):
+        run_source('@ctx.set["username"; "Alice"]\n@var[u; @ctx["username"]]\n@print[{u}]')
+        captured = capsys.readouterr()
+        assert "Alice" in captured.out
+
+    def test_ctx_default_when_missing(self, capsys):
+        run_source('@var[v; @ctx["missing"; "fallback"]]\n@print[{v}]')
+        captured = capsys.readouterr()
+        assert "fallback" in captured.out
+
+    def test_ctx_get_method(self, capsys):
+        run_source('@ctx.set["score"; 99]\n@var[s; @ctx.get["score"]]\n@print[{s}]')
+        captured = capsys.readouterr()
+        assert "99" in captured.out
+
+    def test_ctx_clear(self, capsys):
+        run_source('@ctx.set["x"; "val"]\n@ctx.clear[]\n@var[v; @ctx["x"; "gone"]]\n@print[{v}]')
+        captured = capsys.readouterr()
+        assert "gone" in captured.out
+
+    def test_ctx_delete(self, capsys):
+        run_source('@ctx.set["k"; "v"]\n@ctx.delete["k"]\n@var[v; @ctx["k"; "deleted"]]\n@print[{v}]')
+        captured = capsys.readouterr()
+        assert "deleted" in captured.out
+
+    def test_ctx_plugin_sets_for_block(self, capsys):
+        """Plugin block that pre-populates __ctx__ before running body."""
+        from cruhon.core.mod_loader import ModAPI
+
+        api = ModAPI("test_ctx_plugin")
+
+        def visit_withuser(transpiler, node):
+            username = node.args[0] if node.args else '"unknown"'
+            lines = [transpiler._line(f'__ctx__["user"] = {username}')]
+            for child in node.body:
+                r = child.accept(transpiler)
+                if r:
+                    lines.append(r)
+            return "\n".join(lines)
+
+        api.block_command("withuser", visit_withuser)
+
+        run_source('@withuser["Bob"]\n    @var[u; @ctx["user"]]\n    @print[{u}]\n@end')
+        captured = capsys.readouterr()
+        assert "Bob" in captured.out

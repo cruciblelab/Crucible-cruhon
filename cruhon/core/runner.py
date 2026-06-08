@@ -108,6 +108,56 @@ def resolve_includes(ast: ProgramNode, base_dir: Path, included: Optional[set] =
 
 
 # ─────────────────────────────────────────────────────────────
+# HINT ENGINE — friendly error messages
+# ─────────────────────────────────────────────────────────────
+
+def _build_hint(exc: Exception, python_code: str, python_line: int) -> str:
+    """
+    Return a human-friendly hint for common runtime errors.
+    Returns empty string if no hint applies.
+    """
+    import re
+
+    if isinstance(exc, NameError):
+        # Extract the undefined name from the error message
+        m = re.search(r"name '([^']+)' is not defined", str(exc))
+        if m:
+            name = m.group(1)
+            # Find the source line in generated Python
+            lines = python_code.splitlines()
+            src_line = lines[python_line - 1] if 0 < python_line <= len(lines) else ""
+
+            # If the name appears unquoted as a value (right of = or in a call)
+            # and looks like the user forgot quotes, suggest quoting.
+            if re.search(rf'\b{re.escape(name)}\b', src_line):
+                # Looks like a plain word value — suggest quoting
+                return (
+                    f"'{name}' is not defined as a variable. "
+                    f"If you meant a string, add quotes: \"{name}\""
+                )
+
+    if isinstance(exc, TypeError):
+        if "argument" in str(exc).lower() or "positional" in str(exc).lower():
+            return "Check the number of arguments passed to the function."
+
+    if isinstance(exc, AttributeError):
+        m = re.search(r"'([^']+)' object has no attribute '([^']+)'", str(exc))
+        if m:
+            return f"'{m.group(1)}' has no method or property '{m.group(2)}'."
+
+    if isinstance(exc, KeyError):
+        return f"Key {exc} not found. Check the key name or use a default value."
+
+    if isinstance(exc, IndexError):
+        return "List index out of range. Check that the list has enough items."
+
+    if isinstance(exc, ZeroDivisionError):
+        return "Division by zero. Add a check before dividing."
+
+    return ""
+
+
+# ─────────────────────────────────────────────────────────────
 # SHOW-PYTHON FORMATTING
 # ─────────────────────────────────────────────────────────────
 
@@ -184,7 +234,7 @@ def run_source(
         try:
             exec(
                 compile(python_code, f"<cruhon:{filename}>", "exec"),
-                {"__name__": "__main__", "__ns__": ns_registry}
+                {"__name__": "__main__", "__ns__": ns_registry, "__ctx__": {}}
             )
         finally:
             ns_registry.destroy_all()  # fire destroy hooks after exec
@@ -205,15 +255,15 @@ def run_source(
     except Exception as e:
         fire_hook("on_error", error=e)
 
-        # Translate Python line → Cruhon line
         try:
             tb = traceback.extract_tb(e.__traceback__)
             python_line = tb[-1].lineno if tb else 0
             cruhon_line = transpiler._line_map.get(python_line, "?")
-            raise RunError(
-                f"{type(e).__name__}: {e}\n"
-                f"  → at line {cruhon_line} in {filename}"
-            ) from e
+            hint = _build_hint(e, python_code, python_line)
+            msg = f"{type(e).__name__}: {e}\n  → at line {cruhon_line} in {filename}"
+            if hint:
+                msg += f"\n  Hint: {hint}"
+            raise RunError(msg) from e
         except RunError:
             raise
         except Exception:

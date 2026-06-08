@@ -6,6 +6,9 @@ Both Lexer._read_raw and Parser.parse_args delegate here.
 
 Introduced in v0.6 to fix inconsistent bracket/depth handling between
 the two previous separate implementations.
+
+v1.0: split_named_args() added — parses key=value kwargs alongside
+positional args. Returns (positional: list[str], kwargs: dict[str, str]).
 """
 
 from __future__ import annotations
@@ -73,6 +76,52 @@ class SyntaxEngine:
             args.append(last)
 
         return args
+
+    def split_named_args(self, source: str) -> tuple[list[str], dict[str, str]]:
+        """
+        Split args into positional list and keyword dict.
+
+        @command[pos1; pos2; key=value; key2=value2]
+        → (["pos1", "pos2"], {"key": "value", "key2": "value2"})
+
+        Rules:
+          - key=value at depth 0 → kwarg (key must be identifier)
+          - everything else → positional arg
+          - = inside strings or nested brackets is NOT a kwarg separator
+          - positional args before kwargs are fine; kwargs cannot come
+            before positional args (raises ParseError)
+
+        Examples:
+          "url; reason=spam"           → (["url"], {"reason": "spam"})
+          "@mentioned; delete_days=7"  → (["@mentioned"], {"delete_days": "7"})
+          "5; per=1h; per_user=true"   → (["5"], {"per": "1h", "per_user": "true"})
+          "a; b; c"                    → (["a", "b", "c"], {})
+        """
+        import re
+        raw_parts = self.split_args(source)
+        positional: list[str] = []
+        kwargs: dict[str, str] = {}
+        saw_kwarg = False
+
+        for part in raw_parts:
+            # Detect key=value: identifier immediately followed by = then value
+            # The = must not be inside a string or nested brackets.
+            # Quick heuristic: check if part matches /^[a-zA-Z_]\w*\s*=\s*.+/
+            m = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.*)$', part, re.DOTALL)
+            if m:
+                saw_kwarg = True
+                kwargs[m.group(1)] = m.group(2).strip()
+            else:
+                if saw_kwarg:
+                    from .parser import ParseError
+                    raise ParseError(
+                        f"Positional argument {part!r} after keyword argument. "
+                        f"All positional arguments must come before key=value pairs.",
+                        0
+                    )
+                positional.append(part)
+
+        return positional, kwargs
 
     def read_block(self, line: str, start: int) -> tuple[str, int]:
         """

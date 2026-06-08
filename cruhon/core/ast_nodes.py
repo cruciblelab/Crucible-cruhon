@@ -245,6 +245,25 @@ class NamespaceCallNode(Node):
     args: list = field(default_factory=list)
 
 
+@dataclass
+class PluginBlockNode(Node):
+    """
+    Generic block node for plugin-defined block commands.
+
+    Plugins that use api.block_command() get their body wrapped in
+    this node without needing to define a custom dataclass.
+
+    plugin_name: full command name as registered (e.g. "route", "todo")
+    args: positional arguments from the command header
+    kwargs: keyword arguments from the command header
+    body: parsed child nodes between header and @end
+    """
+    plugin_name: str = ""
+    args: List[str] = field(default_factory=list)
+    kwargs: dict = field(default_factory=dict)
+    body: List[Node] = field(default_factory=list)
+
+
 # ─────────────────────────────────────────────────────────────
 # MOD SYSTEM — dynamic node registration
 # ─────────────────────────────────────────────────────────────

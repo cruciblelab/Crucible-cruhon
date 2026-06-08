@@ -32,6 +32,7 @@ _LIBS: dict[str, str] = {
     "http":        "requests",   # @import[http] → import requests
     "httpx":       "httpx",      # async HTTP client
     "store":       None,         # @import[store] not needed — helpers auto-injected
+    "ctx":         None,         # @ctx.* — context variable access, no import needed
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -117,9 +118,22 @@ def _setup_store_lib_calls():
         register_lib_call("store", method, handler)
 
 
+def _setup_ctx_lib_calls():
+    """Register @ctx.* handlers — read/write the __ctx__ execution context dict."""
+    register_lib_call("ctx", "set",
+        lambda args: f'__ctx__[{args[0]}] = {args[1]}' if len(args) >= 2 else '__ctx__')
+    register_lib_call("ctx", "get",
+        lambda args: f'__ctx__.get({args[0]}, {args[1] if len(args) > 1 else "None"})')
+    register_lib_call("ctx", "clear",
+        lambda args: '__ctx__.clear()')
+    register_lib_call("ctx", "delete",
+        lambda args: f'__ctx__.pop({args[0]}, None)')
+
+
 _setup_core_lib_calls()
 _setup_http_lib_calls()
 _setup_store_lib_calls()
+_setup_ctx_lib_calls()
 
 
 # ─────────────────────────────────────────────────────────────

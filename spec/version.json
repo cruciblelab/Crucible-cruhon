@@ -1,6 +1,6 @@
 {
-  "current": "0.9.2",
-  "spec_version": "0.9",
+  "current": "1.0.0",
+  "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
     "active_from": "0.5.0",
@@ -29,7 +29,7 @@
       "status": "released",
       "summary": "v0.9.2: Pre-release cleanup. Namespace conflict fix (first wins, second gets existing ns back). Path traversal guard in @file.* and @json.read/write. HTTP timeout=30 on all sync requests. SSRF guard in @http.*. Version consistency across all files. Docs updated to v0.9 Stable. library.md translated to English."
     },
-    {"version": "1.0.0",   "status": "planned",  "summary": "Spec freeze, compatibility lock, stable plugin API, full documentation"}
+    {"version": "1.0.0",   "status": "released", "summary": "v1.0.0: Named parameters (key=value args), friendly error hints, block plugin commands (api.block_command), context variables (__ctx__ / @ctx / @ctx.set), 139-test suite, PluginBlockNode, parse_plugin_block(). Stable plugin API."}
   ],
   "frozen_at": null,
   "breaking_change_policy": "major version bump required"

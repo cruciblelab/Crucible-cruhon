@@ -257,7 +257,7 @@ class Parser:
         line = self.current.line
 
         # Inline expression commands — produce a Python expression string
-        inline_expr_cmds = {"env", "list", "dict", "fetch"}
+        inline_expr_cmds = {"env", "list", "dict", "fetch", "ctx"}
 
         if cmd in inline_expr_cmds:
             if cmd == "env":
@@ -291,6 +291,13 @@ class Parser:
                 args = self.parse_args()
                 url = args[0] if args else '""'
                 return f"requests.get({url})"
+
+            elif cmd == "ctx":
+                self.advance()  # @ctx
+                args = self.parse_args()
+                key = args[0] if args else '""'
+                default = args[1] if len(args) > 1 else "None"
+                return f"__ctx__.get({key}, {default})"
 
         # Unknown inline command — raise error with line info
         raise ParseError(
@@ -383,6 +390,50 @@ class Parser:
                 engine.validate_arg(arg, self.current.line)
 
         return args
+
+    def parse_plugin_block(self, plugin_name: str) -> "PluginBlockNode":
+        """
+        Convenience parser for plugin block commands registered via
+        api.block_command(). Handles args + body + @end automatically.
+
+        Plugins that use api.block_command() never call this directly —
+        it is called by the lambda registered in the parser.
+        """
+        line = self.current.line
+        self.advance()  # consume the command token
+        args, kwargs = self.parse_named_args()
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        body = self._parse_block()
+
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+
+        return PluginBlockNode(plugin_name=plugin_name, args=args, kwargs=kwargs, body=body, line=line)
+
+    def parse_named_args(self) -> tuple[list[str], dict[str, str]]:
+        """
+        Parse @command[pos1; pos2; key=value; key2=value2]
+        Returns (positional_args, kwargs).
+
+        Positional args are returned as strings (same as parse_args).
+        Keyword args are returned as {key: value_string} dict.
+
+        Usage:
+            args, kwargs = self.parse_named_args()
+            url   = args[0]
+            reason = kwargs.get("reason", "")
+        """
+        raw_args = self.parse_args()
+        engine = get_syntax_engine()
+        # Re-join and re-split to apply named-arg detection.
+        # parse_args() already resolved inline @commands, so join them
+        # back with ; and run split_named_args on the result.
+        rejoined = " ; ".join(raw_args)
+        return engine.split_named_args(rejoined)
 
     def _parse_single_arg(self) -> str:
         """Read a single argument."""

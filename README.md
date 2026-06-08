@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v0.9.2
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v1.0.0
 
 ---
 
@@ -335,6 +335,31 @@ These can be used inside `@var` values:
 @var[port; @env[PORT; 8080]]
 ```
 
+### Context Variables (`@ctx.*`)
+
+`__ctx__` is a shared dict available throughout execution. Plugins populate it before
+running a block body; code inside the block reads from it.
+
+```clpy
+# Write
+@ctx.set["username"; "Alice"]
+@ctx.set["score"; 100]
+
+# Read (inline expression)
+@var[u; @ctx["username"]]
+@var[u; @ctx["username"; "guest"]]   # with default
+
+# Other operations
+@var[s; @ctx.get["score"]]
+@ctx.clear[]
+@ctx.delete["score"]
+
+# Typical use in a plugin block
+@withuser["Bob"]
+    @print[Hello, {@ctx["user"]}!]
+@end
+```
+
 ---
 
 ## Value Semantics
@@ -393,7 +418,7 @@ myproject/
 {
   "name": "my-mod",
   "version": "1.0.0",
-  "cruhon": ">=0.9.0",
+  "cruhon": ">=1.0.0",
   "namespace": "mymod",
   "author": "You"
 }
@@ -403,8 +428,11 @@ myproject/
 
 ```python
 def register(api):
-    # Add a new command
+    # Add a new inline command
     api.command("say", parse_say, visit_say)
+
+    # Register a block command (body between header and @end)
+    api.block_command("route", visit_route)
 
     # Override an existing command (middleware chain)
     api.override("print", my_print_middleware)
@@ -422,6 +450,48 @@ def register(api):
     api.hook("before_run", setup)
     api.hook("after_run", teardown)
     api.hook("on_error", handle_error)
+
+
+def visit_route(transpiler, node):
+    # node.args   — positional args (e.g. ['"/"'])
+    # node.kwargs — keyword args   (e.g. {"method": '"GET"'})
+    # node.body   — child AST nodes between @route[...] and @end
+    path = node.args[0] if node.args else '""'
+    method = node.kwargs.get("method", '"GET"')
+    body_code = "\n".join(
+        result for n in node.body
+        if (result := n.accept(transpiler))
+    )
+    return (
+        transpiler._line(f"@app.route({path}, methods=[{method}]):")
+        + "\n"
+        + body_code
+    )
+```
+
+**Block commands in `.clpy`:**
+
+```clpy
+@route["/api/users"; method="GET"]
+    @var[users; db.get_all()]
+    @return[users]
+@end
+```
+
+**Named parameters** — all commands support `key=value` syntax:
+
+```clpy
+@http.post["https://api.example.com/ban"; reason="spam"; delete_days=7]
+```
+
+Inside a mod:
+
+```python
+def parse_ban(parser):
+    args, kwargs = parser.parse_named_args()
+    reason = kwargs.get("reason", "")
+    days = kwargs.get("delete_days", "0")
+    return BanNode(target=args[0], reason=reason, days=days)
 ```
 
 ### Publishing a Mod

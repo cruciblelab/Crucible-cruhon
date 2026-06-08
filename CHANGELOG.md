@@ -4,7 +4,43 @@ All notable changes are documented here.
 
 ---
 
-## v0.9.2 (current)
+## v1.0.0 (current)
+
+### New Features
+
+- **Named parameters** — `@command[pos1; pos2; key=value]` syntax.  
+  `parse_named_args()` returns `(positional_list, kwargs_dict)`.  
+  `split_named_args()` added to `SyntaxEngine`.
+
+- **Friendly error hints** — runtime errors now include actionable hints:
+  - `NameError` → suggests adding quotes if the name looks like a string
+  - `ZeroDivisionError`, `IndexError`, `KeyError`, `TypeError`, `AttributeError` — each gets a specific message
+
+- **Block plugin commands** — `api.block_command("name", visitor_fn)` registers a block that opens with `@name[...]`, contains a body, and closes with `@end`.  
+  No custom AST node class needed — body lands in `PluginBlockNode`.  
+  Plugin visitors receive `node.args`, `node.kwargs`, `node.body`.
+
+- **Context variables** — lightweight `__ctx__` dict for plugin→code data passing:
+  - `@ctx["key"]` / `@ctx["key"; default]` — read context (inline expression)
+  - `@ctx.set["key"; value]` — write context at runtime
+  - `@ctx.get["key"]` / `@ctx.clear[]` / `@ctx.delete["key"]` — full dict API
+  - Plugins emit `__ctx__["key"] = value` before running block bodies
+
+### New APIs
+
+- `PluginBlockNode(plugin_name, args, kwargs, body)` — generic block node
+- `Parser.parse_plugin_block(name)` — parse args + body + `@end` in one call
+- `Transpiler._block_visitors` — dict for per-plugin block dispatch
+- `ModAPI.block_command(name, visitor_fn)` — one-line block command registration
+
+### Testing
+
+- Test suite expanded from 117 → 139 tests
+- New: `TestNamedArgs`, `TestHints`, `TestBlockPlugin`, `TestContextVars`
+
+---
+
+## v0.9.2
 
 - Namespace conflict resolution: first registrant wins, second gets existing namespace back
 - Path traversal guard in `@file.*` and `@json.read/write`

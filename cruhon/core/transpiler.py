@@ -39,6 +39,7 @@ class Transpiler:
     def __init__(self):
         self._indent = 0
         self._custom_visitors: dict = {}
+        self._block_visitors: dict = {}   # plugin_name → visitor_fn for PluginBlockNode
         self._pre_hooks: list = []
         self._post_hooks: list = []
         # Line map: python_line (1-based) → cruhon_line
@@ -474,6 +475,16 @@ class Transpiler:
         # Fallback: direct Python call
         args = ", ".join(f'"{a}"' if not a.startswith('"') else a for a in node.args)
         return self._line(f"{node.namespace}.{node.method}({args})", node.line)
+
+    def visit_PluginBlockNode(self, node) -> str:
+        """
+        Dispatch to the plugin's registered visitor.
+        If no visitor is registered, emit a comment so the program still runs.
+        """
+        visitor = self._block_visitors.get(node.plugin_name)
+        if visitor:
+            return visitor(self, node)
+        return self._line(f"# @{node.plugin_name} block (no visitor registered)", node.line)
 
     def visit_NamespaceCallNode(self, node) -> str:
         """

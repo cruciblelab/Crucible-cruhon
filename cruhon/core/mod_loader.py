@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "0.9.2"
+CRUHON_VERSION = "1.0.0"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -168,6 +168,34 @@ class ModAPI:
 
         node_name = f"{name.replace('.', '_').title()}Node"
         self._transpiler._custom_visitors[node_name] = visitor_fn
+
+    def block_command(self, name: str, visitor_fn):
+        """
+        Register a plugin block command — the simple path.
+
+        Usage:
+            def register(api):
+                api.block_command("route", visit_route)
+
+            def visit_route(transpiler, node):
+                # node.args    — positional args from @route[path; method=GET]
+                # node.kwargs  — keyword args  (e.g. {"method": "GET"})
+                # node.body    — child nodes between @route[...] and @end
+                path = node.args[0]
+                body_code = transpiler._block(node.body)
+                return transpiler._line(f"@app.route({path}):") + "\\n" + body_code
+
+        The command is available as @{name}[...] ... @end in .clpy files.
+        No custom AST node class needed — body lands in PluginBlockNode.
+        """
+        _name = name
+
+        def _block_parser():
+            return self._parser.parse_plugin_block(_name)
+
+        self._parser.register_block_command(name, _block_parser)
+        self._transpiler._block_visitors[name] = visitor_fn
+        _log(f"[{self.mod_name}] Block command registered: @{name}")
 
     def override(self, command: str, fn, warn: bool = True):
         """
