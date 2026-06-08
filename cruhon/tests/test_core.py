@@ -899,3 +899,89 @@ class TestContextVars:
         run_source('@withuser["Bob"]\n    @var[u; @ctx["user"]]\n    @print[{u}]\n@end')
         captured = capsys.readouterr()
         assert "Bob" in captured.out
+
+
+# ─────────────────────────────────────────────────────────────
+# PLUGIN FOUNDATION SYSTEM (v1.1.0)
+# ─────────────────────────────────────────────────────────────
+
+class TestPluginFoundation:
+    def test_expose_and_consume(self):
+        from cruhon.core.mod_loader import ModAPI, _EXPOSED_APIS
+        api_a = ModAPI("foundation-plugin")
+        api_a.expose("helper", lambda x: x * 2)
+
+        api_b = ModAPI("dependent-plugin")
+        helper = api_b.consume("foundation-plugin", "helper")
+        assert helper(5) == 10
+
+    def test_consume_missing_raises(self):
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("consumer-plugin")
+        with pytest.raises(RuntimeError, match="not exposed"):
+            api.consume("nonexistent-plugin", "some_key")
+
+    def test_consume_with_default(self):
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("consumer-default")
+        result = api.consume("nonexistent-plugin", "key", default="fallback")
+        assert result == "fallback"
+
+    def test_is_loaded_true(self):
+        from cruhon.core.mod_loader import ModAPI, _LOADED_MODS
+        _LOADED_MODS["test-is-loaded-mod"] = {"version": "1.0", "source": "test", "source_path": "", "manifest": {}}
+        api = ModAPI("checker")
+        assert api.is_loaded("test-is-loaded-mod") is True
+
+    def test_is_loaded_false(self):
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("checker2")
+        assert api.is_loaded("definitely-not-loaded-xyz") is False
+
+    def test_config_reads_from_manifest(self):
+        from cruhon.core.mod_loader import ModAPI, _LOADED_MODS
+        _LOADED_MODS["config-test-mod"] = {
+            "version": "1.0", "source": "test", "source_path": "",
+            "manifest": {"prefix": "!", "debug": True}
+        }
+        api = ModAPI("config-test-mod")
+        assert api.config("prefix") == "!"
+        assert api.config("debug") is True
+        assert api.config("missing", default="x") == "x"
+
+    def test_expose_multiple_keys(self):
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("multi-expose-plugin")
+        api.expose("fn_a", lambda: "a")
+        api.expose("fn_b", lambda: "b")
+        fn_a = api.consume("multi-expose-plugin", "fn_a")
+        fn_b = api.consume("multi-expose-plugin", "fn_b")
+        assert fn_a() == "a"
+        assert fn_b() == "b"
+
+    def test_version_aware_dependency(self):
+        from cruhon.core.dependency_resolver import DependencyResolver
+        resolver = DependencyResolver()
+        resolver.mark_loaded("cruhon-base", "2.0.0")
+        resolver.declare("my-plugin", ["cruhon-base >= 1.0.0"])
+        missing = resolver.check("my-plugin")
+        assert missing == []
+
+    def test_version_constraint_fails(self):
+        from cruhon.core.dependency_resolver import DependencyResolver
+        resolver = DependencyResolver()
+        resolver.mark_loaded("cruhon-base", "0.5.0")
+        resolver.declare("my-plugin", ["cruhon-base >= 1.0.0"])
+        missing = resolver.check("my-plugin")
+        assert len(missing) == 1
+        assert "cruhon-base" in missing[0]
+
+    def test_list_exposed_apis(self):
+        from cruhon.core.mod_loader import ModAPI, list_exposed_apis
+        api = ModAPI("list-test-plugin")
+        api.expose("foo", 42)
+        api.expose("bar", lambda: None)
+        exposed = list_exposed_apis()
+        assert "list-test-plugin" in exposed
+        assert "foo" in exposed["list-test-plugin"]
+        assert "bar" in exposed["list-test-plugin"]

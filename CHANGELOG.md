@@ -4,7 +4,26 @@ All notable changes are documented here.
 
 ---
 
-## v1.0.0 (current)
+## v1.1.0 (current)
+
+### Plugin Foundation System
+
+- **`api.expose(key, value)`** — Plugin başka pluginler için API/utility yayınlar
+- **`api.consume(plugin, key)`** — Başka plugin'in yayınladığını alır; default destekler
+- **`api.is_loaded(name)`** — Plugin yüklü mü kontrol eder (bool)
+- **`api.config(key, default)`** — Plugin'in kendi `mod.json` manifest'inden veri okur
+- **Versiyon-aware bağımlılık** — `require("cruhon-utils >= 1.2.0")` gerçekten versiyon kısıtlamasını kontrol eder
+- **Hata attribution** — Plugin visitor'larından gelen hatalar plugin adını gösterir
+- **`list_exposed_apis()`** — Tüm yayınlanmış plugin API'lerini listeler
+
+### Testing
+
+- Test suite: 139 → 150 tests
+- New: `TestPluginFoundation`
+
+---
+
+## v1.0.0
 
 ### New Features
 

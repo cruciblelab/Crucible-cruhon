@@ -29,28 +29,37 @@ class DependencyResolver:
     def __init__(self):
         self._requirements: dict[str, list[str]] = {}  # mod → [required mods]
         self._loaded: list[str] = []
+        self._loaded_versions: dict[str, str] = {}  # mod_name → version string
 
     def declare(self, mod_name: str, requires: list[str]):
         """Declare that mod_name requires these mods."""
         self._requirements[mod_name] = requires
 
-    def mark_loaded(self, mod_name: str):
+    def mark_loaded(self, mod_name: str, version: str = "?"):
         """Mark a mod as successfully loaded."""
         if mod_name not in self._loaded:
             self._loaded.append(mod_name)
+        self._loaded_versions[mod_name] = version
 
     def check(self, mod_name: str) -> list[str]:
         """
         Check if all requirements for mod_name are satisfied.
-        Returns list of missing dependencies.
+        Returns list of missing or version-mismatched dependencies.
         """
+        from .mod_loader import _parse_version, _check_version_compat
         required = self._requirements.get(mod_name, [])
         missing = []
         for req in required:
-            # Support "mod >= version" format (v0.8: ignore version, just check name)
-            req_name = req.split()[0] if " " in req else req
-            if req_name not in self._loaded:
+            parts = req.strip().split(None, 1)
+            req_name = parts[0]
+            version_constraint = parts[1] if len(parts) > 1 else None
+
+            if req_name not in self._loaded_versions:
                 missing.append(req)
+            elif version_constraint:
+                loaded_ver = self._loaded_versions[req_name]
+                if not _check_version_compat(version_constraint, loaded_ver):
+                    missing.append(f"{req} (loaded: {loaded_ver})")
         return missing
 
     def ordered_load(self, mods: list[str]) -> list[str]:

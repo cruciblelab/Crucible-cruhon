@@ -320,7 +320,13 @@ class Transpiler:
         """Unknown node — check mod visitors."""
         node_name = node.__class__.__name__
         if node_name in self._custom_visitors:
-            return self._custom_visitors[node_name](self, node)
+            try:
+                return self._custom_visitors[node_name](self, node)
+            except Exception as e:
+                raise TranspileError(
+                    f"Plugin visitor for '{node_name}' raised {type(e).__name__}: {e}",
+                    node.line
+                ) from e
         return self._line(f"# Unknown node: {node_name}")
 
     # ── Core visitors ─────────────────────────────────────────
@@ -483,7 +489,13 @@ class Transpiler:
         """
         visitor = self._block_visitors.get(node.plugin_name)
         if visitor:
-            return visitor(self, node)
+            try:
+                return visitor(self, node)
+            except Exception as e:
+                raise TranspileError(
+                    f"Block plugin '@{node.plugin_name}' raised {type(e).__name__}: {e}",
+                    node.line
+                ) from e
         return self._line(f"# @{node.plugin_name} block (no visitor registered)", node.line)
 
     def visit_NamespaceCallNode(self, node) -> str:

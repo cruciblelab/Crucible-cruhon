@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "1.0.0"
+CRUHON_VERSION = "1.1.0"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -64,6 +64,9 @@ _CLAIMED_NAMESPACES: dict[str, str] = {}   # namespace → first claimant mod na
 _CLAIMED_ALIASES: dict[str, str] = {}      # alias    → first claimant mod name
 _OVERRIDE_CHAINS: dict[str, list[str]] = {}  # command → [mod names in chain order]
 _WARNINGS: list[str] = []                  # collected warnings for `cruhon mods`
+
+_EXPOSED_APIS: dict[str, dict] = {}   # plugin_name → {key: value}
+_MISSING = object()  # sentinel for consume() default
 
 
 # ─────────────────────────────────────────────────────────────
@@ -324,6 +327,65 @@ class ModAPI:
         resolver.declare(self.mod_name, existing)
         _log(f"[{self.mod_name}] Requires: {dependency}")
 
+    def expose(self, key: str, value):
+        """
+        Publish a value or function for other plugins to consume.
+
+        Usage (foundation plugin):
+            api.expose("format_date", lambda dt: dt.strftime("%Y-%m-%d"))
+            api.expose("slugify", lambda s: s.lower().replace(" ", "-"))
+        """
+        if self.mod_name not in _EXPOSED_APIS:
+            _EXPOSED_APIS[self.mod_name] = {}
+        _EXPOSED_APIS[self.mod_name][key] = value
+        _log(f"[{self.mod_name}] Exposed: {key}")
+
+    def consume(self, plugin_name: str, key: str, default=_MISSING):
+        """
+        Consume a value exposed by another plugin.
+
+        Raises RuntimeError if plugin not loaded or key not exposed,
+        unless a default is provided.
+
+        Usage (dependent plugin):
+            fmt = api.consume("cruhon-utils", "format_date")
+            slugify = api.consume("cruhon-utils", "slugify", default=None)
+        """
+        plugin_apis = _EXPOSED_APIS.get(plugin_name, {})
+        if key not in plugin_apis:
+            if default is _MISSING:
+                raise RuntimeError(
+                    f"[{self.mod_name}] Cannot consume '{key}' from '{plugin_name}': "
+                    f"not exposed or plugin not loaded. "
+                    f"Make sure '{plugin_name}' is loaded before this plugin."
+                )
+            return default
+        return plugin_apis[key]
+
+    def is_loaded(self, name: str) -> bool:
+        """
+        Check if a plugin is loaded.
+
+        Usage:
+            if api.is_loaded("cruhon-redis"):
+                api.expose("cache_backend", redis_cache)
+            else:
+                api.expose("cache_backend", memory_cache)
+        """
+        return name in _LOADED_MODS
+
+    def config(self, key: str, default=None):
+        """
+        Read a value from this plugin's mod.json manifest.
+
+        Usage (in register()):
+            prefix = api.config("prefix", default="!")
+            debug  = api.config("debug", default=False)
+        """
+        mod_info = _LOADED_MODS.get(self.mod_name, {})
+        manifest = mod_info.get("manifest", {})
+        return manifest.get(key, default)
+
     def alias(self, alias_name: str, target: str) -> bool:
         """
         Register an alias shortcut.
@@ -415,13 +477,14 @@ def _log(msg: str):
         print(f"  \033[90m{msg}\033[0m")
 
 
-def _record_loaded(name: str, version: str, source: str, source_path: str = ""):
+def _record_loaded(name: str, version: str, source: str, source_path: str = "", manifest: dict = None):
     """Record a successfully loaded mod in the tracking structures."""
     _LOAD_ORDER.append(name)
     _LOADED_MODS[name] = {
         "version": version,
         "source": source,          # "pip" or "local"
         "source_path": source_path,
+        "manifest": manifest or {},
     }
 
 
@@ -480,11 +543,11 @@ def load_mod_from_path(mod_path: Path) -> bool:
             api = ModAPI(mod_name)
             module.register(api)
             register_mod(manifest)
-            _record_loaded(mod_name, mod_version, "local", str(mod_path))
+            _record_loaded(mod_name, mod_version, "local", str(mod_path), manifest=manifest)
             _log(f"[ModLoader] Local mod loaded: {mod_name} v{mod_version}")
             # Dependency tracking
             from .dependency_resolver import get_dependency_resolver
-            get_dependency_resolver().mark_loaded(mod_name)
+            get_dependency_resolver().mark_loaded(mod_name, mod_version)
             missing = get_dependency_resolver().check(mod_name)
             for dep in missing:
                 print(f"  \033[33m⚠ [{mod_name}] requires '{dep}' which is not loaded\033[0m")
@@ -616,3 +679,8 @@ def get_override_chains() -> dict[str, list[str]]:
 def get_warnings() -> list[str]:
     """Return collected warnings."""
     return list(_WARNINGS)
+
+
+def list_exposed_apis() -> dict[str, list[str]]:
+    """Return {plugin_name: [key, ...]} for all exposed plugin APIs."""
+    return {name: list(apis.keys()) for name, apis in _EXPOSED_APIS.items()}
