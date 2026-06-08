@@ -43,6 +43,7 @@ class Parser:
         self.pos: int = 0
         self._commands: dict[str, Callable] = {}
         self._block_commands: dict[str, Callable] = {}
+        self._inline_commands: dict[str, Callable] = {}
         self._pre_hooks: list = []
         self._post_hooks: list = []
         # Track inline expressions that require auto-imports
@@ -64,6 +65,18 @@ class Parser:
     def register_block_command(self, name: str, fn: Callable):
         """Register a block-opening command (closed by @end)."""
         self._block_commands[name] = fn
+
+    def register_inline_command(self, name: str, fn: Callable):
+        """
+        Register an inline expression command.
+
+        fn(parser) -> str
+          Called when @name appears inside an argument context.
+          fn must call parser.advance() to consume the command token,
+          then optionally parser.parse_args() for arguments.
+          Must return a Python expression string.
+        """
+        self._inline_commands[name] = fn
 
     def add_pre_hook(self, fn: Callable):
         """Token manipulation before parsing."""
@@ -310,10 +323,17 @@ class Parser:
                 default = args[1] if len(args) > 1 else "None"
                 return f"__ctx__.get({key}, {default})"
 
+        # Plugin-registered inline commands
+        if cmd in self._inline_commands:
+            return self._inline_commands[cmd](self)
+
         # Unknown inline command — raise error with line info
+        builtin = "@env, @list, @dict, @fetch, @ctx"
+        plugin_names = ", ".join(f"@{k}" for k in self._inline_commands) if self._inline_commands else ""
+        available = f"{builtin}{', ' + plugin_names if plugin_names else ''}"
         raise ParseError(
             f"@{cmd} cannot be used as an inline expression. "
-            f"Supported inline commands: @env, @list, @dict, @fetch",
+            f"Supported inline commands: {available}",
             self.current.line,
         )
 

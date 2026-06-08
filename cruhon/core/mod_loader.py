@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "1.4.0"
+CRUHON_VERSION = "1.5.0"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ _WARNINGS: list[str] = []                  # collected warnings for `cruhon mods
 
 _EXPOSED_APIS: dict[str, dict] = {}              # plugin_name → {key: value}
 _REGISTERED_BLOCK_COMMANDS: dict[str, list] = {} # plugin_name → [cmd, ...]
+_INJECT_PROVIDERS: dict = {}                      # key → value or factory()
 _MISSING = object()  # sentinel for consume() default
 
 
@@ -277,6 +278,91 @@ class ModAPI:
             self._transpiler._ast_hooks[node_type] = []
         self._transpiler._ast_hooks[node_type].append(fn)
         _log(f"[{self.mod_name}] AST hook registered for {node_type}")
+
+    def inject(self, key: str, value_or_factory):
+        """
+        Inject a value into the exec() globals for every script run.
+
+        value_or_factory:
+          - A plain value → injected as-is
+          - A callable (no args) → called before each exec(), return value is injected
+
+        Scripts access the injected value by name directly, no __ns__ needed.
+
+        Usage:
+            def register(api):
+                api.inject("db", lambda: DatabaseConnection())
+                api.inject("APP_VERSION", "2.1.0")
+
+        Script:
+            @var[rows; db.query("SELECT * FROM users")]
+            @print[{APP_VERSION}]
+        """
+        _INJECT_PROVIDERS[key] = value_or_factory
+        _log(f"[{self.mod_name}] Inject registered: {key}")
+
+    def inline_command(self, name: str, handler_fn):
+        """
+        Register an inline expression command usable inside argument contexts.
+
+        handler_fn(parser) -> str
+          Called when @name appears inside @var[x; @name[...]] etc.
+          handler_fn must:
+            1. Call parser.advance() to consume the @name token
+            2. Optionally call parser.parse_args() for arguments
+            3. Return a Python expression string
+
+        Usage:
+            def register(api):
+                api.inline_command("uuid", handle_uuid)
+                api.inline_command("now", handle_now)
+
+            def handle_uuid(parser):
+                parser.advance()
+                parser.parse_args()  # consume [] even if no args
+                return "__import__('uuid').uuid4().__str__()"
+
+            def handle_now(parser):
+                parser.advance()
+                parser.parse_args()
+                return "__import__('datetime').datetime.now()"
+
+        Script:
+            @var[id; @uuid[]]
+            @var[ts; @now[]]
+        """
+        self._parser.register_inline_command(name, handler_fn)
+        _log(f"[{self.mod_name}] Inline command registered: @{name}")
+
+    def eval_hook(self, fn):
+        """
+        Register a value evaluation hook.
+
+        fn(value: str, context: str) -> str | None
+
+        Fires at transpile-time for every value passed to _eval_value().
+        Return a Python expression string to override default evaluation.
+        Return None to pass through to the default rules.
+
+        context: "expr" (right-hand side values) or "display" (@print values)
+
+        Hooks run in registration order. First non-None return wins.
+
+        Usage:
+            def register(api):
+                api.eval_hook(dollar_env_hook)
+
+            def dollar_env_hook(value, context):
+                if value.startswith("$"):
+                    return f'os.environ.get("{value[1:]}")'
+                return None
+
+        Script:
+            @var[url; $DATABASE_URL]   → os.environ.get("DATABASE_URL")
+            @print[$GREETING]           → print(os.environ.get("GREETING"))
+        """
+        self._transpiler._eval_hooks.append(fn)
+        _log(f"[{self.mod_name}] Eval hook registered")
 
     def override(self, command: str, fn, warn: bool = True):
         """
@@ -767,3 +853,17 @@ def list_exposed_apis() -> dict[str, list[str]]:
 def list_block_commands() -> dict[str, list[str]]:
     """Return {plugin_name: [cmd, ...]} for all registered plugin block commands."""
     return {name: list(cmds) for name, cmds in _REGISTERED_BLOCK_COMMANDS.items()}
+
+
+def get_inject_globals() -> dict:
+    """
+    Resolve all registered inject providers into a dict suitable for exec() globals.
+    Callables are invoked; plain values are used as-is.
+    """
+    result = {}
+    for key, val in _INJECT_PROVIDERS.items():
+        try:
+            result[key] = val() if callable(val) else val
+        except Exception as e:
+            _log(f"[inject] Factory for '{key}' raised {type(e).__name__}: {e}")
+    return result

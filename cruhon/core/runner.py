@@ -18,7 +18,7 @@ from typing import Optional
 
 from .parser import parse, ParseError
 from .transpiler import transpile, get_transpiler
-from .mod_loader import fire_hook, load_all_mods
+from .mod_loader import fire_hook, load_all_mods, get_inject_globals
 from .ast_nodes import IncludeNode, ProgramNode
 
 
@@ -239,16 +239,20 @@ def run_source(
             for fn in _block_hooks.get(event, []):
                 fn(plugin_name, args or [])
 
+        # Build exec globals: fixed builtins + plugin injections
+        exec_globals = {
+            "__name__": "__main__",
+            "__ns__": ns_registry,
+            "__ctx__": {},
+            "__ctx_stack__": [],
+            "__ph__": _ph,
+        }
+        exec_globals.update(get_inject_globals())
+
         try:
             exec(
                 compile(python_code, f"<cruhon:{filename}>", "exec"),
-                {
-                    "__name__": "__main__",
-                    "__ns__": ns_registry,
-                    "__ctx__": {},
-                    "__ctx_stack__": [],
-                    "__ph__": _ph,
-                }
+                exec_globals
             )
         finally:
             ns_registry.destroy_all()  # fire destroy hooks after exec

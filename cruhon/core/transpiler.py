@@ -45,6 +45,7 @@ class Transpiler:
         self._node_transforms: dict = {}       # plugin_name → [transform_fn, ...]
         self._block_hooks: dict = {}           # "enter"|"exit" → [fn, ...]
         self._ast_hooks: dict = {}             # node_type_name → [fn(node) → node, ...]
+        self._eval_hooks: list = []            # fn(value, context) → str | None
         self._pre_hooks: list = []
         self._post_hooks: list = []
         # Line map: python_line (1-based) → cruhon_line
@@ -221,8 +222,12 @@ class Transpiler:
           "display" — @print value, @assert message
                       bare identifiers become string literals
 
+        Plugin eval hooks run first — if any returns non-None, that value is used
+        and the default rules below are skipped entirely.
+
         Priority order (strict):
 
+          0. Plugin eval hooks (api.eval_hook)
           1. Quoted string without {} → string literal as-is
           2. Quoted string with {}    → f-string
           3. Numeric literal          → as-is
@@ -234,6 +239,12 @@ class Transpiler:
           8. Bare text (anything else) → string literal "text"
         """
         v = value.strip()
+
+        # ── Rule 0: plugin eval hooks ─────────────────────────
+        for _hook in self._eval_hooks:
+            _result = _hook(v, context)
+            if _result is not None:
+                return _result
 
         # ── Rule 1: quoted string, no interpolation ───────────
         if (v.startswith('"') and v.endswith('"') and len(v) >= 2) or \

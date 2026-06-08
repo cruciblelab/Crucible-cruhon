@@ -4,7 +4,19 @@ All notable changes are documented here.
 
 ---
 
-## v1.4.0 (current)
+## v1.5.0 (current)
+
+### Plugin Freedom — Runtime Injection, Inline Commands, Eval Hooks
+
+- **`api.inject(key, value_or_factory)`** — injects values/objects into exec() globals; scripts access them directly by name. Callable factories are called before each exec(), static values are used as-is.
+- **`api.inline_command(name, handler_fn)`** — registers inline expression commands (`@var[x; @uuid[]]`, `@var[t; @now[]]`). `handler_fn(parser) → str` consumes tokens and returns a Python expression string.
+- **`api.eval_hook(fn)`** — hooks into `_eval_value()` at transpile-time. `fn(value, context) → str | None`; return a Python expression to override default evaluation, `None` to pass through.
+- `get_inject_globals()` public function — resolves all inject providers to a dict
+- Test suite: 194 → 210 tests (`TestInject`, `TestInlineCommand`, `TestEvalHook`)
+
+---
+
+## v1.4.0
 
 ### Plugin System Hardening
 
