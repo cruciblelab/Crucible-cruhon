@@ -45,7 +45,7 @@ from .transpiler import get_transpiler
 # CRUHON VERSION (used for compatibility checks)
 # ─────────────────────────────────────────────────────────────
 
-CRUHON_VERSION = "1.2.0"
+CRUHON_VERSION = "1.3.0"
 
 
 # ─────────────────────────────────────────────────────────────

@@ -988,6 +988,112 @@ class TestPluginFoundation:
 
 
 # ─────────────────────────────────────────────────────────────
+# LANGUAGE COMPLETION v1.3.0
+# ─────────────────────────────────────────────────────────────
+
+class TestWith:
+    def test_with_as_var(self, tmp_path):
+        f = tmp_path / "t.txt"
+        f.write_text("hello")
+        old = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            run_source('@with[open("t.txt") as f]\n    @var[c; f.read()]\n@end')
+        finally:
+            os.chdir(old)
+
+    def test_with_no_var(self):
+        run_source('@with[open("/dev/null", "w")]\n    pass\n@end')
+
+    def test_with_body_executes(self, capsys):
+        run_source('@with[open("/dev/null", "w") as f]\n    @print[inside]\n@end')
+        assert "inside" in capsys.readouterr().out
+
+    def test_with_nested(self, tmp_path):
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_text("A")
+        b.write_text("B")
+        old = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            run_source(
+                '@with[open("a.txt") as fa]\n'
+                '    @with[open("b.txt") as fb]\n'
+                '        @var[both; fa.read() + fb.read()]\n'
+                '    @end\n'
+                '@end'
+            )
+        finally:
+            os.chdir(old)
+
+
+class TestMatch:
+    def test_match_basic(self, capsys):
+        run_source('@var[x; 2]\n@match[x]\n    @case[1]\n        @print[one]\n    @case[2]\n        @print[two]\n@end')
+        assert "two" in capsys.readouterr().out
+
+    def test_match_default(self, capsys):
+        run_source('@var[x; 99]\n@match[x]\n    @case[1]\n        @print[one]\n    @default\n        @print[other]\n@end')
+        assert "other" in capsys.readouterr().out
+
+    def test_match_string(self, capsys):
+        run_source('@var[cmd; "quit"]\n@match[cmd]\n    @case["start"]\n        @print[starting]\n    @case["quit"]\n        @print[quitting]\n    @default\n        @print[unknown]\n@end')
+        assert "quitting" in capsys.readouterr().out
+
+    def test_match_no_default_no_match(self, capsys):
+        run_source('@var[x; 5]\n@match[x]\n    @case[1]\n        @print[one]\n@end')
+        assert capsys.readouterr().out.strip() == ""
+
+
+class TestDel:
+    def test_del_single(self):
+        with pytest.raises(RunError):
+            run_source('@var[x; 42]\n@del[x]\n@print[{x}]')
+
+    def test_del_multiple(self):
+        run_source('@var[a; 1]\n@var[b; 2]\n@del[a; b]')
+
+
+class TestRaise:
+    def test_raise_with_message(self, capsys):
+        run_source('@try\n    @raise[ValueError; "bad input"]\n@catch[e]\n    @print[caught]\n@end')
+        assert "caught" in capsys.readouterr().out
+
+    def test_raise_bare_reraise(self):
+        with pytest.raises(RunError):
+            run_source('@try\n    @raise[RuntimeError; "orig"]\n@catch[e]\n    @raise\n@end')
+
+    def test_raise_reraise_outer_catches(self, capsys):
+        run_source(
+            '@try\n'
+            '    @try\n'
+            '        @raise[ValueError; "inner"]\n'
+            '    @catch[e]\n'
+            '        @raise\n'
+            '    @end\n'
+            '@catch[e]\n'
+            '    @print[reraised]\n'
+            '@end'
+        )
+        assert "reraised" in capsys.readouterr().out
+
+
+class TestMultiLine:
+    def test_multiline_parens(self, capsys):
+        run_source('@var[x; (\n    1 + 2\n)]\n@print[{x}]')
+        assert "3" in capsys.readouterr().out
+
+    def test_multiline_func_call(self, capsys):
+        run_source('@var[r; max(\n    10,\n    20,\n    30\n)]\n@print[{r}]')
+        assert "30" in capsys.readouterr().out
+
+    def test_multiline_list_literal(self, capsys):
+        run_source('@var[lst; [\n    1,\n    2,\n    3\n]]\n@print[{len(lst)}]')
+        assert "3" in capsys.readouterr().out
+
+
+# ─────────────────────────────────────────────────────────────
 # PLUGIN SYSTEM v1.2.0 — scoped ctx, transforms, block hooks
 # ─────────────────────────────────────────────────────────────
 

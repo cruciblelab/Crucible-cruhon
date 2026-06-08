@@ -4,7 +4,20 @@ All notable changes are documented here.
 
 ---
 
-## v1.2.0 (current)
+## v1.3.0 (current)
+
+### Dil Tamamlama — Language Completion
+
+- **`@with[expr as var] ... @end`** — context manager bloğu; `with open(...) as f:` artık Cruhon syntax'ı
+- **`@match[value] / @case[pattern] / @default`** — Python 3.10+ pattern matching
+- **`@del[var1; var2]`** — değişken silme
+- **`@raise[ExceptionType; msg]`** / **`@raise`** (bare re-raise) — explicit exception fırlatma
+- **Multi-line fix** — `parse_args` artık INDENT/DEDENT/COMMENT token'larını atlıyor; parantez içi multi-line expression çalışıyor
+- Test suite: 156 → 172 tests (`TestWith`, `TestMatch`, `TestDel`, `TestRaise`, `TestMultiLine`)
+
+---
+
+## v1.2.0
 
 ### Plugin System — Scope, Transforms, Block Hooks
 

@@ -90,6 +90,8 @@ class Parser:
             "await":    self._parse_await,
             "fetch":    self._parse_fetch,
             "input":    self._parse_input,
+            "del":      self._parse_del,
+            "raise":    self._parse_raise,
         }
         self._block_commands = {
             "if":     self._parse_if,
@@ -101,6 +103,8 @@ class Parser:
             "async":  self._parse_async_func,
             "repeat": self._parse_repeat,
             "raw":    self._parse_raw,
+            "with":   self._parse_with,
+            "match":  self._parse_match,
         }
 
     # ── Token navigation ──────────────────────────────────────
@@ -162,7 +166,9 @@ class Parser:
                 break
 
             # Block closing keywords
-            if self.current.type == "AT_CMD" and self.current.value in ("end", "else", "elif", "catch", "finally"):
+            if self.current.type == "AT_CMD" and self.current.value in (
+                "end", "else", "elif", "catch", "finally", "case", "default"
+            ):
                 break
 
             if self.current.type in ("DEDENT",):
@@ -335,7 +341,7 @@ class Parser:
                 self.advance()
                 break
 
-            if tok.type == "NEWLINE":
+            if tok.type in ("NEWLINE", "INDENT", "DEDENT", "COMMENT"):
                 self.advance()
                 continue
 
@@ -733,6 +739,97 @@ class Parser:
             finally_body=finally_body,
             line=line
         )
+
+    def _parse_del(self) -> "DelNode":
+        line = self.current.line
+        self.advance()  # @del
+        args = self.parse_args()
+        return DelNode(targets=args, line=line)
+
+    def _parse_raise(self) -> "RaiseNode":
+        line = self.current.line
+        self.advance()  # @raise
+        args = self.parse_args()
+        if not args:
+            return RaiseNode(exception="", message=None, line=line)  # bare re-raise
+        exception = args[0]
+        message = args[1] if len(args) > 1 else None
+        return RaiseNode(exception=exception, message=message, line=line)
+
+    def _parse_with(self) -> "WithNode":
+        line = self.current.line
+        self.advance()  # @with
+        args = self.parse_args()
+        raw = args[0] if args else ""
+
+        # Split "expr as var" pattern
+        var = None
+        if " as " in raw:
+            expr_part, var_part = raw.split(" as ", 1)
+            expr = expr_part.strip()
+            var = var_part.strip()
+        else:
+            expr = raw.strip()
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        body = self._parse_block()
+
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+
+        return WithNode(expr=expr, var=var, body=body, line=line)
+
+    def _parse_match(self) -> "MatchNode":
+        line = self.current.line
+        self.advance()  # @match
+        args = self.parse_args()
+        value = args[0] if args else ""
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        cases = []
+        default_body = []
+
+        while self.current.type != "EOF":
+            self.skip_newlines()
+
+            if self.current.type in ("DEDENT",):
+                self.advance()
+                continue
+
+            if self.current.type == "AT_CMD" and self.current.value == "end":
+                self.advance()
+                break
+
+            if self.current.type == "AT_CMD" and self.current.value == "case":
+                self.advance()  # @case
+                case_args = self.parse_args()
+                pattern = case_args[0] if case_args else "_"
+
+                self.skip_newlines()
+                if self.current.type == "INDENT":
+                    self.advance()
+
+                case_body = self._parse_block()
+                cases.append((pattern, case_body))
+
+            elif self.current.type == "AT_CMD" and self.current.value == "default":
+                self.advance()  # @default
+                self.skip_newlines()
+                if self.current.type == "INDENT":
+                    self.advance()
+
+                default_body = self._parse_block()
+
+            else:
+                break
+
+        return MatchNode(value=value, cases=cases, default_body=default_body, line=line)
 
     def _parse_raw(self):
         """

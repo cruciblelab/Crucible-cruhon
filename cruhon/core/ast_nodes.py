@@ -199,6 +199,42 @@ class TryNode(Node):
 
 
 @dataclass
+class WithNode(Node):
+    """@with[expr as var] ... @end  or  @with[expr] ... @end"""
+    expr: str = ""
+    var: Optional[str] = None
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class MatchNode(Node):
+    """
+    @match[value]
+        @case[pattern]
+            ...
+        @default
+            ...
+    @end
+    """
+    value: str = ""
+    cases: List[tuple] = field(default_factory=list)   # [(pattern, body), ...]
+    default_body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class DelNode(Node):
+    """@del[var1; var2]"""
+    targets: List[str] = field(default_factory=list)
+
+
+@dataclass
+class RaiseNode(Node):
+    """@raise[ExceptionType; message]  or  @raise  (re-raise)"""
+    exception: str = ""
+    message: Optional[str] = None
+
+
+@dataclass
 class AsyncNode(Node):
     """@async[func_call]"""
     call: str = ""

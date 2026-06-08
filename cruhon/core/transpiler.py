@@ -466,6 +466,38 @@ class Transpiler:
         lines.append(self._block(node.body))
         return "\n".join(lines)
 
+    def visit_WithNode(self, node) -> str:
+        if node.var:
+            header = self._line(f"with {node.expr} as {node.var}:", node.line)
+        else:
+            header = self._line(f"with {node.expr}:", node.line)
+        return "\n".join([header, self._block(node.body)])
+
+    def visit_MatchNode(self, node) -> str:
+        lines = [self._line(f"match {node.value}:", node.line)]
+        self._indent += 1
+        for pattern, body in node.cases:
+            lines.append(self._line(f"case {pattern}:"))
+            lines.append(self._block(body))
+        if node.default_body:
+            lines.append(self._line("case _:"))
+            lines.append(self._block(node.default_body))
+        self._indent -= 1
+        return "\n".join(lines)
+
+    def visit_DelNode(self, node) -> str:
+        targets = ", ".join(node.targets)
+        return self._line(f"del {targets}", node.line)
+
+    def visit_RaiseNode(self, node) -> str:
+        if not node.exception:
+            return self._line("raise", node.line)
+        exc = self._eval_value(str(node.exception), "expr")
+        if node.message:
+            msg = self._eval_value(str(node.message), "expr")
+            return self._line(f"raise {exc}({msg})", node.line)
+        return self._line(f"raise {exc}", node.line)
+
     def visit_TryNode(self, node: TryNode) -> str:
         lines = [self._line("try:", node.line)]
         lines.append(self._block(node.body))
