@@ -107,6 +107,33 @@ class IncludeNode(Node):
 
 
 @dataclass
+class ModuleNode(Node):
+    """@module[name] ... @end — encapsulated module with its own scope."""
+    name: str = ""
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class ExportNode(Node):
+    """@export[name1; name2; ...] — mark symbols as public in a module."""
+    names: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UseNode(Node):
+    """@use[path] or @use[path as alias] — load a module file."""
+    path: str = ""
+    alias: str = ""
+
+
+@dataclass
+class FromNode(Node):
+    """@from[module; name1; name2 as alias; ...] — selective import from module."""
+    module: str = ""
+    imports: List[tuple] = field(default_factory=list)  # [(name, alias), ...]
+
+
+@dataclass
 class RawNode(Node):
     """
     @raw

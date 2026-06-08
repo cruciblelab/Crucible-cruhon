@@ -4,7 +4,23 @@ All notable changes are documented here.
 
 ---
 
-## v1.5.0 (current)
+## v1.6.0 (current)
+
+### Module System — Real Encapsulation
+
+- **`@module[name] ... @end`** — block module with its own isolated scope. Inner variables never leak; only exported symbols are accessible from outside.
+- **`@export[name1; name2; ...]`** — explicit visibility control. `@export[*]` or no `@export` → all non-private names public. Private convention: `_underscore` prefix.
+- **`@use[path]`** / **`@use[path as alias]`** — load a `.clpy` file as a module. Searches current dir then `modules/` subdirectory. Circular dependency detection.
+- **`@from[module; name1; name2 as alias; ...]`** — selective import from a module into local scope.
+- **`@module.method[args]`** — namespace call syntax works for user modules (routes to `module.method(args)` instead of runtime mod dispatch).
+- **`@include` unchanged** — legacy compile-time flatten, fully backward compatible.
+- **Plugin compatibility** — all v1.5.0 APIs (`api.inject`, `api.eval_hook`, `api.ast_hook`, `api.block_command`, etc.) work transparently inside module bodies. Injected globals are visible within module init functions via exec() scope.
+- **f-string template detection improved** — `{func()}` and `{obj.method()}` patterns now correctly recognized as f-string interpolation in display context. `{expr + op}` fallthrough in display context wraps as f-string.
+- Test suite: 210 → 237 tests (`TestModuleBlock`, `TestModuleFrom`, `TestModuleFile`, `TestModulePluginCompat`)
+
+---
+
+## v1.5.0
 
 ### Plugin Freedom — Runtime Injection, Inline Commands, Eval Hooks
 

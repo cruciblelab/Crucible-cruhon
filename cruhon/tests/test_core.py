@@ -1870,3 +1870,322 @@ class TestEvalHook:
         api.eval_hook(pct_env)
         run_source('@var[v; %%CRUHON_TEST_KEY]\n@print[{v}]')
         assert "test_value_xyz" in capsys.readouterr().out
+
+
+# ─────────────────────────────────────────────────────────────
+# MODULE SYSTEM — v1.6.0
+# ─────────────────────────────────────────────────────────────
+
+class TestModuleBlock:
+    """Inline @module[name] ... @end block form."""
+
+    def test_module_basic_function(self, capsys):
+        src = """
+@module[mymod]
+  @func[hello]
+    @return["hi"]
+  @end
+@end
+@var[r; @mymod.hello[]]
+@print[{r}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "hi"
+
+    def test_module_const_access(self, capsys):
+        src = """
+@module[cfg]
+  @const[VERSION; "1.6.0"]
+@end
+@print[{cfg.VERSION}]
+"""
+        run_source(src)
+        assert "1.6.0" in capsys.readouterr().out
+
+    def test_module_no_export_exports_all(self, capsys):
+        src = """
+@module[m]
+  @func[greet; name]
+    @return["Hi " + name]
+  @end
+  @const[LANG; "Cruhon"]
+@end
+@print[{m.greet("Dev")}]
+@print[{m.LANG}]
+"""
+        run_source(src)
+        out = capsys.readouterr().out
+        assert "Hi Dev" in out
+        assert "Cruhon" in out
+
+    def test_module_export_selective(self, capsys):
+        src = """
+@module[m]
+  @export[pub]
+  @func[pub]
+    @return["public"]
+  @end
+  @func[_priv]
+    @return["private"]
+  @end
+@end
+@print[{m.pub()}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "public"
+
+    def test_module_private_not_accessible(self):
+        src = """
+@module[m]
+  @export[pub]
+  @func[pub]
+    @return["ok"]
+  @end
+  @const[SECRET; "hidden"]
+@end
+@var[x; m.SECRET]
+"""
+        import pytest
+        with pytest.raises(Exception):
+            run_source(src)
+
+    def test_module_var_not_exported_does_not_leak(self):
+        src = """
+@module[m]
+  @var[inner; "inside"]
+@end
+@print[{inner}]
+"""
+        import pytest
+        with pytest.raises(Exception):
+            run_source(src)
+
+    def test_module_namespace_call_in_var(self, capsys):
+        src = """
+@module[utils]
+  @func[add; a; b]
+    @return[a + b]
+  @end
+@end
+@var[r; @utils.add[3; 4]]
+@print[{r}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "7"
+
+    def test_module_inline_call_in_expression(self, capsys):
+        src = """
+@module[calc]
+  @func[double; n]
+    @return[n * 2]
+  @end
+@end
+@print[{calc.double(5)}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "10"
+
+    def test_module_export_star(self, capsys):
+        src = """
+@module[m]
+  @export[*]
+  @func[f]
+    @return[42]
+  @end
+@end
+@print[{m.f()}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "42"
+
+    def test_module_ast_node_type(self):
+        from cruhon.core.ast_nodes import ModuleNode, ExportNode
+        from cruhon.core.parser import parse
+        ast = parse("@module[m]\n  @export[f]\n  @func[f]\n    @return[1]\n  @end\n@end\n")
+        assert isinstance(ast.body[0], ModuleNode)
+        assert ast.body[0].name == "m"
+        export_nodes = [n for n in ast.body[0].body if isinstance(n, ExportNode)]
+        assert export_nodes[0].names == ["f"]
+
+    def test_module_generates_simplenamespace(self):
+        from cruhon.core.transpiler import transpile
+        from cruhon.core.parser import parse
+        code = transpile(parse("@module[x]\n  @func[f]\n    @return[1]\n  @end\n@end\n"))
+        assert "_cruhon_mod_x" in code
+        assert "SimpleNamespace" in code
+        assert "x = _cruhon_mod_x()" in code
+
+
+class TestModuleFrom:
+    """@from[module; name1; name2 as alias] selective imports."""
+
+    def test_from_single(self, capsys):
+        src = """
+@module[m]
+  @func[greet]
+    @return["hello"]
+  @end
+@end
+@from[m; greet]
+@print[{greet()}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "hello"
+
+    def test_from_multiple(self, capsys):
+        src = """
+@module[m]
+  @const[A; 1]
+  @const[B; 2]
+@end
+@from[m; A; B]
+@print[{A + B}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "3"
+
+    def test_from_alias(self, capsys):
+        src = """
+@module[m]
+  @func[long_function_name]
+    @return["aliased"]
+  @end
+@end
+@from[m; long_function_name as fn]
+@print[{fn()}]
+"""
+        run_source(src)
+        assert capsys.readouterr().out.strip() == "aliased"
+
+    def test_from_multiple_aliases(self, capsys):
+        src = """
+@module[math]
+  @const[PI; 3.14159]
+  @func[square; n]
+    @return[n * n]
+  @end
+@end
+@from[math; PI as pi; square as sq]
+@print[{pi}]
+@print[{sq(3)}]
+"""
+        run_source(src)
+        out = capsys.readouterr().out
+        assert "3.14159" in out
+        assert "9" in out
+
+    def test_from_ast_node_type(self):
+        from cruhon.core.ast_nodes import FromNode
+        from cruhon.core.parser import parse
+        ast = parse("@module[m]\n  @func[f]\n    @return[1]\n  @end\n@end\n@from[m; f as g]\n")
+        from_nodes = [n for n in ast.body if isinstance(n, FromNode)]
+        assert from_nodes[0].module == "m"
+        assert from_nodes[0].imports == [("f", "g")]
+
+
+class TestModuleFile:
+    """File-based @use[path] module loading."""
+
+    def setup_method(self):
+        import tempfile
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def teardown_method(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def _write(self, name: str, content: str) -> Path:
+        p = self.tmpdir / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_use_basic(self, capsys):
+        self._write("utils.clpy", '@func[greet]\n  @return["hi"]\n@end\n')
+        run_source("@use[utils]\n@var[r; @utils.greet[]]\n@print[{r}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "hi"
+
+    def test_use_alias(self, capsys):
+        self._write("myutils.clpy", '@func[f]\n  @return["ok"]\n@end\n')
+        run_source("@use[myutils as u]\n@var[r; @u.f[]]\n@print[{r}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "ok"
+
+    def test_use_with_export(self, capsys):
+        self._write("lib.clpy", '@export[pub]\n@func[pub]\n  @return["ok"]\n@end\n@func[_priv]\n  @return["no"]\n@end\n')
+        run_source("@use[lib]\n@print[{lib.pub()}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "ok"
+
+    def test_use_with_module_declaration(self, capsys):
+        self._write("utils.clpy", '@module[utils]\n@func[greet]\n  @return["hello"]\n@end\n')
+        run_source("@use[utils]\n@print[{utils.greet()}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "hello"
+
+    def test_use_path_relative(self, capsys):
+        (self.tmpdir / "lib").mkdir()
+        self._write("lib/db.clpy", '@func[query]\n  @return["result"]\n@end\n')
+        run_source("@use[./lib/db]\n@print[{db.query()}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "result"
+
+    def test_use_modules_dir(self, capsys):
+        (self.tmpdir / "modules").mkdir()
+        self._write("modules/helpers.clpy", '@func[greet]\n  @return["mod_dir"]\n@end\n')
+        run_source("@use[helpers]\n@print[{helpers.greet()}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "mod_dir"
+
+    def test_use_not_found_raises(self):
+        import pytest
+        with pytest.raises(Exception, match="module not found"):
+            run_source("@use[nonexistent]\n", base_dir=self.tmpdir)
+
+    def test_use_circular_raises(self):
+        import pytest
+        self._write("a.clpy", "@use[b]\n")
+        self._write("b.clpy", "@use[a]\n")
+        with pytest.raises(Exception, match="Circular"):
+            run_source("@use[a]\n", base_dir=self.tmpdir)
+
+    def test_use_from_file(self, capsys):
+        self._write("utils.clpy", '@func[greet]\n  @return["file_greet"]\n@end\n')
+        run_source("@use[utils]\n@from[utils; greet]\n@print[{greet()}]\n", base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "file_greet"
+
+
+class TestModulePluginCompat:
+    """Modules and plugin system work together correctly."""
+
+    def test_inject_visible_inside_module(self, capsys):
+        """api.inject() globals are accessible inside module bodies."""
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("mod-inject-compat")
+        api.inject("INJECTED_VAL", "injected_works")
+        src = """
+@module[m]
+  @func[get_val]
+    @return[INJECTED_VAL]
+  @end
+@end
+@print[{m.get_val()}]
+"""
+        run_source(src)
+        assert "injected_works" in capsys.readouterr().out
+
+    def test_multiple_modules(self, capsys):
+        """Multiple inline modules coexist without conflict."""
+        src = """
+@module[a]
+  @func[f]
+    @return["from_a"]
+  @end
+@end
+@module[b]
+  @func[f]
+    @return["from_b"]
+  @end
+@end
+@print[{a.f()}]
+@print[{b.f()}]
+"""
+        run_source(src)
+        out = capsys.readouterr().out
+        assert "from_a" in out
+        assert "from_b" in out

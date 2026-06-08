@@ -48,6 +48,7 @@ class Transpiler:
         self._eval_hooks: list = []            # fn(value, context) → str | None
         self._pre_hooks: list = []
         self._post_hooks: list = []
+        self._known_modules: set = set()       # module names for namespace call routing
         # Line map: python_line (1-based) → cruhon_line
         self._line_map: dict[int, int] = {}
         self._python_line: int = 1
@@ -114,6 +115,12 @@ class Transpiler:
         self._line_map = {}
         self._python_line = 1
 
+        # Pre-pass: collect module names so @ns.method calls route correctly
+        self._known_modules = set()
+        for _n in _walk_ast(ast):
+            if isinstance(_n, ModuleNode):
+                self._known_modules.add(_n.name)
+
         # AST hooks — parse-time transforms registered by plugins
         if self._ast_hooks:
             ast = self._apply_ast_hooks(ast)
@@ -134,7 +141,7 @@ class Transpiler:
 
         # Main code
         for node in ast.body:
-            if not isinstance(node, (ImportNode, IncludeNode)):
+            if not isinstance(node, (ImportNode, IncludeNode, UseNode)):
                 result = node.accept(self)
                 if result:
                     lines.append(result)
@@ -188,6 +195,13 @@ class Transpiler:
         if store_helpers:
             for hl in store_helpers.splitlines():
                 lines.append(hl)
+
+        # Auto-inject types when @module is used
+        if any(isinstance(n, ModuleNode) for n in _walk_ast(ast)):
+            stmt = "import types as _cruhon_types"
+            if stmt not in seen:
+                seen.add(stmt)
+                lines.append(stmt)
 
         return lines
 
@@ -262,8 +276,15 @@ class Transpiler:
             if self._is_python_expression(v):
                 return v          # pass through as Python expression (Rule 6 territory)
             if self._is_fstring_template(v):
-                return f'f"{v}"'  # wrap as f-string
-            # fallthrough: ambiguous — treat as expression (safe default)
+                # Use single-quoted f-string when content contains double quotes
+                if '"' in v:
+                    return f"f'{v}'"
+                return f'f"{v}"'
+            # Fallthrough: display → f-string interpolation; expr → raw expression
+            if context == "display":
+                if '"' in v:
+                    return f"f'{v}'"
+                return f'f"{v}"'
             return v
 
         # ── Rule 3: numeric literal ───────────────────────────
@@ -331,8 +352,11 @@ class Transpiler:
         # Python expressions are never f-string templates
         if self._is_python_expression(value):
             return False
-        # Must contain at least one {identifier} or {expression} pattern
-        return bool(re.search(r'\{[a-zA-Z_][a-zA-Z0-9_. ]*\}', value))
+        # Match {identifier}, {attr.path}, or {func_call(…)} patterns
+        return bool(
+            re.search(r'\{[a-zA-Z_][a-zA-Z0-9_.]*\}', value) or   # {var} or {obj.attr}
+            re.search(r'\{[a-zA-Z_][a-zA-Z0-9_.]*\(', value)       # {func( or {obj.method(
+        )
 
     def _is_python_expression(self, value: str) -> bool:
         """
@@ -639,16 +663,17 @@ class Transpiler:
 
     def visit_NamespaceCallNode(self, node) -> str:
         """
-        Generates runtime namespace dispatch code.
-
-        @discord.send["hello"]
-        → __ns__["discord"].call("send", "hello")
-
-        Args are passed as positional arguments to Namespace.call().
+        Route namespace calls:
+          @utils.greet[...] → utils.greet(...)       when utils is a user module
+          @discord.send[...] → __ns__["discord"]...  when it is a runtime mod
         """
         args_str = ", ".join(
             self._eval_value(a, "expr") for a in node.args
         )
+        if node.namespace in self._known_modules:
+            if args_str:
+                return self._line(f"{node.namespace}.{node.method}({args_str})", node.line)
+            return self._line(f"{node.namespace}.{node.method}()", node.line)
         if args_str:
             return self._line(
                 f'__ns__["{node.namespace}"].call("{node.method}", {args_str})',
@@ -658,6 +683,80 @@ class Transpiler:
             f'__ns__["{node.namespace}"].call("{node.method}")',
             node.line
         )
+
+    def visit_ModuleNode(self, node) -> str:
+        """
+        @module[name] ... @end
+
+        Compiles to a Python init function that returns a SimpleNamespace
+        of exported symbols. Private names (starts with _) or names not
+        listed in @export stay inside the function scope and never leak.
+        """
+        export_names = []
+        export_star = False
+        body_nodes = []
+
+        for n in node.body:
+            if isinstance(n, ExportNode):
+                if "*" in n.names:
+                    export_star = True
+                else:
+                    export_names.extend(n.names)
+            else:
+                body_nodes.append(n)
+
+        # No @export directive → export all non-private top-level names
+        if not export_names:
+            export_star = True
+
+        if export_star:
+            export_names = []
+            for n in body_nodes:
+                if isinstance(n, (FuncNode, ClassNode, VarNode, ConstNode)):
+                    if isinstance(n.name, str) and not n.name.startswith("_"):
+                        export_names.append(n.name)
+
+        fn_name = f"_cruhon_mod_{node.name}"
+        lines = [self._line(f"def {fn_name}():", node.line)]
+
+        # Init export dict — must precede the body
+        self._indent += 1
+        lines.append(self._line("_cruhon_ex = {}"))
+        self._indent -= 1
+
+        # Module body (handles its own indentation via _block)
+        lines.append(self._block(body_nodes))
+
+        # Export assignments + return at body depth
+        self._indent += 1
+        for name in export_names:
+            lines.append(self._line(f'_cruhon_ex["{name}"] = {name}'))
+        lines.append(self._line("return _cruhon_types.SimpleNamespace(**_cruhon_ex)"))
+        self._indent -= 1
+
+        # Instantiate the module
+        lines.append(self._line(f"{node.name} = {fn_name}()"))
+
+        return "\n".join(filter(None, lines))
+
+    def visit_ExportNode(self, node) -> str:
+        """@export outside a module body is a no-op (handled by visit_ModuleNode)."""
+        return ""
+
+    def visit_UseNode(self, node) -> str:
+        raise TranspileError(
+            f"Unresolved @use[{node.path}] — ensure resolve_modules() ran before transpile",
+            node.line,
+        )
+
+    def visit_FromNode(self, node) -> str:
+        """@from[module; name1; name2 as alias] → name1 = module.name1 ..."""
+        if not node.imports:
+            return ""
+        lines = []
+        for name, alias in node.imports:
+            lines.append(self._line(f"{alias} = {node.module}.{name}", node.line))
+        return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────────────────────

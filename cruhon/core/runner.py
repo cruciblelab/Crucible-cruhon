@@ -19,7 +19,7 @@ from typing import Optional
 from .parser import parse, ParseError
 from .transpiler import transpile, get_transpiler
 from .mod_loader import fire_hook, load_all_mods, get_inject_globals
-from .ast_nodes import IncludeNode, ProgramNode
+from .ast_nodes import IncludeNode, ProgramNode, UseNode, ModuleNode
 
 
 class RunError(Exception):
@@ -99,6 +99,88 @@ def resolve_includes(ast: ProgramNode, base_dir: Path, included: Optional[set] =
                 for cond, branch_body in node.elif_branches:
                     sub_prog = ProgramNode(body=branch_body)
                     resolved = resolve_includes(sub_prog, base_dir, included)
+                    new_branches.append((cond, resolved.body))
+                node.elif_branches = new_branches
+            new_body.append(node)
+
+    ast.body = new_body
+    return ast
+
+
+# ─────────────────────────────────────────────────────────────
+# MODULE RESOLUTION
+# ─────────────────────────────────────────────────────────────
+
+def _find_module_file(path: str, base_dir: Path) -> Path:
+    """Locate a .clpy module file by name or relative path."""
+    if path.startswith(".") or path.startswith("/"):
+        candidate = (base_dir / path).resolve()
+        if not candidate.suffix:
+            candidate = candidate.with_suffix(".clpy")
+        if candidate.exists():
+            return candidate
+        raise RunError(f"@use: module not found: {path}")
+
+    for search_dir in [base_dir, base_dir / "modules"]:
+        candidate = search_dir / f"{path}.clpy"
+        if candidate.exists():
+            return candidate
+
+    raise RunError(f"@use: module not found: {path}")
+
+
+def resolve_modules(
+    ast: ProgramNode,
+    base_dir: Path,
+    loading: Optional[set] = None,
+) -> ProgramNode:
+    """
+    Walk the AST, find UseNode instances, replace them with resolved ModuleNode.
+
+    base_dir: directory for resolving relative module paths.
+    loading: set of absolute paths currently being resolved (circular detection).
+    """
+    if loading is None:
+        loading = set()
+
+    new_body = []
+    for node in ast.body:
+        if isinstance(node, UseNode):
+            module_path = _find_module_file(node.path, base_dir)
+            abs_path = module_path.resolve()
+
+            if abs_path in loading:
+                raise RunError(f"Circular module dependency: {node.path}")
+
+            source = module_path.read_text(encoding="utf-8")
+            mod_ast = parse(source)
+            new_loading = loading | {abs_path}
+            mod_ast = resolve_includes(mod_ast, module_path.parent)
+            mod_ast = resolve_modules(mod_ast, module_path.parent, new_loading)
+
+            if mod_ast.body and isinstance(mod_ast.body[0], ModuleNode):
+                mod_node = mod_ast.body[0]
+                mod_node.name = node.alias
+            else:
+                mod_node = ModuleNode(
+                    name=node.alias,
+                    body=mod_ast.body,
+                    line=node.line,
+                )
+
+            new_body.append(mod_node)
+        else:
+            for attr in ("body", "else_body", "catch_body", "finally_body"):
+                children = getattr(node, attr, None)
+                if isinstance(children, list):
+                    sub_prog = ProgramNode(body=children)
+                    resolved = resolve_modules(sub_prog, base_dir, loading)
+                    setattr(node, attr, resolved.body)
+            if hasattr(node, "elif_branches"):
+                new_branches = []
+                for cond, branch_body in node.elif_branches:
+                    sub_prog = ProgramNode(body=branch_body)
+                    resolved = resolve_modules(sub_prog, base_dir, loading)
                     new_branches.append((cond, resolved.body))
                 node.elif_branches = new_branches
             new_body.append(node)
@@ -213,6 +295,7 @@ def run_source(
         # are caught in addition to direct cycles (A→B→A).
         initial_included = {_root_path} if _root_path else set()
         ast = resolve_includes(ast, base_dir, initial_included)
+        ast = resolve_modules(ast, base_dir)
 
         # Transpile
         python_code = transpile(ast)
@@ -329,6 +412,7 @@ def build_file(path: str | Path, output: Optional[str | Path] = None) -> Path:
 
     ast = parse(source)
     ast = resolve_includes(ast, path.parent, {path.resolve()})
+    ast = resolve_modules(ast, path.parent)
     python_code = transpile(ast)
 
     out_path = Path(output) if output else path.with_suffix(".py")
@@ -350,6 +434,7 @@ def check_file(path: str | Path) -> list[str]:
     try:
         ast = parse(source)
         ast = resolve_includes(ast, path.parent, {path.resolve()})
+        ast = resolve_modules(ast, path.parent)
         transpile(ast)
     except Exception as e:
         errors.append(str(e))

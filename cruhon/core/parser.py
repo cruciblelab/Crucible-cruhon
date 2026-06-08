@@ -51,6 +51,8 @@ class Parser:
         self._needs_requests: bool = False
         # Source lines preserved for @raw block reconstruction
         self._source_lines: list = []
+        # Module aliases declared in the current parse — cleared each parse()
+        self._module_aliases: set = set()
         self._register_core_commands()
 
     # ── Mod API ───────────────────────────────────────────────
@@ -118,7 +120,13 @@ class Parser:
             "raw":    self._parse_raw,
             "with":   self._parse_with,
             "match":  self._parse_match,
+            "module": self._parse_module,
         }
+        self._commands.update({
+            "export": self._parse_export,
+            "use":    self._parse_use,
+            "from":   self._parse_from,
+        })
 
     # ── Token navigation ──────────────────────────────────────
 
@@ -160,6 +168,7 @@ class Parser:
         for hook in self._pre_hooks:
             self.tokens = hook(self.tokens)
 
+        self._module_aliases = set()
         program = ProgramNode(line=1)
         program.body = self._parse_block()
 
@@ -256,6 +265,11 @@ class Parser:
         handler = get_lib_call(namespace, method)
         if handler:
             return handler(args)
+
+        # User module alias → direct attribute call
+        if namespace in self._module_aliases:
+            args_str = ", ".join(args)
+            return f"{namespace}.{method}({args_str})"
 
         # Mod namespace inline — emit runtime dispatch expression
         from .registry import is_lib_namespace
@@ -524,6 +538,61 @@ class Parser:
             raise ParseError("@include requires [filepath.clpy]", line)
         path = args[0].strip('"')
         return IncludeNode(path=path, line=line)
+
+    def _parse_module(self) -> ModuleNode:
+        line = self.current.line
+        self.advance()  # @module
+        args = self.parse_args()
+        name = args[0].strip("\"'") if args else ""
+        self._module_aliases.add(name)
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+        body = self._parse_block()
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+        return ModuleNode(name=name, body=body, line=line)
+
+    def _parse_export(self) -> ExportNode:
+        line = self.current.line
+        self.advance()  # @export
+        args = self.parse_args()
+        names = [a.strip("\"'") for a in args]
+        return ExportNode(names=names, line=line)
+
+    def _parse_use(self) -> UseNode:
+        line = self.current.line
+        self.advance()  # @use
+        args = self.parse_args()
+        raw = args[0].strip("\"'") if args else ""
+        if " as " in raw:
+            path, alias = raw.split(" as ", 1)
+            path = path.strip()
+            alias = alias.strip()
+        else:
+            path = raw
+            # Derive alias from the last path segment, strip extension
+            seg = path.rstrip("/").rsplit("/", 1)[-1]
+            if "." in seg:
+                seg = seg.rsplit(".", 1)[0]
+            alias = seg.replace("-", "_").replace(".", "_")
+        self._module_aliases.add(alias)
+        return UseNode(path=path, alias=alias, line=line)
+
+    def _parse_from(self) -> FromNode:
+        line = self.current.line
+        self.advance()  # @from
+        args = self.parse_args()
+        module = args[0].strip("\"'") if args else ""
+        imports = []
+        for spec in args[1:]:
+            spec = spec.strip().strip("\"'")
+            if " as " in spec:
+                name, alias = spec.split(" as ", 1)
+                imports.append((name.strip(), alias.strip()))
+            else:
+                imports.append((spec.strip(), spec.strip()))
+        return FromNode(module=module, imports=imports, line=line)
 
     def _parse_fetch(self) -> FetchNode:
         line = self.current.line
