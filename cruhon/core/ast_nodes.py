@@ -361,6 +361,27 @@ class ForeachNode(Node):
 
 
 @dataclass
+class IncNode(Node):
+    """@inc[x]  or  @inc[x; n] — augmented add (x += n)"""
+    target: str = ""
+    amount: str = "1"
+
+
+@dataclass
+class DecNode(Node):
+    """@dec[x]  or  @dec[x; n] — augmented subtract (x -= n)"""
+    target: str = ""
+    amount: str = "1"
+
+
+@dataclass
+class SwapNode(Node):
+    """@swap[a; b] — tuple swap (a, b = b, a)"""
+    left: str = ""
+    right: str = ""
+
+
+@dataclass
 class PluginBlockNode(Node):
     """
     Generic block node for plugin-defined block commands.

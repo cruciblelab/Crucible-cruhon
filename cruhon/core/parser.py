@@ -112,6 +112,9 @@ class Parser:
             "nonlocal": self._parse_nonlocal,
             "yield":    self._parse_yield,
             "decorate": self._parse_decorate,
+            "inc":      self._parse_inc,
+            "dec":      self._parse_dec,
+            "swap":     self._parse_swap,
         }
         self._block_commands = {
             "if":      self._parse_if,
@@ -304,7 +307,10 @@ class Parser:
         line = self.current.line
 
         # Inline expression commands — produce a Python expression string
-        inline_expr_cmds = {"env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe"}
+        inline_expr_cmds = {
+            "env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe",
+            "dictcomp", "setcomp", "gencomp", "set", "tuple", "when", "default",
+        }
 
         if cmd in inline_expr_cmds:
             if cmd == "env":
@@ -380,12 +386,83 @@ class Parser:
                     result = f"{fn}({result})"
                 return result
 
+            elif cmd == "dictcomp":
+                # @dictcomp[key; value; var; iterable]  (+ optional condition)
+                self.advance()  # @dictcomp
+                args = self.parse_args()
+                if len(args) < 4:
+                    raise ParseError(
+                        "@dictcomp requires [key; value; var; iterable] or [...; cond]", line)
+                key, value, var, iterable = args[0], args[1], args[2], args[3]
+                if len(args) >= 5:
+                    return "{" + f"{key}: {value} for {var} in {iterable} if {args[4]}" + "}"
+                return "{" + f"{key}: {value} for {var} in {iterable}" + "}"
+
+            elif cmd == "setcomp":
+                # @setcomp[expr; var; iterable]  (+ optional condition)
+                self.advance()  # @setcomp
+                args = self.parse_args()
+                if len(args) < 3:
+                    raise ParseError(
+                        "@setcomp requires [expr; var; iterable] or [...; cond]", line)
+                expr, var, iterable = args[0], args[1], args[2]
+                if len(args) >= 4:
+                    return "{" + f"{expr} for {var} in {iterable} if {args[3]}" + "}"
+                return "{" + f"{expr} for {var} in {iterable}" + "}"
+
+            elif cmd == "gencomp":
+                # @gencomp[expr; var; iterable]  (+ optional condition)
+                self.advance()  # @gencomp
+                args = self.parse_args()
+                if len(args) < 3:
+                    raise ParseError(
+                        "@gencomp requires [expr; var; iterable] or [...; cond]", line)
+                expr, var, iterable = args[0], args[1], args[2]
+                if len(args) >= 4:
+                    return f"({expr} for {var} in {iterable} if {args[3]})"
+                return f"({expr} for {var} in {iterable})"
+
+            elif cmd == "set":
+                # @set[a; b; c] → {a, b, c}   ;   @set[] → set()
+                self.advance()  # @set
+                args = self.parse_args()
+                if not args:
+                    return "set()"
+                return "{" + ", ".join(args) + "}"
+
+            elif cmd == "tuple":
+                # @tuple[a; b] → (a, b)  ;  @tuple[a] → (a,)  ;  @tuple[] → ()
+                self.advance()  # @tuple
+                args = self.parse_args()
+                if not args:
+                    return "()"
+                if len(args) == 1:
+                    return f"({args[0]},)"
+                return "(" + ", ".join(args) + ")"
+
+            elif cmd == "when":
+                # @when[cond; yes; no] → (yes if cond else no)
+                self.advance()  # @when
+                args = self.parse_args()
+                if len(args) < 3:
+                    raise ParseError("@when requires [condition; if_true; if_false]", line)
+                return f"({args[1]} if {args[0]} else {args[2]})"
+
+            elif cmd == "default":
+                # @default[value; fallback] → (value if value is not None else fallback)
+                self.advance()  # @default
+                args = self.parse_args()
+                if len(args) < 2:
+                    raise ParseError("@default requires [value; fallback]", line)
+                return f"({args[0]} if {args[0]} is not None else {args[1]})"
+
         # Plugin-registered inline commands
         if cmd in self._inline_commands:
             return self._inline_commands[cmd](self)
 
         # Unknown inline command — raise error with line info
-        builtin = "@env, @list, @dict, @fetch, @ctx, @lambda, @comp, @pipe"
+        builtin = ("@env, @list, @dict, @fetch, @ctx, @lambda, @comp, @pipe, "
+                   "@dictcomp, @setcomp, @gencomp, @set, @tuple, @when, @default")
         plugin_names = ", ".join(f"@{k}" for k in self._inline_commands) if self._inline_commands else ""
         available = f"{builtin}{', ' + plugin_names if plugin_names else ''}"
         raise ParseError(
@@ -1167,6 +1244,34 @@ class Parser:
             self.advance()
 
         return ForeachNode(index=index, var=var, iterable=iterable, start=start, body=body, line=line)
+
+    def _parse_inc(self) -> "IncNode":
+        line = self.current.line
+        self.advance()  # @inc
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@inc requires [target] or [target; amount]", line)
+        target = args[0].strip()
+        amount = args[1].strip() if len(args) > 1 else "1"
+        return IncNode(target=target, amount=amount, line=line)
+
+    def _parse_dec(self) -> "DecNode":
+        line = self.current.line
+        self.advance()  # @dec
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@dec requires [target] or [target; amount]", line)
+        target = args[0].strip()
+        amount = args[1].strip() if len(args) > 1 else "1"
+        return DecNode(target=target, amount=amount, line=line)
+
+    def _parse_swap(self) -> "SwapNode":
+        line = self.current.line
+        self.advance()  # @swap
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@swap requires [a; b]", line)
+        return SwapNode(left=args[0].strip(), right=args[1].strip(), line=line)
 
     def _parse_namespace_call(self) -> Node:
         """

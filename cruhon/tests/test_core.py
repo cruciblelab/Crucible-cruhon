@@ -3760,3 +3760,159 @@ class TestDecoratorRuntime:
             "@var[result; Math.twice(21)]",
         ]))
         assert ns["result"] == 42
+
+
+# ─────────────────────────────────────────────────────────────
+# EXPRESSIVENESS UPGRADE — comprehensions, literals, sugar
+# ─────────────────────────────────────────────────────────────
+
+class TestComprehensions:
+    def test_dictcomp_basic(self):
+        ns = _run_ns("@var[d; @dictcomp[k; k*k; k; range(4)]]")
+        assert ns["d"] == {0: 0, 1: 1, 2: 4, 3: 9}
+
+    def test_dictcomp_with_condition(self):
+        ns = _run_ns("@var[d; @dictcomp[k; k*2; k; range(6); k % 2 == 0]]")
+        assert ns["d"] == {0: 0, 2: 4, 4: 8}
+
+    def test_dictcomp_codegen(self):
+        code = _compile("@var[d; @dictcomp[k; v; k; items]]")
+        assert "{k: v for k in items}" in code
+
+    def test_setcomp_basic(self):
+        ns = _run_ns("@var[s; @setcomp[x*2; x; range(4)]]")
+        assert ns["s"] == {0, 2, 4, 6}
+
+    def test_setcomp_dedupes(self):
+        ns = _run_ns("@var[s; @setcomp[x % 2; x; range(10)]]")
+        assert ns["s"] == {0, 1}
+
+    def test_setcomp_with_condition(self):
+        ns = _run_ns("@var[s; @setcomp[x; x; range(10); x > 5]]")
+        assert ns["s"] == {6, 7, 8, 9}
+
+    def test_gencomp_basic(self):
+        ns = _run_ns("@var[g; @gencomp[x; x; range(5)]]\n@var[total; sum(g)]")
+        assert ns["total"] == 10
+
+    def test_gencomp_is_lazy(self):
+        # A generator object, not a list
+        ns = _run_ns("@var[g; @gencomp[x; x; range(3)]]")
+        import types
+        assert isinstance(ns["g"], types.GeneratorType)
+
+    def test_gencomp_with_condition(self):
+        ns = _run_ns("@var[g; @gencomp[x; x; range(10); x % 3 == 0]]\n@var[r; list(g)]")
+        assert ns["r"] == [0, 3, 6, 9]
+
+
+class TestLiterals:
+    def test_set_literal(self):
+        ns = _run_ns("@var[s; @set[1; 2; 3; 2; 1]]")
+        assert ns["s"] == {1, 2, 3}
+
+    def test_empty_set(self):
+        ns = _run_ns("@var[s; @set[]]")
+        assert ns["s"] == set()
+        assert isinstance(ns["s"], set)
+
+    def test_set_codegen(self):
+        code = _compile("@var[s; @set[1; 2; 3]]")
+        assert "{1, 2, 3}" in code
+
+    def test_empty_set_is_set_not_dict(self):
+        code = _compile("@var[s; @set[]]")
+        assert "set()" in code  # not {}
+
+    def test_tuple_literal(self):
+        ns = _run_ns("@var[t; @tuple[1; 2; 3]]")
+        assert ns["t"] == (1, 2, 3)
+
+    def test_single_element_tuple(self):
+        ns = _run_ns("@var[t; @tuple[5]]")
+        assert ns["t"] == (5,)
+        assert isinstance(ns["t"], tuple)
+
+    def test_empty_tuple(self):
+        ns = _run_ns("@var[t; @tuple[]]")
+        assert ns["t"] == ()
+
+    def test_single_tuple_codegen(self):
+        code = _compile("@var[t; @tuple[5]]")
+        assert "(5,)" in code
+
+
+class TestTernaryAndDefault:
+    def test_when_true(self):
+        ns = _run_ns('@var[x; 5]\n@var[r; @when[x > 0; "pos"; "neg"]]')
+        assert ns["r"] == "pos"
+
+    def test_when_false(self):
+        ns = _run_ns('@var[x; -5]\n@var[r; @when[x > 0; "pos"; "neg"]]')
+        assert ns["r"] == "neg"
+
+    def test_when_codegen(self):
+        code = _compile('@var[r; @when[a; b; c]]')
+        assert "(b if a else c)" in code
+
+    def test_default_none_uses_fallback(self):
+        ns = _run_ns("@var[x; None]\n@var[r; @default[x; 42]]")
+        assert ns["r"] == 42
+
+    def test_default_value_kept(self):
+        ns = _run_ns("@var[x; 7]\n@var[r; @default[x; 42]]")
+        assert ns["r"] == 7
+
+    def test_default_falsy_but_not_none(self):
+        # 0 is falsy but not None — must be kept
+        ns = _run_ns("@var[x; 0]\n@var[r; @default[x; 99]]")
+        assert ns["r"] == 0
+
+
+class TestAugmentedAssignment:
+    def test_inc_default(self):
+        ns = _run_ns("@var[x; 0]\n@inc[x]")
+        assert ns["x"] == 1
+
+    def test_inc_by_amount(self):
+        ns = _run_ns("@var[x; 10]\n@inc[x; 5]")
+        assert ns["x"] == 15
+
+    def test_inc_codegen(self):
+        code = _compile("@inc[counter]")
+        assert "counter += 1" in code
+
+    def test_dec_default(self):
+        ns = _run_ns("@var[x; 10]\n@dec[x]")
+        assert ns["x"] == 9
+
+    def test_dec_by_amount(self):
+        ns = _run_ns("@var[x; 10]\n@dec[x; 3]")
+        assert ns["x"] == 7
+
+    def test_inc_in_loop(self):
+        ns = _run_ns("\n".join([
+            "@var[total; 0]",
+            "@for[i; range(5)]",
+            "    @inc[total; i]",
+            "@end",
+        ]))
+        assert ns["total"] == 10  # 0+1+2+3+4
+
+    def test_inc_with_variable_amount(self):
+        ns = _run_ns("@var[step; 4]\n@var[x; 0]\n@inc[x; step]")
+        assert ns["x"] == 4
+
+
+class TestSwap:
+    def test_swap_basic(self):
+        ns = _run_ns("@var[a; 1]\n@var[b; 2]\n@swap[a; b]")
+        assert ns["a"] == 2 and ns["b"] == 1
+
+    def test_swap_codegen(self):
+        code = _compile("@swap[a; b]")
+        assert "a, b = b, a" in code
+
+    def test_swap_preserves_values(self):
+        ns = _run_ns('@var[x; "hello"]\n@var[y; "world"]\n@swap[x; y]')
+        assert ns["x"] == "world" and ns["y"] == "hello"

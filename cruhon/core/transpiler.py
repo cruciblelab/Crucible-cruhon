@@ -541,6 +541,17 @@ class Transpiler:
         lines.append(self._block(node.body))
         return "\n".join(lines)
 
+    def visit_IncNode(self, node) -> str:
+        amount = self._eval_value(str(node.amount), "expr")
+        return self._line(f"{node.target} += {amount}", node.line)
+
+    def visit_DecNode(self, node) -> str:
+        amount = self._eval_value(str(node.amount), "expr")
+        return self._line(f"{node.target} -= {amount}", node.line)
+
+    def visit_SwapNode(self, node) -> str:
+        return self._line(f"{node.left}, {node.right} = {node.right}, {node.left}", node.line)
+
     def visit_ExprNode(self, node: ExprNode) -> str:
         return self._line(node.expr, node.line)
 
