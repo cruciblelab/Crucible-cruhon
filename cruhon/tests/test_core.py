@@ -3209,3 +3209,341 @@ class TestCruhonDB:
             '@end',
         )
         assert "2" in capsys.readouterr().out
+
+
+# ─────────────────────────────────────────────────────────────
+# LANGUAGE FEATURE COMPLETION (13 new features)
+# ─────────────────────────────────────────────────────────────
+
+from cruhon.core.parser import parse as _lf_parse
+from cruhon.core.transpiler import transpile as _lf_transpile
+
+
+def _compile(source):
+    """Helper: parse + transpile, return Python code string."""
+    ast = _lf_parse(source)
+    return _lf_transpile(ast)
+
+
+class TestPass:
+    def test_pass_basic(self):
+        code = _compile("@pass")
+        assert "pass" in code
+
+    def test_pass_in_func(self):
+        code = _compile("\n".join([
+            "@func[stub]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "def stub" in code
+        assert "pass" in code
+
+
+class TestGlobal:
+    def test_global_single(self):
+        code = _compile("@global[x]")
+        assert "global x" in code
+
+    def test_global_multi(self):
+        code = _compile("@global[x; y; z]")
+        assert "global x, y, z" in code
+
+    def test_global_in_func(self):
+        code = _compile("\n".join([
+            "@func[counter]",
+            "    @global[count]",
+            "    @var[count; count + 1]",
+            "@end",
+        ]))
+        assert "global count" in code
+
+
+class TestNonlocal:
+    def test_nonlocal_single(self):
+        code = _compile("@nonlocal[x]")
+        assert "nonlocal x" in code
+
+    def test_nonlocal_multi(self):
+        code = _compile("@nonlocal[a; b]")
+        assert "nonlocal a, b" in code
+
+    def test_nonlocal_in_closure(self):
+        code = _compile("\n".join([
+            "@func[outer]",
+            "    @var[n; 0]",
+            "    @func[inner]",
+            "        @nonlocal[n]",
+            "        @var[n; n + 1]",
+            "    @end",
+            "    @return[n]",
+            "@end",
+        ]))
+        assert "nonlocal n" in code
+
+
+class TestYield:
+    def test_yield_with_value(self):
+        code = _compile("\n".join([
+            "@func[gen]",
+            "    @yield[42]",
+            "@end",
+        ]))
+        assert "yield 42" in code
+
+    def test_yield_bare(self):
+        code = _compile("\n".join([
+            "@func[gen]",
+            "    @yield",
+            "@end",
+        ]))
+        assert "yield" in code
+
+    def test_yield_variable(self):
+        code = _compile("\n".join([
+            "@func[gen; items]",
+            "    @for[x; items]",
+            "        @yield[x]",
+            "    @end",
+            "@end",
+        ]))
+        assert "yield x" in code
+
+    def test_yield_from(self):
+        code = _compile("\n".join([
+            "@func[gen; other]",
+            "    @yield.from[other]",
+            "@end",
+        ]))
+        assert "yield from other" in code
+
+    def test_yield_from_expression(self):
+        code = _compile("\n".join([
+            "@func[gen]",
+            "    @yield.from[range(10)]",
+            "@end",
+        ]))
+        assert "yield from range(10)" in code
+
+
+class TestDecorate:
+    def test_decorate_simple(self):
+        code = _compile("\n".join([
+            "@decorate[staticmethod]",
+            "@func[greet]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "@staticmethod" in code
+        assert "def greet" in code
+
+    def test_decorate_with_args(self):
+        code = _compile("\n".join([
+            "@decorate[app.route(\"/home\")]",
+            "@func[home]",
+            "    @pass",
+            "@end",
+        ]))
+        assert '@app.route("/home")' in code
+
+    def test_decorate_property(self):
+        code = _compile("\n".join([
+            "@class[Circle]",
+            "    @decorate[property]",
+            "    @func[area; self]",
+            "        @return[3.14]",
+            "    @end",
+            "@end",
+        ]))
+        assert "@property" in code
+
+
+class TestForeach:
+    def test_foreach_basic(self):
+        code = _compile("\n".join([
+            "@foreach[i; x; items]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "for i, x in enumerate(items):" in code
+
+    def test_foreach_with_start(self):
+        code = _compile("\n".join([
+            "@foreach[i; x; items; 1]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "for i, x in enumerate(items, 1):" in code
+
+    def test_foreach_zero_start_omits_arg(self):
+        code = _compile("\n".join([
+            "@foreach[idx; val; data; 0]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "enumerate(data)" in code
+        assert "enumerate(data, 0)" not in code
+
+    def test_foreach_executes(self, capsys):
+        import textwrap
+        prog = textwrap.dedent("""
+            @foreach[i; ch; "abc"]
+                @print[{i}]
+            @end
+        """)
+        ast = _lf_parse(prog)
+        code = _lf_transpile(ast)
+        exec(compile(code, "<test>", "exec"), {})
+        out = capsys.readouterr().out
+        assert "0" in out
+        assert "1" in out
+        assert "2" in out
+
+
+class TestCatchType:
+    def test_catch_bare_var(self):
+        code = _compile("\n".join([
+            "@try",
+            "    @pass",
+            "@catch[e]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "except Exception as e:" in code
+
+    def test_catch_type_only(self):
+        code = _compile("\n".join([
+            "@try",
+            "    @pass",
+            "@catch[ValueError]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "except ValueError:" in code
+
+    def test_catch_type_and_var(self):
+        code = _compile("\n".join([
+            "@try",
+            "    @pass",
+            "@catch[TypeError; err]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "except TypeError as err:" in code
+
+    def test_catch_with_finally(self):
+        code = _compile("\n".join([
+            "@try",
+            "    @pass",
+            "@catch[RuntimeError; e]",
+            "    @pass",
+            "@finally",
+            "    @pass",
+            "@end",
+        ]))
+        assert "except RuntimeError as e:" in code
+        assert "finally:" in code
+
+
+class TestTupleUnpack:
+    def test_unpack_two(self):
+        code = _compile("@var[a, b; 1, 2]")
+        assert "a, b =" in code
+        assert "1" in code and "2" in code
+
+    def test_unpack_three(self):
+        code = _compile("@var[x, y, z; 10, 20, 30]")
+        assert "x, y, z =" in code
+
+    def test_unpack_from_function(self):
+        code = _compile("@var[q, r; divmod(10, 3)]")
+        assert "q, r = divmod(10, 3)" in code
+
+    def test_unpack_executes(self, capsys):
+        prog = "@var[a, b; 1, 2]\n@print[{a + b}]"
+        ast = _lf_parse(prog)
+        code = _lf_transpile(ast)
+        exec(compile(code, "<test>", "exec"), {})
+        assert "3" in capsys.readouterr().out
+
+
+class TestFuncReturnType:
+    def test_return_type_hint(self):
+        code = _compile("\n".join([
+            "@func[add; x; y; -> int]",
+            "    @return[x + y]",
+            "@end",
+        ]))
+        assert "def add(x, y) -> int:" in code
+
+    def test_async_return_type_hint(self):
+        code = _compile("\n".join([
+            "@async[fetch_data; url; -> str]",
+            "    @return[url]",
+            "@end",
+        ]))
+        assert "async def fetch_data(url) -> str:" in code
+
+    def test_no_return_type(self):
+        code = _compile("\n".join([
+            "@func[greet; name]",
+            "    @pass",
+            "@end",
+        ]))
+        assert "def greet(name):" in code
+        assert "->" not in code
+
+
+class TestLambdaInline:
+    def test_lambda_with_params(self):
+        code = _compile("@var[double; @lambda[x; x * 2]]")
+        assert "(lambda x: x * 2)" in code
+
+    def test_lambda_no_params(self):
+        code = _compile("@var[f; @lambda[42]]")
+        assert "(lambda: 42)" in code
+
+    def test_lambda_in_var(self):
+        code = _compile("@var[add; @lambda[a, b; a + b]]")
+        assert "(lambda a, b: a + b)" in code
+
+
+class TestCompInline:
+    def test_comp_basic(self):
+        code = _compile("@var[squares; @comp[x**2; x; range(5)]]")
+        assert "[x**2 for x in range(5)]" in code
+
+    def test_comp_with_condition(self):
+        code = _compile("@var[evens; @comp[x; x; range(10); x % 2 == 0]]")
+        assert "[x for x in range(10) if x % 2 == 0]" in code
+
+    def test_comp_executes(self, capsys):
+        prog = "\n".join([
+            "@var[result; @comp[x*2; x; range(3)]]",
+            "@print[{result}]",
+        ])
+        ast = _lf_parse(prog)
+        code = _lf_transpile(ast)
+        exec(compile(code, "<test>", "exec"), {})
+        assert "[0, 2, 4]" in capsys.readouterr().out
+
+
+class TestPipeInline:
+    def test_pipe_single_fn(self):
+        code = _compile("@var[result; @pipe[5; str]]")
+        assert "str(5)" in code
+
+    def test_pipe_chained(self):
+        code = _compile("@var[result; @pipe[items; sorted; list]]")
+        assert "list(sorted(items))" in code
+
+    def test_pipe_executes(self, capsys):
+        prog = "\n".join([
+            "@var[nums; @list[3; 1; 2]]",
+            "@var[result; @pipe[nums; sorted; list]]",
+            "@print[{result}]",
+        ])
+        ast = _lf_parse(prog)
+        code = _lf_transpile(ast)
+        exec(compile(code, "<test>", "exec"), {})
+        assert "[1, 2, 3]" in capsys.readouterr().out

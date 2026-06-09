@@ -221,6 +221,7 @@ class TryNode(Node):
     """@try ... @catch[e] ... @finally ... @end"""
     body: List[Node] = field(default_factory=list)
     catch_var: str = "e"
+    catch_type: Optional[str] = None          # @catch[TypeError; e] or @catch[TypeError]
     catch_body: List[Node] = field(default_factory=list)
     finally_body: List[Node] = field(default_factory=list)
 
@@ -316,6 +317,47 @@ class NamespaceCallNode(Node):
     namespace: str = ""
     method: str = ""
     args: list = field(default_factory=list)
+
+
+@dataclass
+class PassNode(Node):
+    """@pass"""
+    pass
+
+
+@dataclass
+class GlobalNode(Node):
+    """@global[x; y; z]"""
+    names: List[str] = field(default_factory=list)
+
+
+@dataclass
+class NonlocalNode(Node):
+    """@nonlocal[x; y]"""
+    names: List[str] = field(default_factory=list)
+
+
+@dataclass
+class YieldNode(Node):
+    """@yield[expr]  or  @yield  or  @yield.from[expr]"""
+    value: Optional[str] = None
+    is_from: bool = False
+
+
+@dataclass
+class DecorateNode(Node):
+    """@decorate[expr] — places @expr above the next function/class."""
+    expr: str = ""
+
+
+@dataclass
+class ForeachNode(Node):
+    """@foreach[index; var; iterable]  or  @foreach[index; var; iterable; start]"""
+    index: str = ""
+    var: str = ""
+    iterable: str = ""
+    start: str = "0"
+    body: List[Node] = field(default_factory=list)
 
 
 @dataclass

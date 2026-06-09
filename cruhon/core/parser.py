@@ -107,20 +107,26 @@ class Parser:
             "input":    self._parse_input,
             "del":      self._parse_del,
             "raise":    self._parse_raise,
+            "pass":     self._parse_pass,
+            "global":   self._parse_global,
+            "nonlocal": self._parse_nonlocal,
+            "yield":    self._parse_yield,
+            "decorate": self._parse_decorate,
         }
         self._block_commands = {
-            "if":     self._parse_if,
-            "for":    self._parse_for,
-            "while":  self._parse_while,
-            "func":   self._parse_func,
-            "class":  self._parse_class,
-            "try":    self._parse_try,
-            "async":  self._parse_async_func,
-            "repeat": self._parse_repeat,
-            "raw":    self._parse_raw,
-            "with":   self._parse_with,
-            "match":  self._parse_match,
-            "module": self._parse_module,
+            "if":      self._parse_if,
+            "for":     self._parse_for,
+            "while":   self._parse_while,
+            "func":    self._parse_func,
+            "class":   self._parse_class,
+            "try":     self._parse_try,
+            "async":   self._parse_async_func,
+            "repeat":  self._parse_repeat,
+            "raw":     self._parse_raw,
+            "with":    self._parse_with,
+            "match":   self._parse_match,
+            "module":  self._parse_module,
+            "foreach": self._parse_foreach,
         }
         self._commands.update({
             "export": self._parse_export,
@@ -216,6 +222,9 @@ class Parser:
 
         # Namespace command: @requests.get[...]
         if self.current.type == "NAMESPACE":
+            # @yield.from[expr]
+            if self.current.value == "yield" and self.peek(2).type == "AT_CMD" and self.peek(2).value == "from":
+                return self._parse_yield_from()
             # @async.for / @async.with are block commands
             if self.current.value == "async" and self.peek(2).type == "AT_CMD":
                 method = self.peek(2).value
@@ -295,7 +304,7 @@ class Parser:
         line = self.current.line
 
         # Inline expression commands — produce a Python expression string
-        inline_expr_cmds = {"env", "list", "dict", "fetch", "ctx"}
+        inline_expr_cmds = {"env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe"}
 
         if cmd in inline_expr_cmds:
             if cmd == "env":
@@ -337,12 +346,46 @@ class Parser:
                 default = args[1] if len(args) > 1 else "None"
                 return f"__ctx__.get({key}, {default})"
 
+            elif cmd == "lambda":
+                # @lambda[params; body]  or  @lambda[body]  (no params)
+                self.advance()  # @lambda
+                args = self.parse_args()
+                if len(args) >= 2:
+                    params = args[0]
+                    body = args[1]
+                    return f"(lambda {params}: {body})"
+                elif args:
+                    return f"(lambda: {args[0]})"
+                raise ParseError("@lambda requires [body] or [params; body]", line)
+
+            elif cmd == "comp":
+                # @comp[expr; var; iterable]  or  @comp[expr; var; iterable; condition]
+                self.advance()  # @comp
+                args = self.parse_args()
+                if len(args) < 3:
+                    raise ParseError("@comp requires [expr; var; iterable] or [expr; var; iterable; cond]", line)
+                expr, var, iterable = args[0], args[1], args[2]
+                if len(args) >= 4:
+                    return f"[{expr} for {var} in {iterable} if {args[3]}]"
+                return f"[{expr} for {var} in {iterable}]"
+
+            elif cmd == "pipe":
+                # @pipe[value; fn1; fn2; fn3] → fn3(fn2(fn1(value)))
+                self.advance()  # @pipe
+                args = self.parse_args()
+                if len(args) < 2:
+                    raise ParseError("@pipe requires [value; fn1; fn2; ...]", line)
+                result = args[0]
+                for fn in args[1:]:
+                    result = f"{fn}({result})"
+                return result
+
         # Plugin-registered inline commands
         if cmd in self._inline_commands:
             return self._inline_commands[cmd](self)
 
         # Unknown inline command — raise error with line info
-        builtin = "@env, @list, @dict, @fetch, @ctx"
+        builtin = "@env, @list, @dict, @fetch, @ctx, @lambda, @comp, @pipe"
         plugin_names = ", ".join(f"@{k}" for k in self._inline_commands) if self._inline_commands else ""
         available = f"{builtin}{', ' + plugin_names if plugin_names else ''}"
         raise ParseError(
@@ -739,7 +782,7 @@ class Parser:
             raise ParseError("@func requires at least a name", line)
 
         name = args[0]
-        params = args[1:]
+        params = list(args[1:])
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -760,7 +803,7 @@ class Parser:
             raise ParseError("@async requires at least a name", line)
 
         name = args[0]
-        params = args[1:]
+        params = list(args[1:])
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -807,10 +850,23 @@ class Parser:
         catch_body = []
         finally_body = []
 
+        catch_type = None
         if self.current.type == "AT_CMD" and self.current.value == "catch":
             self.advance()
             args = self.parse_args()
-            catch_var = args[0] if args else "e"
+            if len(args) >= 2:
+                # @catch[TypeError; e]  — type + var
+                catch_type = args[0].strip()
+                catch_var = args[1].strip()
+            elif len(args) == 1:
+                a = args[0].strip()
+                if a and a[0].isupper():
+                    # @catch[TypeError]  — type only, no var
+                    catch_type = a
+                    catch_var = ""
+                else:
+                    # @catch[e]  — bare variable (backward compat)
+                    catch_var = a
             self.skip_newlines()
             if self.current.type == "INDENT":
                 self.advance()
@@ -829,6 +885,7 @@ class Parser:
         return TryNode(
             body=body,
             catch_var=catch_var,
+            catch_type=catch_type,
             catch_body=catch_body,
             finally_body=finally_body,
             line=line
@@ -1046,6 +1103,70 @@ class Parser:
 
         code = "\n".join(raw_lines)
         return RawNode(code=code, line=raw_line_num)
+
+    def _parse_pass(self) -> "PassNode":
+        line = self.current.line
+        self.advance()  # @pass
+        return PassNode(line=line)
+
+    def _parse_global(self) -> "GlobalNode":
+        line = self.current.line
+        self.advance()  # @global
+        args = self.parse_args()
+        names = [a.strip() for a in args]
+        return GlobalNode(names=names, line=line)
+
+    def _parse_nonlocal(self) -> "NonlocalNode":
+        line = self.current.line
+        self.advance()  # @nonlocal
+        args = self.parse_args()
+        names = [a.strip() for a in args]
+        return NonlocalNode(names=names, line=line)
+
+    def _parse_yield(self) -> "YieldNode":
+        line = self.current.line
+        self.advance()  # @yield
+        args = self.parse_args()
+        value = args[0] if args else None
+        return YieldNode(value=value, is_from=False, line=line)
+
+    def _parse_yield_from(self) -> "YieldNode":
+        line = self.current.line
+        self.advance()  # NAMESPACE "yield"
+        self.advance()  # DOT
+        self.advance()  # AT_CMD "from"
+        args = self.parse_args()
+        value = args[0] if args else ""
+        return YieldNode(value=value, is_from=True, line=line)
+
+    def _parse_decorate(self) -> "DecorateNode":
+        line = self.current.line
+        self.advance()  # @decorate
+        args = self.parse_args()
+        expr = args[0] if args else ""
+        return DecorateNode(expr=expr, line=line)
+
+    def _parse_foreach(self) -> "ForeachNode":
+        line = self.current.line
+        self.advance()  # @foreach
+        args = self.parse_args()
+        if len(args) < 3:
+            raise ParseError("@foreach requires [index; var; iterable] or [index; var; iterable; start]", line)
+        index = args[0].strip()
+        var = args[1].strip()
+        iterable = args[2].strip()
+        start = args[3].strip() if len(args) >= 4 else "0"
+
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+
+        body = self._parse_block()
+
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+
+        return ForeachNode(index=index, var=var, iterable=iterable, start=start, body=body, line=line)
 
     def _parse_namespace_call(self) -> Node:
         """

@@ -445,6 +445,9 @@ class Transpiler:
         return self._line(f"input({prompt})", node.line)
 
     def visit_VarNode(self, node: VarNode) -> str:
+        if "," in node.name:
+            # Tuple unpacking — bypass _eval_value to avoid quote-wrapping
+            return self._line(f"{node.name} = {node.value}", node.line)
         value = self._eval_value(str(node.value), "expr")
         return self._line(f"{node.name} = {value}", node.line)
 
@@ -509,6 +512,35 @@ class Transpiler:
     def visit_ContinueNode(self, node: ContinueNode) -> str:
         return self._line("continue", node.line)
 
+    def visit_PassNode(self, node) -> str:
+        return self._line("pass", node.line)
+
+    def visit_GlobalNode(self, node) -> str:
+        return self._line(f"global {', '.join(node.names)}", node.line)
+
+    def visit_NonlocalNode(self, node) -> str:
+        return self._line(f"nonlocal {', '.join(node.names)}", node.line)
+
+    def visit_YieldNode(self, node) -> str:
+        if node.is_from:
+            return self._line(f"yield from {node.value}", node.line)
+        if node.value:
+            val = self._eval_value(str(node.value), "expr")
+            return self._line(f"yield {val}", node.line)
+        return self._line("yield", node.line)
+
+    def visit_DecorateNode(self, node) -> str:
+        return self._line(f"@{node.expr}", node.line)
+
+    def visit_ForeachNode(self, node) -> str:
+        if node.start != "0":
+            enum_call = f"enumerate({node.iterable}, {node.start})"
+        else:
+            enum_call = f"enumerate({node.iterable})"
+        lines = [self._line(f"for {node.index}, {node.var} in {enum_call}:", node.line)]
+        lines.append(self._block(node.body))
+        return "\n".join(lines)
+
     def visit_ExprNode(self, node: ExprNode) -> str:
         return self._line(node.expr, node.line)
 
@@ -548,9 +580,14 @@ class Transpiler:
         return "\n".join(lines)
 
     def visit_FuncNode(self, node: FuncNode) -> str:
-        params = ", ".join(node.params)
+        params = list(node.params)
+        return_type = ""
+        if params and params[-1].strip().startswith("->"):
+            return_type = " " + params[-1].strip()
+            params = params[:-1]
+        params_str = ", ".join(params)
         prefix = "async " if node.is_async else ""
-        lines = [self._line(f"{prefix}def {node.name}({params}):", node.line)]
+        lines = [self._line(f"{prefix}def {node.name}({params_str}){return_type}:", node.line)]
         lines.append(self._block(node.body))
         return "\n".join(lines)
 
@@ -607,7 +644,15 @@ class Transpiler:
     def visit_TryNode(self, node: TryNode) -> str:
         lines = [self._line("try:", node.line)]
         lines.append(self._block(node.body))
-        lines.append(self._line(f"except Exception as {node.catch_var}:"))
+        if node.catch_type and node.catch_var:
+            except_line = f"except {node.catch_type} as {node.catch_var}:"
+        elif node.catch_type:
+            except_line = f"except {node.catch_type}:"
+        elif node.catch_var:
+            except_line = f"except Exception as {node.catch_var}:"
+        else:
+            except_line = "except:"
+        lines.append(self._line(except_line))
         lines.append(self._block(node.catch_body))
         if node.finally_body:
             lines.append(self._line("finally:"))
