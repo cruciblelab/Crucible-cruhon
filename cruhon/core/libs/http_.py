@@ -96,18 +96,21 @@ def _handler_status(args):
 
 def _handler_async_get(args):
     url = args[0] if args else '""'
-    return f"await __import__('httpx').AsyncClient().get({url})"
+    check = f"{_SSRF_CHECK}({url})"
+    return f"await __import__('httpx').AsyncClient().get({check})"
 
 
 def _handler_async_post(args):
     url = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    return f"await __import__('httpx').AsyncClient().post({url}, json={data})"
+    check = f"{_SSRF_CHECK}({url})"
+    return f"await __import__('httpx').AsyncClient().post({check}, json={data})"
 
 
 def _handler_async_json(args):
     url = args[0] if args else '""'
-    return f"(await __import__('httpx').AsyncClient().get({url})).json()"
+    check = f"{_SSRF_CHECK}({url})"
+    return f"(await __import__('httpx').AsyncClient().get({check})).json()"
 
 
 HTTP_HANDLERS = {
