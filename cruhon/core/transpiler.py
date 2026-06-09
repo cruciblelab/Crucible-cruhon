@@ -114,12 +114,7 @@ class Transpiler:
         self._indent = 0
         self._line_map = {}
         self._python_line = 1
-
-        # Pre-pass: collect module names so @ns.method calls route correctly
-        self._known_modules = set()
-        for _n in _walk_ast(ast):
-            if isinstance(_n, ModuleNode):
-                self._known_modules.add(_n.name)
+        self._known_modules = set()  # Populated by _collect_imports after hooks
 
         # AST hooks — parse-time transforms registered by plugins
         if self._ast_hooks:
@@ -155,8 +150,15 @@ class Transpiler:
         return code
 
     def _collect_imports(self, ast: ProgramNode) -> List[str]:
-        """Collect ImportNodes and any auto-required imports."""
+        """
+        Collect ImportNodes, detect auto-required imports, and populate
+        self._known_modules — all in a single AST walk.
+
+        Running after ast_hooks and pre-hooks means _known_modules correctly
+        reflects any node renames those hooks may have applied.
+        """
         from .registry import get_lib
+        from .parser import get_parser as _gp
         lines = []
         seen = set()
 
@@ -176,28 +178,41 @@ class Transpiler:
                     seen.add(stmt)
                     lines.append(stmt)
 
-        # Auto-inject os when @env is used
-        if _needs_os_import(ast):
+        # Single unified scan: populate _known_modules + all auto-import flags
+        _p = _gp()
+        needs_os = _p._needs_os
+        needs_requests = _p._needs_requests
+        needs_store = False
+        needs_types = False
+        self._known_modules = set()
+        for _n in _walk_ast(ast):
+            if not needs_os and isinstance(_n, EnvNode):
+                needs_os = True
+            if not needs_requests and isinstance(_n, FetchNode):
+                needs_requests = True
+            if not needs_store and isinstance(_n, LibCallNode) and _n.namespace == "store":
+                needs_store = True
+            if isinstance(_n, ModuleNode):
+                needs_types = True
+                self._known_modules.add(_n.name)
+
+        if needs_os:
             stmt = "import os"
             if stmt not in seen:
                 seen.add(stmt)
                 lines.insert(0, stmt)
 
-        # Auto-inject requests when @fetch is used
-        if _needs_requests_import(ast):
+        if needs_requests:
             stmt = "import requests"
             if stmt not in seen:
                 seen.add(stmt)
                 lines.append(stmt)
 
-        # Auto-inject store helpers when @store.* is used
-        store_helpers = _needs_store_helpers(ast)
-        if store_helpers:
-            for hl in store_helpers.splitlines():
+        if needs_store:
+            for hl in _STORE_HELPERS.splitlines():
                 lines.append(hl)
 
-        # Auto-inject types when @module is used
-        if any(isinstance(n, ModuleNode) for n in _walk_ast(ast)):
+        if needs_types:
             stmt = "import types as _cruhon_types"
             if stmt not in seen:
                 seen.add(stmt)

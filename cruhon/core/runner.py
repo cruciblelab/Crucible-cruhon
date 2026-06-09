@@ -52,6 +52,35 @@ def _make_async_runner(python_code: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
+# SHARED AST CHILD RECURSION
+# ─────────────────────────────────────────────────────────────
+
+def _recurse_children(node, fn) -> None:
+    """
+    Apply fn(ProgramNode) → ProgramNode to every child-body list of node,
+    mutating node in place.
+
+    Handles: body / else_body / catch_body / finally_body / default_body,
+             elif_branches (list of (cond, body)),
+             cases (list of (pattern, body)).
+    """
+    for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
+        children = getattr(node, attr, None)
+        if isinstance(children, list):
+            setattr(node, attr, fn(ProgramNode(body=children)).body)
+    if hasattr(node, "elif_branches"):
+        node.elif_branches = [
+            (cond, fn(ProgramNode(body=branch_body)).body)
+            for cond, branch_body in (node.elif_branches or [])
+        ]
+    if hasattr(node, "cases") and node.cases:
+        node.cases = [
+            (pat, fn(ProgramNode(body=case_body)).body)
+            for pat, case_body in node.cases
+        ]
+
+
+# ─────────────────────────────────────────────────────────────
 # INCLUDE RESOLUTION
 # ─────────────────────────────────────────────────────────────
 
@@ -86,21 +115,7 @@ def resolve_includes(ast: ProgramNode, base_dir: Path, included: Optional[set] =
             sub_ast = resolve_includes(sub_ast, include_path.parent, included | {include_path})
             new_body.extend(sub_ast.body)
         else:
-            # Recurse into block nodes
-            for attr in ("body", "else_body", "catch_body", "finally_body"):
-                children = getattr(node, attr, None)
-                if isinstance(children, list):
-                    sub_prog = ProgramNode(body=children)
-                    resolved = resolve_includes(sub_prog, base_dir, included)
-                    setattr(node, attr, resolved.body)
-            # elif_branches: list of (condition, body)
-            if hasattr(node, "elif_branches"):
-                new_branches = []
-                for cond, branch_body in node.elif_branches:
-                    sub_prog = ProgramNode(body=branch_body)
-                    resolved = resolve_includes(sub_prog, base_dir, included)
-                    new_branches.append((cond, resolved.body))
-                node.elif_branches = new_branches
+            _recurse_children(node, lambda sub: resolve_includes(sub, base_dir, included))
             new_body.append(node)
 
     ast.body = new_body
@@ -170,26 +185,7 @@ def resolve_modules(
 
             new_body.append(mod_node)
         else:
-            for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
-                children = getattr(node, attr, None)
-                if isinstance(children, list):
-                    sub_prog = ProgramNode(body=children)
-                    resolved = resolve_modules(sub_prog, base_dir, loading)
-                    setattr(node, attr, resolved.body)
-            if hasattr(node, "elif_branches"):
-                new_branches = []
-                for cond, branch_body in node.elif_branches:
-                    sub_prog = ProgramNode(body=branch_body)
-                    resolved = resolve_modules(sub_prog, base_dir, loading)
-                    new_branches.append((cond, resolved.body))
-                node.elif_branches = new_branches
-            if hasattr(node, "cases") and node.cases:
-                new_cases = []
-                for pattern, case_body in node.cases:
-                    sub_prog = ProgramNode(body=case_body)
-                    resolved = resolve_modules(sub_prog, base_dir, loading)
-                    new_cases.append((pattern, resolved.body))
-                node.cases = new_cases
+            _recurse_children(node, lambda sub: resolve_modules(sub, base_dir, loading))
             new_body.append(node)
 
     ast.body = new_body

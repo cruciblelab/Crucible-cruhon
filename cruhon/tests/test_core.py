@@ -624,6 +624,38 @@ class TestFileLib:
         finally:
             os.chdir(old)
 
+    def test_file_vp_adjacent_prefix_blocked(self, tmp_path):
+        """Path whose prefix matches cwd but isn't under it (e.g. /tmp/x vs /tmp/x-evil)."""
+        from cruhon.core.libs.file_ import _vp
+        import os
+        old = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            adjacent = str(tmp_path.parent / (tmp_path.name + "-adjacent"))
+            with pytest.raises(PermissionError, match="outside the working directory"):
+                _vp(adjacent)
+        finally:
+            os.chdir(old)
+
+    def test_http_ssrf_loopback_blocked(self):
+        """_check_url blocks localhost and loopback addresses."""
+        from cruhon.core.libs.http_ import _check_url
+        for url in [
+            "http://127.0.0.1/",
+            "http://localhost/secret",
+            "http://0.0.0.0/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://192.168.1.1/admin",
+            "http://10.0.0.1/internal",
+        ]:
+            with pytest.raises(PermissionError, match="blocked"):
+                _check_url(url)
+
+    def test_http_ssrf_public_url_allowed(self):
+        """_check_url passes public URLs through."""
+        from cruhon.core.libs.http_ import _check_url
+        assert _check_url("https://example.com/api") == "https://example.com/api"
+
 
 # ─────────────────────────────────────────────────────────────
 # SYNTAX ENGINE
@@ -1694,6 +1726,15 @@ class TestInject:
         result = get_inject_globals()
         assert result.get("computed") == 42
 
+    def test_inject_reserved_key_does_not_overwrite_ns(self, capsys):
+        """api.inject() cannot overwrite __ns__ or other reserved exec globals."""
+        from cruhon.core.mod_loader import ModAPI
+        api = ModAPI("inject-reserved-mod")
+        api.inject("__ns__", "should_not_overwrite")
+        # Script must run without NameError — __ns__ stays the real registry
+        run_source('@print["reserved_safe"]')
+        assert "reserved_safe" in capsys.readouterr().out
+
 
 class TestInlineCommand:
     def test_inline_command_used_in_var(self, capsys):
@@ -2148,6 +2189,32 @@ class TestModuleFile:
         self._write("utils.clpy", '@func[greet]\n  @return["file_greet"]\n@end\n')
         run_source("@use[utils]\n@from[utils; greet]\n@print[{greet()}]\n", base_dir=self.tmpdir)
         assert capsys.readouterr().out.strip() == "file_greet"
+
+    def test_use_inside_match_case(self, capsys):
+        """@use inside a @match case body is resolved correctly."""
+        self._write("utils.clpy", '@func[greet]\n  @return["matched"]\n@end\n')
+        src = (
+            "@var[x; 1]\n"
+            "@match[x]\n"
+            "    @case[1]\n"
+            "        @use[utils]\n"
+            "        @print[{utils.greet()}]\n"
+            "@end\n"
+        )
+        run_source(src, base_dir=self.tmpdir)
+        assert capsys.readouterr().out.strip() == "matched"
+
+    def test_inline_env_with_use_injects_import_os(self, capsys):
+        """Inline @env + @use in same script: import os must still be injected."""
+        import os
+        self._write("utils.clpy", '@func[f]\n  @return["ok"]\n@end\n')
+        os.environ["_CRUHON_TEST_KEY"] = "hello_env"
+        try:
+            src = "@use[utils]\n@var[x; @env[_CRUHON_TEST_KEY]]\n@print[{x}]\n"
+            run_source(src, base_dir=self.tmpdir)
+            assert "hello_env" in capsys.readouterr().out
+        finally:
+            del os.environ["_CRUHON_TEST_KEY"]
 
 
 class TestModulePluginCompat:
