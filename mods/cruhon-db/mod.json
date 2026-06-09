@@ -1,0 +1,8 @@
+{
+    "name": "cruhon-db",
+    "version": "1.0.0",
+    "description": "Database plugin for Cruhon — SQLite, PostgreSQL, MySQL with full CRUD and transaction support",
+    "author": "Crucible",
+    "cruhon": ">=1.0.0",
+    "namespace": "db"
+}

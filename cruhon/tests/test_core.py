@@ -2256,3 +2256,271 @@ class TestModulePluginCompat:
         out = capsys.readouterr().out
         assert "from_a" in out
         assert "from_b" in out
+
+
+# ─────────────────────────────────────────────────────────────
+# cruhon-db PLUGIN
+# ─────────────────────────────────────────────────────────────
+
+class TestCruhonDB:
+    """cruhon-db plugin: SQLite CRUD, schema helpers, transactions, result access."""
+
+    @classmethod
+    def setup_class(cls):
+        """Load cruhon-db mod once before any test in this class runs."""
+        from cruhon.core.mod_loader import load_mod_from_path
+        mod_path = Path(__file__).parent.parent.parent / "mods" / "cruhon-db"
+        load_mod_from_path(mod_path)
+
+    # ── helpers ───────────────────────────────────────────────
+
+    @staticmethod
+    def _run(*lines):
+        """Run one script built from a sequence of @cmd lines."""
+        run_source("\n".join(lines))
+
+    # ── connection ────────────────────────────────────────────
+
+    def test_connect_exec_ok(self, capsys):
+        """@db.connect + @db.exec round-trip succeeds and produces output."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"]',
+            '@print["ok"]',
+        )
+        assert "ok" in capsys.readouterr().out
+
+    def test_no_connect_raises(self):
+        """@db.query without @db.connect raises RunError."""
+        with pytest.raises(RunError) as exc:
+            run_source('@db.query["SELECT 1"]')
+        assert "No active connection" in str(exc.value)
+
+    # ── insert + query ────────────────────────────────────────
+
+    def test_insert_and_query_returns_row(self, capsys):
+        """@db.insert stores a row; @db.query retrieves it as a dict."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"]',
+            '@db.insert["users"; {"name": "Alice"}]',
+            '@db.query["SELECT * FROM users"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["name"]}]',
+        )
+        assert "Alice" in capsys.readouterr().out
+
+    def test_query_multiple_rows(self, capsys):
+        """@db.query returns all matching rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE nums (n INTEGER)"]',
+            '@db.exec["INSERT INTO nums VALUES (10)"]',
+            '@db.exec["INSERT INTO nums VALUES (20)"]',
+            '@db.query["SELECT * FROM nums"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_query_with_params(self, capsys):
+        """Bound parameters filter rows correctly."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE p (name TEXT, age INTEGER)"]',
+            '@db.exec["INSERT INTO p VALUES (?, ?)"; "Alice"; 30]',
+            '@db.exec["INSERT INTO p VALUES (?, ?)"; "Bob"; 25]',
+            '@db.query["SELECT * FROM p WHERE age > ?"; 27]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    # ── result access ─────────────────────────────────────────
+
+    def test_count(self, capsys):
+        """@db.count[] returns the row count of the last query."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE items (x INTEGER)"]',
+            '@db.exec["INSERT INTO items VALUES (1)"]',
+            '@db.exec["INSERT INTO items VALUES (2)"]',
+            '@db.exec["INSERT INTO items VALUES (3)"]',
+            '@db.query["SELECT * FROM items"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "3" in capsys.readouterr().out
+
+    def test_one_returns_first_row(self, capsys):
+        """@db.one[] returns the first dict of the last query result."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE r (val INTEGER)"]',
+            '@db.exec["INSERT INTO r VALUES (42)"]',
+            '@db.exec["INSERT INTO r VALUES (99)"]',
+            '@db.query["SELECT * FROM r ORDER BY val"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["val"]}]',
+        )
+        assert "42" in capsys.readouterr().out
+
+    def test_one_empty_returns_none(self, capsys):
+        """@db.one[] on an empty result set returns None."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE empty (x INTEGER)"]',
+            '@db.query["SELECT * FROM empty"]',
+            '@var[row; @db.one[]]',
+            '@print[{row is None}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_lastid(self, capsys):
+        """@db.lastid[] returns the rowid of the last INSERT."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)"]',
+            '@db.insert["t"; {"val": "hello"}]',
+            '@var[lid; @db.lastid[]]',
+            '@print[{lid}]',
+        )
+        out = capsys.readouterr().out.strip()
+        assert int(out) >= 1
+
+    def test_rows_passthrough(self, capsys):
+        """@db.rows[result] passes through a given list unchanged."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE r (x INTEGER)"]',
+            '@db.exec["INSERT INTO r VALUES (5)"]',
+            '@var[res; @db.query["SELECT * FROM r"]]',
+            '@var[same; @db.rows[res]]',
+            '@print[{len(same)}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    # ── update + delete ───────────────────────────────────────
+
+    def test_update_modifies_rows(self, capsys):
+        """@db.update changes matching rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE u (id INTEGER PRIMARY KEY, name TEXT)"]',
+            '@db.insert["u"; {"name": "Alice"}]',
+            '@db.update["u"; {"name": "Bob"}; "name = ?"; "Alice"]',
+            '@db.query["SELECT name FROM u"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["name"]}]',
+        )
+        assert "Bob" in capsys.readouterr().out
+
+    def test_delete_removes_rows(self, capsys):
+        """@db.delete removes matching rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE d (id INTEGER PRIMARY KEY, name TEXT)"]',
+            '@db.insert["d"; {"name": "Alice"}]',
+            '@db.insert["d"; {"name": "Bob"}]',
+            '@db.delete["d"; "name = ?"; "Alice"]',
+            '@db.query["SELECT * FROM d"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    # ── schema helpers ────────────────────────────────────────
+
+    def test_create_helper(self, capsys):
+        """@db.create is an alias for @db.exec for CREATE TABLE."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.create["CREATE TABLE IF NOT EXISTS c (id INTEGER PRIMARY KEY)"]',
+            '@var[ok; @db.exists["c"]]',
+            '@print[{ok}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_exists_true(self, capsys):
+        """@db.exists returns True for an existing table."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE exist_test (id INTEGER)"]',
+            '@var[ok; @db.exists["exist_test"]]',
+            '@print[{ok}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_exists_false(self, capsys):
+        """@db.exists returns False for a non-existent table."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[ok; @db.exists["no_such_table"]]',
+            '@print[{ok}]',
+        )
+        assert "False" in capsys.readouterr().out
+
+    def test_tables_lists_all(self, capsys):
+        """@db.tables returns a list of all table names."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE aaa (x INTEGER)"]',
+            '@db.exec["CREATE TABLE bbb (y TEXT)"]',
+            '@var[tbl; @db.tables[]]',
+            '@print[{len(tbl)}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_drop_removes_table(self, capsys):
+        """@db.drop makes the table disappear."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE to_drop (x INTEGER)"]',
+            '@db.drop["to_drop"]',
+            '@var[ok; @db.exists["to_drop"]]',
+            '@print[{ok}]',
+        )
+        assert "False" in capsys.readouterr().out
+
+    # ── transactions ──────────────────────────────────────────
+
+    def test_transaction_commit_persists(self, capsys):
+        """Explicit @db.begin + @db.commit persists inserted rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE tx (val INTEGER)"]',
+            '@db.begin[]',
+            '@db.insert["tx"; {"val": 99}]',
+            '@db.commit[]',
+            '@db.query["SELECT * FROM tx"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    def test_transaction_rollback_discards(self, capsys):
+        """@db.rollback undoes all changes since @db.begin."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE rb (val INTEGER)"]',
+            '@db.begin[]',
+            '@db.exec["INSERT INTO rb VALUES (42)"]',
+            '@db.rollback[]',
+            '@db.query["SELECT * FROM rb"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "0" in capsys.readouterr().out
+
+    # ── generated code ────────────────────────────────────────
+
+    def test_transpiles_to_ns_call(self):
+        """@db.query[...] transpiles to __ns__[\"db\"].call(\"query\", ...)."""
+        code = _transpile('@db.query["SELECT 1"]')
+        assert '__ns__["db"].call("query"' in code
+
+    def test_transpiles_insert_with_args(self):
+        """@db.insert[t; data] transpiles to __ns__[\"db\"].call(\"insert\", t, data)."""
+        code = _transpile('@db.insert["users"; {"name": "Alice"}]')
+        assert '__ns__["db"].call("insert"' in code
+        assert '"users"' in code
