@@ -3547,3 +3547,216 @@ class TestPipeInline:
         code = _lf_transpile(ast)
         exec(compile(code, "<test>", "exec"), {})
         assert "[1, 2, 3]" in capsys.readouterr().out
+
+
+# ─────────────────────────────────────────────────────────────
+# RUNTIME REGRESSION — verified-but-untested Python parity features
+# (class self.attr, star-unpack, walrus, generator runtime, swap)
+# ─────────────────────────────────────────────────────────────
+
+def _run_ns(source):
+    """Helper: compile + exec, return the resulting namespace dict."""
+    code = _lf_transpile(_lf_parse(source))
+    ns = {}
+    exec(compile(code, "<test>", "exec"), ns)
+    return ns
+
+
+class TestClassRuntime:
+    def test_init_and_self_attr(self):
+        ns = _run_ns("\n".join([
+            "@class[Person]",
+            "    @func[__init__; self; name]",
+            "        @var[self.name; name]",
+            "    @end",
+            "    @func[greet; self]",
+            '        @return["Hi " + self.name]',
+            "    @end",
+            "@end",
+            '@var[p; Person("Ada")]',
+            "@var[result; p.greet()]",
+        ]))
+        assert ns["result"] == "Hi Ada"
+        assert ns["p"].name == "Ada"
+
+    def test_self_attr_assignment_codegen(self):
+        code = _compile("\n".join([
+            "@class[Box]",
+            "    @func[__init__; self; v]",
+            "        @var[self.value; v]",
+            "    @end",
+            "@end",
+        ]))
+        assert "self.value = v" in code
+
+    def test_property_runtime(self):
+        ns = _run_ns("\n".join([
+            "@class[Circle]",
+            "    @func[__init__; self; r]",
+            "        @var[self.r; r]",
+            "    @end",
+            "    @decorate[property]",
+            "    @func[area; self]",
+            "        @return[self.r * self.r]",
+            "    @end",
+            "@end",
+            "@var[c; Circle(3)]",
+            "@var[a; c.area]",
+        ]))
+        assert ns["a"] == 9
+
+    def test_class_inheritance_runtime(self):
+        ns = _run_ns("\n".join([
+            "@class[Animal]",
+            "    @func[sound; self]",
+            '        @return["..."]',
+            "    @end",
+            "@end",
+            "@class[Dog; Animal]",
+            "    @func[sound; self]",
+            '        @return["woof"]',
+            "    @end",
+            "@end",
+            "@var[d; Dog()]",
+            "@var[s; d.sound()]",
+        ]))
+        assert ns["s"] == "woof"
+
+
+class TestUnpackRuntime:
+    def test_swap(self):
+        ns = _run_ns("\n".join([
+            "@var[a; 1]",
+            "@var[b; 2]",
+            "@var[a, b; b, a]",
+        ]))
+        assert ns["a"] == 2 and ns["b"] == 1
+
+    def test_star_unpack(self):
+        ns = _run_ns("@var[first, *rest; [1, 2, 3, 4]]")
+        assert ns["first"] == 1
+        assert ns["rest"] == [2, 3, 4]
+
+    def test_star_unpack_codegen(self):
+        code = _compile("@var[first, *rest; [1, 2, 3, 4]]")
+        assert "first, *rest =" in code
+
+    def test_unpack_swap_executes(self):
+        ns = _run_ns("\n".join([
+            "@var[x, y; 10, 20]",
+            "@var[x, y; y, x]",
+        ]))
+        assert ns["x"] == 20 and ns["y"] == 10
+
+
+class TestWalrusRuntime:
+    def test_walrus_in_if(self):
+        ns = _run_ns("\n".join([
+            "@var[data; [1, 2, 3]]",
+            "@if[(n := len(data)) > 2]",
+            "    @var[found; n]",
+            "@end",
+        ]))
+        assert ns["found"] == 3
+
+    def test_walrus_in_while(self):
+        ns = _run_ns("\n".join([
+            "@var[items; [1, 2, 3]]",
+            "@var[total; 0]",
+            "@while[items and (x := items.pop())]",
+            "    @var[total; total + x]",
+            "@end",
+        ]))
+        assert ns["total"] == 6
+
+
+class TestGeneratorRuntime:
+    def test_generator_yields(self):
+        ns = _run_ns("\n".join([
+            "@func[counter]",
+            "    @yield[1]",
+            "    @yield[2]",
+            "    @yield[3]",
+            "@end",
+            "@var[result; list(counter())]",
+        ]))
+        assert ns["result"] == [1, 2, 3]
+
+    def test_generator_yield_from(self):
+        ns = _run_ns("\n".join([
+            "@func[gen]",
+            "    @yield.from[range(4)]",
+            "@end",
+            "@var[result; list(gen())]",
+        ]))
+        assert ns["result"] == [0, 1, 2, 3]
+
+    def test_generator_with_loop(self):
+        ns = _run_ns("\n".join([
+            "@func[squares; n]",
+            "    @for[i; range(n)]",
+            "        @yield[i * i]",
+            "    @end",
+            "@end",
+            "@var[result; list(squares(4))]",
+        ]))
+        assert ns["result"] == [0, 1, 4, 9]
+
+    def test_async_generator_codegen(self):
+        code = _compile("\n".join([
+            "@async[agen]",
+            "    @yield[1]",
+            "    @yield[2]",
+            "@end",
+        ]))
+        assert "async def agen" in code
+        assert "yield 1" in code
+
+
+class TestClosureRuntime:
+    def test_nonlocal_counter(self):
+        ns = _run_ns("\n".join([
+            "@func[make_counter]",
+            "    @var[count; 0]",
+            "    @func[inc]",
+            "        @nonlocal[count]",
+            "        @var[count; count + 1]",
+            "        @return[count]",
+            "    @end",
+            "    @return[inc]",
+            "@end",
+            "@var[c; make_counter()]",
+            "@var[a; c()]",
+            "@var[b; c()]",
+        ]))
+        assert ns["a"] == 1 and ns["b"] == 2
+
+
+class TestDecoratorRuntime:
+    def test_decorator_actually_applies(self):
+        ns = _run_ns("\n".join([
+            "@func[double_it; fn]",
+            "    @func[wrapper; x]",
+            "        @return[fn(x) * 2]",
+            "    @end",
+            "    @return[wrapper]",
+            "@end",
+            "@decorate[double_it]",
+            "@func[add_one; x]",
+            "    @return[x + 1]",
+            "@end",
+            "@var[result; add_one(5)]",
+        ]))
+        assert ns["result"] == 12  # (5 + 1) * 2
+
+    def test_staticmethod_decorator(self):
+        ns = _run_ns("\n".join([
+            "@class[Math]",
+            "    @decorate[staticmethod]",
+            "    @func[twice; n]",
+            "        @return[n * 2]",
+            "    @end",
+            "@end",
+            "@var[result; Math.twice(21)]",
+        ]))
+        assert ns["result"] == 42
