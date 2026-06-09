@@ -1,93 +1,182 @@
 """
-cruhon-db — comprehensive database plugin for Cruhon.
+cruhon-db — full-coverage database plugin for Cruhon  (138 commands)
 
-Sync backends:  SQLite (built-in), PostgreSQL (psycopg2), MySQL (pymysql)
-Async backends: SQLite (aiosqlite), PostgreSQL (asyncpg), MySQL (aiomysql)
+Sync backends:  SQLite (built-in)  ·  PostgreSQL (psycopg2)  ·  MySQL (pymysql)
+Async backends: SQLite (aiosqlite) ·  PostgreSQL (asyncpg)   ·  MySQL (aiomysql)
 
-=== CONNECTION ===
-  @db.connect["sqlite:///data.db"]
-  @db.connect["sqlite:///:memory:"]
-  @db.connect["postgres://user:pass@host:5432/dbname"]
-  @db.connect["mysql://user:pass@host:3306/dbname"]
+━━━ CONNECTION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.connect["sqlite:///data.db"]      — also :memory: / postgres:// / mysql://
   @db.close[]
-  @db.ping[]                      → bool — connection alive?
-  @db.reconnect[]                 — reconnect using same DSN
-  @db.in_transaction[]            → bool
+  @db.ping[]              → bool
+  @db.reconnect[]
+  @db.in_transaction[]    → bool
 
-=== CORE EXEC / QUERY ===
-  @db.exec[sql; params...]        — INSERT/UPDATE/DELETE/DDL, returns lastrowid
-  @db.execmany[sql; rows_list]    — bulk parameterized SQL
-  @db.query[sql; params...]       — SELECT, stores result, returns list of dicts
-  @db.fetchone[]                  → next row from open cursor (or None)
-  @db.fetchmany[n]                → next n rows from open cursor
-  @db.fetchall[]                  → alias: re-fetch all from open cursor
+━━━ CONNECTION INFO & RAW ACCESS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.connection[]        → raw connection object  (full Python freedom)
+  @db.cursor_obj[]        → raw cursor object
+  @db.db_type[]           → "sqlite" | "postgres" | "mysql"
+  @db.dsn[]               → DSN string used to connect
+  @db.closed[]            → bool
+  @db.conn_info[]         → dict: host/port/user/db/type
+  @db.server_version[]    → version string (all backends)
+  @db.autocommit[]        → current autocommit bool
+  @db.autocommit[bool]    — set autocommit
+  @db.isolation_level[]   → current isolation level
+  @db.isolation_level[lv] — set isolation level
+  @db.total_changes[]     → total rows changed since open (sqlite)
 
-=== CRUD SHORTCUTS ===
-  @db.insert[table; {col: val}]               → lastrowid
-  @db.insertmany[table; [{...}, ...]]         — bulk dict-list INSERT
-  @db.update[table; {col: val}; where; params...]  → rowcount
-  @db.delete[table; where; params...]              → rowcount
-  @db.get[table; where; params...]            → first matching row dict or None
-  @db.getall[table]                           → all rows list
-  @db.getall[table; where; params...]         → filtered rows list
-  @db.truncate[table]                         — delete all rows (TRUNCATE or DELETE)
+━━━ CORE EXEC / QUERY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.exec[sql; params...]         — INSERT/UPDATE/DELETE/DDL → lastrowid
+  @db.execmany[sql; rows_list]     — bulk parameterized SQL
+  @db.query[sql; params...]        — SELECT → list of dicts (stored)
+  @db.fetchone[]                   → next row from open cursor
+  @db.fetchmany[n]                 → next n rows from open cursor
+  @db.fetchall[]                   → all remaining rows from open cursor
 
-=== SCHEMA ===
-  @db.create[sql]                — CREATE TABLE (full SQL)
-  @db.drop[table]                — DROP TABLE IF EXISTS
-  @db.exists[table]              → bool
-  @db.tables[]                   → sorted list of table names
-  @db.views[]                    → sorted list of view names
-  @db.schema[table]              → list of {name, type, nullable, default, pk}
-  @db.indexes[table]             → list of index info dicts
-  @db.rename[old; new]           — rename a table
-  @db.index_create[table; col]   — CREATE INDEX IF NOT EXISTS
-  @db.index_drop[index_name]     — DROP INDEX IF EXISTS
+━━━ CRUD SHORTCUTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.insert[table; {col: val}]
+  @db.insertmany[table; [{...}, ...]]
+  @db.update[table; {col: val}; where; params...]   → rowcount
+  @db.delete[table; where; params...]               → rowcount
+  @db.get[table; where; params...]                  → first row or None
+  @db.getall[table]  /  @db.getall[table; where; params...]
+  @db.truncate[table]
 
-=== RESULT ACCESS ===
-  @db.rows[]                     → last query result (list of dicts)
-  @db.rows[result]               → pass-through
-  @db.one[]                      → first row dict or None
-  @db.one[result]                → first row of given list
-  @db.row[n]                     → nth row dict (0-indexed) or None
-  @db.col[name]                  → named column from first row
-  @db.cols[]                     → list of column names from last query
-  @db.count[]                    → len of last query result
-  @db.count[result]              → len of given list
-  @db.rowcount[]                 → rows affected by last exec/update/delete
-  @db.lastid[]                   → last INSERT rowid
+━━━ CURSOR CONTROL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.scroll[n]                    — relative scroll (pg/mysql)
+  @db.scroll[n; "absolute"]        — absolute scroll
+  @db.rownumber[]                  → current row index (pg/mysql)
+  @db.arraysize[]                  → cursor.arraysize
+  @db.arraysize[n]                 — set cursor.arraysize
+  @db.callproc[name; args]         — call stored procedure (pg/mysql)
+  @db.nextset[]                    — move to next result set (mysql)
+  @db.cursor_close[]               — close current cursor
 
-=== TRANSACTIONS ===
-  @db.begin[]
-  @db.commit[]
-  @db.rollback[]
-  @db.savepoint[name]            — SAVEPOINT name
-  @db.release[name]              — RELEASE SAVEPOINT name
-  @db.rollback_to[name]          — ROLLBACK TO SAVEPOINT name
+━━━ SCHEMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.create[sql]
+  @db.drop[table]
+  @db.exists[table]      → bool
+  @db.tables[]           → list
+  @db.views[]            → list
+  @db.schema[table]      → list of {name, type, nullable, default, pk}
+  @db.indexes[table]     → list of index dicts
+  @db.rename[old; new]
+  @db.index_create[table; col]
+  @db.index_drop[name]
 
-=== SQLITE-SPECIFIC ===
-  @db.pragma[name]               → current PRAGMA value
-  @db.pragma[name; value]        — set a PRAGMA
-  @db.vacuum[]                   — VACUUM the SQLite database
-  @db.backup[path]               — backup database to file (SQLite only)
-  @db.restore[path]              — connect to an on-disk SQLite file (alias for connect)
+━━━ RESULT ACCESS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.rows[]  /  @db.rows[result]
+  @db.one[]   /  @db.one[result]
+  @db.row[n]
+  @db.col[name]
+  @db.cols[]
+  @db.count[] /  @db.count[result]
+  @db.rowcount[]
+  @db.lastid[]
 
-=== ASYNC COMMANDS (use inside @async[main]...@end) ===
-  @db.async_connect["sqlite:///..."]   — aiosqlite / asyncpg / aiomysql
-  @db.async_close[]
-  @db.async_query[sql; params...]      → list of dicts
-  @db.async_exec[sql; params...]       → lastrowid
-  @db.async_insert[table; data]        → lastrowid
+━━━ TRANSACTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.begin[]  @db.commit[]  @db.rollback[]
+  @db.savepoint[name]  @db.release[name]  @db.rollback_to[name]
+
+━━━ SQLITE-SPECIFIC ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.pragma[name]  /  @db.pragma[name; value]
+  @db.vacuum[]
+  @db.backup[path]
+  @db.restore[path]
+  @db.script[sql]             — executescript (multi-statement)
+  @db.func[name; nargs; fn]   — create_function (Python → SQL)
+  @db.aggregate[name; nargs; cls]  — create_aggregate
+  @db.collation[name; fn]     — create_collation
+  @db.dump[]                  → list of SQL strings (iterdump)
+  @db.serialize[]             → bytes (py 3.11+)
+  @db.deserialize[data]       — load from bytes (py 3.11+)
+  @db.text_factory[fn]        — set text decoding callable
+  @db.trace[fn]               — set_trace_callback
+  @db.progress[n; fn]         — set_progress_handler
+  @db.authorizer[fn]          — set_authorizer
+  @db.enable_ext[bool]        — enable_load_extension
+  @db.load_ext[path]          — load_extension
+  @db.row_factory[fn]         — set row_factory callable
+  @db.total_changes[]         → int
+
+━━━ POSTGRESQL-SPECIFIC (psycopg2) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.pg_copy_from[path; table]           — COPY file → table
+  @db.pg_copy_to[path; table]             — COPY table → file
+  @db.pg_copy_expert[sql; path]           — COPY with custom SQL
+  @db.pg_mogrify[sql; params]             → formatted SQL string
+  @db.pg_listen[channel]                  — LISTEN channel
+  @db.pg_unlisten[channel]                — UNLISTEN channel
+  @db.pg_notify[channel; payload]         — NOTIFY
+  @db.pg_poll[]                           — poll async notifications
+  @db.pg_notifications[]                  → list of pending NOTIFYs
+  @db.pg_notices[]                        → list of server notices
+  @db.pg_cancel[]                         — cancel current operation
+  @db.pg_reset[]                          — reset connection
+  @db.pg_pid[]                            → backend PID
+  @db.pg_param[name]                      → server parameter value
+  @db.pg_isolation[level]                 — set isolation level
+  @db.pg_encoding[enc]                    — set client encoding
+  @db.pg_autocommit[bool]                 — set autocommit
+  @db.pg_status[]                         → transaction status int
+  @db.pg_server_version[]                 → int (e.g. 140001)
+  @db.pg_tpc_begin[xid]
+  @db.pg_tpc_prepare[]
+  @db.pg_tpc_commit[]
+  @db.pg_tpc_rollback[]
+  @db.pg_tpc_recover[]                    → list of pending XIDs
+
+━━━ MYSQL-SPECIFIC (pymysql) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.my_select_db[name]    — USE database
+  @db.my_server_info[]      → version string
+  @db.my_thread_id[]        → int
+  @db.my_charset[name]      — set charset (no arg = get current)
+  @db.my_kill[tid]          — kill thread
+  @db.my_warnings[]         → list of warning dicts
+  @db.my_nextset[]          — move to next result set
+
+━━━ ASYNC (use inside @async[main]...@end) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.async_connect[dsn]  @db.async_close[]
+  @db.async_query[sql; params...]       → list of dicts
+  @db.async_exec[sql; params...]        → lastrowid
+  @db.async_execmany[sql; rows]         — bulk SQL
+  @db.async_insert[table; data]         → lastrowid
   @db.async_insertmany[table; rows]
-  @db.async_get[table; where; params...] → first row dict or None
-  @db.async_getall[table]               → all rows
-  @db.async_getall[table; where; params...]
-  @db.async_begin[]
-  @db.async_commit[]
-  @db.async_rollback[]
-  @db.async_one[]                       → first row of last async result
-  @db.async_rows[]                      → last async result list
-  @db.async_count[]                     → count of last async result
+  @db.async_get[table; where; params...]  → first row or None
+  @db.async_getall[table]  /  @db.async_getall[table; where; params...]
+  @db.async_begin[]  @db.async_commit[]  @db.async_rollback[]
+  @db.async_one[]  @db.async_rows[]  @db.async_count[]
+  @db.async_rowcount[]  @db.async_cols[]
+
+  — Streaming cursor:
+  @db.async_cursor_open[sql; params...]  — open streaming cursor
+  @db.async_fetchone[]                   → next row dict or None
+  @db.async_fetchmany[n]                 → next n row dicts
+  @db.async_cursor_close[]
+
+  — aiosqlite extras:
+  @db.async_script[sql]                  — executescript
+  @db.async_func[name; nargs; fn]        — create_function
+  @db.async_total_changes[]              → int
+  @db.async_dump[]                       → list of SQL strings
+  @db.async_in_transaction[]             → bool
+
+  — asyncpg extras:
+  @db.async_fetchrow[sql; params...]     → single dict or None
+  @db.async_fetchval[sql; col; params...]  → scalar value
+  @db.async_copy_from[table; records]    — copy records to table
+  @db.async_copy_to[table; path]         — copy table to file
+  @db.async_server_version[]             → version namedtuple
+  @db.async_pid[]                        → backend PID
+  @db.async_is_closed[]                  → bool
+  @db.async_terminate[]                  — force close
+  @db.async_reset[]                      — reset connection
+
+  — aiomysql extras:
+  @db.async_select_db[name]
+  @db.async_charset[name]
+  @db.async_ping[]
+  @db.async_callproc[name; args]
+  @db.async_scroll[n]
 """
 
 from __future__ import annotations
@@ -100,22 +189,10 @@ from typing import Any, Optional
 # ─────────────────────────────────────────────────────────────
 
 def _parse_dsn(url: str):
-    """
-    Parse a database DSN into (db_type, connect_kwargs).
-
-    Supported:
-      sqlite:///path/to/file.db  |  sqlite:///:memory:
-      postgres://user:pass@host:port/dbname
-      postgresql://user:pass@host:port/dbname
-      mysql://user:pass@host:port/dbname
-      bare path  → treated as SQLite file
-    """
     url = url.strip()
-
     if url.startswith("sqlite:"):
         path = re.sub(r"^sqlite:///", "", url)
         return "sqlite", {"database": path or ":memory:"}
-
     for prefix in ("postgresql://", "postgres://"):
         if url.startswith(prefix):
             rest = url[len(prefix):]
@@ -130,7 +207,6 @@ def _parse_dsn(url: str):
             if password: kw["password"] = password
             if port:     kw["port"] = int(port)
             return "postgres", kw
-
     if url.startswith("mysql://"):
         rest = url[8:]
         m = re.match(
@@ -144,23 +220,16 @@ def _parse_dsn(url: str):
         if password: kw["passwd"] = password
         if port:     kw["port"] = int(port)
         return "mysql", kw
-
-    # Bare path → SQLite
     return "sqlite", {"database": url}
 
 
 # ─────────────────────────────────────────────────────────────
-# SYNC DB CLASS
+# MAIN DB CLASS
 # ─────────────────────────────────────────────────────────────
 
 class _DB:
-    """
-    Synchronous database connection + query manager.
-    One instance lives for the lifetime of a Cruhon mod session.
-    Each method receives args as a list; async methods return coroutines.
-    """
-
     def __init__(self):
+        # Sync state
         self._conn = None
         self._cursor = None
         self._db_type: Optional[str] = None
@@ -172,21 +241,35 @@ class _DB:
         self._in_transaction: bool = False
         # Async state
         self._async_conn = None
+        self._async_cursor = None           # streaming cursor
         self._async_db_type: Optional[str] = None
         self._async_last_result: list = []
         self._async_last_id: Optional[Any] = None
+        self._async_last_rowcount: int = 0
+        self._async_last_cols: list = []
 
     # ── Internal helpers ───────────────────────────────────────
 
     def _require_conn(self):
         if self._conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No active connection. Call @db.connect first."
-            )
+            raise RuntimeError("[cruhon-db] No active connection. Call @db.connect first.")
+
+    def _require_sqlite(self, cmd: str):
+        self._require_conn()
+        if self._db_type != "sqlite":
+            raise RuntimeError(f"[cruhon-db] @db.{cmd} is SQLite-only.")
+
+    def _require_postgres(self, cmd: str):
+        self._require_conn()
+        if self._db_type != "postgres":
+            raise RuntimeError(f"[cruhon-db] @db.{cmd} is PostgreSQL-only.")
+
+    def _require_mysql(self, cmd: str):
+        self._require_conn()
+        if self._db_type != "mysql":
+            raise RuntimeError(f"[cruhon-db] @db.{cmd} is MySQL-only.")
 
     def _auto_commit(self):
-        # SQLite with isolation_level=None is autocommit per-statement.
-        # PostgreSQL and MySQL use implicit transactions requiring explicit commit.
         if not self._in_transaction and self._db_type in ("postgres", "mysql"):
             self._conn.commit()
 
@@ -203,7 +286,6 @@ class _DB:
         return {"_": row}
 
     def _store_result(self, rows):
-        """Normalize, store, and return result list. Also updates _last_cols."""
         self._last_result = [self._row_to_dict(r) for r in rows]
         if self._cursor and self._cursor.description:
             self._last_cols = [d[0] for d in self._cursor.description]
@@ -213,70 +295,55 @@ class _DB:
             self._last_cols = []
         return self._last_result
 
-    # ── Connection ─────────────────────────────────────────────
+    # ── CONNECTION ────────────────────────────────────────────
 
     def connect(self, args: list):
-        """@db.connect[dsn]"""
         if not args:
-            raise RuntimeError("[cruhon-db] @db.connect requires a DSN argument.")
+            raise RuntimeError("[cruhon-db] @db.connect requires a DSN.")
         if self._conn is not None:
             self.close([])
-
         dsn = str(args[0])
         self._dsn = dsn
         db_type, kwargs = _parse_dsn(dsn)
         self._db_type = db_type
-
         if db_type == "sqlite":
             import sqlite3
-            # isolation_level=None: autocommit; we manage BEGIN/COMMIT explicitly.
             self._conn = sqlite3.connect(kwargs["database"], isolation_level=None)
             self._conn.row_factory = sqlite3.Row
             self._cursor = self._conn.cursor()
-
         elif db_type == "postgres":
             try:
-                import psycopg2
-                import psycopg2.extras
+                import psycopg2, psycopg2.extras
                 self._conn = psycopg2.connect(**kwargs)
                 self._cursor = self._conn.cursor(
                     cursor_factory=psycopg2.extras.RealDictCursor
                 )
             except ImportError:
                 raise RuntimeError(
-                    "[cruhon-db] PostgreSQL requires psycopg2. "
-                    "Install: pip install psycopg2-binary"
+                    "[cruhon-db] PostgreSQL requires psycopg2. pip install psycopg2-binary"
                 )
-
         elif db_type == "mysql":
             try:
-                import pymysql
-                import pymysql.cursors
+                import pymysql, pymysql.cursors
                 kwargs["cursorclass"] = pymysql.cursors.DictCursor
                 self._conn = pymysql.connect(**kwargs)
                 self._cursor = self._conn.cursor()
             except ImportError:
                 raise RuntimeError(
-                    "[cruhon-db] MySQL requires pymysql. "
-                    "Install: pip install pymysql"
+                    "[cruhon-db] MySQL requires pymysql. pip install pymysql"
                 )
-
         return self._conn
 
     def close(self, args: list):
-        """@db.close[]"""
         if self._conn is not None:
-            try:
-                self._conn.close()
-            except Exception:
-                pass
+            try: self._conn.close()
+            except Exception: pass
         self._conn = None
         self._cursor = None
         self._db_type = None
         self._in_transaction = False
 
     def ping(self, args: list):
-        """@db.ping[]  → True if connection is alive, False otherwise."""
         if self._conn is None:
             return False
         try:
@@ -291,215 +358,351 @@ class _DB:
             return False
 
     def reconnect(self, args: list):
-        """@db.reconnect[]  — close and reopen using the same DSN."""
         if not self._dsn:
-            raise RuntimeError("[cruhon-db] No previous DSN stored for reconnect.")
+            raise RuntimeError("[cruhon-db] No previous DSN for reconnect.")
         self.connect([self._dsn])
 
     def in_transaction(self, args: list):
-        """@db.in_transaction[]  → bool"""
         return self._in_transaction
 
-    # ── Core exec / query ──────────────────────────────────────
+    # ── CONNECTION INFO & RAW ACCESS ──────────────────────────
 
-    def exec(self, args: list):
+    def connection(self, args: list):
+        """Return the raw connection object — full Python freedom."""
+        return self._conn
+
+    def cursor_obj(self, args: list):
+        """Return the raw cursor object."""
+        return self._cursor
+
+    def db_type(self, args: list):
+        """Return 'sqlite', 'postgres', or 'mysql'."""
+        return self._db_type
+
+    def dsn(self, args: list):
+        """Return the DSN string used to connect."""
+        return self._dsn
+
+    def closed(self, args: list):
+        """Return True if no active connection."""
+        return self._conn is None
+
+    def conn_info(self, args: list):
+        """Return dict with host/port/user/db/type metadata."""
+        if self._conn is None:
+            return {"type": None, "connected": False}
+        info: dict = {"type": self._db_type, "connected": True}
+        if self._db_type == "sqlite":
+            info["database"] = self._dsn or ":memory:"
+        elif self._db_type == "postgres":
+            try:
+                params = self._conn.get_dsn_parameters()
+                info.update(params)
+            except Exception:
+                pass
+        elif self._db_type == "mysql":
+            info["host"] = getattr(self._conn, "host", None)
+            info["port"] = getattr(self._conn, "port", None)
+            info["user"] = getattr(self._conn, "user", None)
+            info["db"]   = getattr(self._conn, "db", None)
+        return info
+
+    def server_version(self, args: list):
+        """Return the server version string for the current backend."""
+        self._require_conn()
+        if self._db_type == "sqlite":
+            import sqlite3
+            return sqlite3.sqlite_version
+        elif self._db_type == "postgres":
+            v = self._conn.server_version
+            major = v // 10000
+            minor = (v % 10000) // 100
+            patch = v % 100
+            return f"{major}.{minor}.{patch}"
+        elif self._db_type == "mysql":
+            return self._conn.get_server_info()
+
+    def autocommit(self, args: list):
         """
-        @db.exec[sql; params...]
-        Execute a non-SELECT statement. Returns lastrowid (or 0 for DDL).
+        @db.autocommit[]       → current autocommit bool
+        @db.autocommit[True]   — enable autocommit
+        @db.autocommit[False]  — disable autocommit
         """
         self._require_conn()
         if not args:
-            raise RuntimeError("[cruhon-db] @db.exec requires a SQL argument.")
+            if self._db_type == "sqlite":
+                return self._conn.isolation_level is None
+            elif self._db_type == "postgres":
+                return self._conn.autocommit
+            elif self._db_type == "mysql":
+                return bool(getattr(self._conn, "_autocommit", False))
+        value = bool(args[0])
+        if self._db_type == "sqlite":
+            self._conn.isolation_level = None if value else ""
+        elif self._db_type == "postgres":
+            self._conn.autocommit = value
+        elif self._db_type == "mysql":
+            self._conn.autocommit(value)
+        return value
+
+    def isolation_level(self, args: list):
+        """
+        @db.isolation_level[]       → current isolation level
+        @db.isolation_level[level]  — set isolation level
+        """
+        self._require_conn()
+        if not args:
+            if self._db_type == "sqlite":
+                return self._conn.isolation_level
+            elif self._db_type == "postgres":
+                return self._conn.isolation_level
+            elif self._db_type == "mysql":
+                self._cursor.execute(
+                    "SELECT @@SESSION.transaction_isolation"
+                )
+                row = self._cursor.fetchone()
+                return list(row.values())[0] if row else None
+        level = str(args[0])
+        if self._db_type == "sqlite":
+            self._conn.isolation_level = level
+        elif self._db_type == "postgres":
+            import psycopg2.extensions as ext
+            levels = {
+                "SERIALIZABLE":    ext.ISOLATION_LEVEL_SERIALIZABLE,
+                "REPEATABLE READ": ext.ISOLATION_LEVEL_REPEATABLE_READ,
+                "READ COMMITTED":  ext.ISOLATION_LEVEL_READ_COMMITTED,
+                "READ UNCOMMITTED":ext.ISOLATION_LEVEL_READ_UNCOMMITTED,
+                "AUTOCOMMIT":      ext.ISOLATION_LEVEL_AUTOCOMMIT,
+            }
+            self._conn.set_isolation_level(levels.get(level.upper(), int(level)))
+        elif self._db_type == "mysql":
+            self._cursor.execute(
+                f"SET SESSION TRANSACTION ISOLATION LEVEL {level}"
+            )
+        return level
+
+    def total_changes(self, args: list):
+        """Return total rows modified since the connection was opened (sqlite)."""
+        self._require_sqlite("total_changes")
+        return self._conn.total_changes
+
+    # ── CURSOR CONTROL ────────────────────────────────────────
+
+    def scroll(self, args: list):
+        """
+        @db.scroll[n]              — relative scroll by n rows
+        @db.scroll[n; "absolute"]  — scroll to absolute position n
+        """
+        self._require_conn()
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.scroll requires a value.")
+        n = int(args[0])
+        mode = str(args[1]).strip('"\'') if len(args) > 1 else "relative"
+        if self._db_type == "sqlite":
+            raise RuntimeError(
+                "[cruhon-db] @db.scroll: SQLite cursors are forward-only."
+            )
+        self._cursor.scroll(n, mode=mode)
+
+    def rownumber(self, args: list):
+        """Return current cursor row index (psycopg2/pymysql)."""
+        self._require_conn()
+        return getattr(self._cursor, "rownumber", None)
+
+    def arraysize(self, args: list):
+        """
+        @db.arraysize[]    → current cursor.arraysize
+        @db.arraysize[n]   — set cursor.arraysize
+        """
+        self._require_conn()
+        if not args:
+            return self._cursor.arraysize
+        self._cursor.arraysize = int(args[0])
+        return self._cursor.arraysize
+
+    def callproc(self, args: list):
+        """
+        @db.callproc[name; args_list]
+        Call a stored procedure. Returns result rows stored in last-result.
+        """
+        self._require_conn()
+        if self._db_type == "sqlite":
+            raise RuntimeError(
+                "[cruhon-db] @db.callproc: SQLite does not support stored procedures."
+            )
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.callproc requires a procedure name.")
+        name = str(args[0])
+        proc_args = args[1] if len(args) > 1 else []
+        self._cursor.callproc(name, proc_args)
+        try:
+            return self._store_result(self._cursor.fetchall())
+        except Exception:
+            return []
+
+    def nextset(self, args: list):
+        """Advance to the next result set (MySQL multiple statements)."""
+        self._require_conn()
+        if not hasattr(self._cursor, "nextset"):
+            raise RuntimeError(
+                "[cruhon-db] @db.nextset is not supported by this backend."
+            )
+        result = self._cursor.nextset()
+        if result:
+            return self._store_result(self._cursor.fetchall())
+        return None
+
+    def cursor_close(self, args: list):
+        """Close the current cursor."""
+        if self._cursor is not None:
+            try: self._cursor.close()
+            except Exception: pass
+            if self._conn is not None:
+                if self._db_type == "sqlite":
+                    import sqlite3
+                    self._cursor = self._conn.cursor()
+                elif self._db_type == "postgres":
+                    import psycopg2.extras
+                    self._cursor = self._conn.cursor(
+                        cursor_factory=psycopg2.extras.RealDictCursor
+                    )
+                elif self._db_type == "mysql":
+                    self._cursor = self._conn.cursor()
+
+    # ── CORE EXEC / QUERY ─────────────────────────────────────
+
+    def exec(self, args: list):
+        self._require_conn()
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.exec requires SQL.")
         sql = str(args[0])
         params = tuple(args[1:]) if len(args) > 1 else ()
         self._cursor.execute(sql, params)
         self._last_id = self._cursor.lastrowid
-        self._last_rowcount = self._cursor.rowcount if self._cursor.rowcount >= 0 else 0
+        self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
         return self._last_id
 
     def execmany(self, args: list):
-        """
-        @db.execmany[sql; rows_list]
-        Execute SQL for each item in rows_list (list of tuples or dicts).
-        """
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.execmany requires sql and rows_list arguments."
-            )
+            raise RuntimeError("[cruhon-db] @db.execmany requires sql and rows_list.")
         sql = str(args[0])
         rows = args[1]
-        if not isinstance(rows, (list, tuple)):
-            raise RuntimeError("[cruhon-db] @db.execmany: rows_list must be a list.")
         self._cursor.executemany(sql, rows)
-        self._last_rowcount = self._cursor.rowcount if self._cursor.rowcount >= 0 else 0
+        self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
 
     def query(self, args: list):
-        """
-        @db.query[sql; params...]
-        Execute a SELECT. Stores and returns list of dicts.
-        """
         self._require_conn()
         if not args:
-            raise RuntimeError("[cruhon-db] @db.query requires a SQL argument.")
+            raise RuntimeError("[cruhon-db] @db.query requires SQL.")
         sql = str(args[0])
         params = tuple(args[1:]) if len(args) > 1 else ()
         self._cursor.execute(sql, params)
         return self._store_result(self._cursor.fetchall())
 
     def fetchone(self, args: list):
-        """@db.fetchone[]  → next row dict from open cursor, or None."""
         self._require_conn()
-        row = self._cursor.fetchone()
-        return self._row_to_dict(row)
+        return self._row_to_dict(self._cursor.fetchone())
 
     def fetchmany(self, args: list):
-        """@db.fetchmany[n]  → list of next n row dicts from open cursor."""
         self._require_conn()
         n = int(args[0]) if args else 1
-        rows = self._cursor.fetchmany(n)
-        return [self._row_to_dict(r) for r in rows]
+        return [self._row_to_dict(r) for r in self._cursor.fetchmany(n)]
 
     def fetchall(self, args: list):
-        """@db.fetchall[]  → all remaining rows from open cursor as list of dicts."""
         self._require_conn()
         return self._store_result(self._cursor.fetchall())
 
-    # ── CRUD shortcuts ─────────────────────────────────────────
+    # ── CRUD SHORTCUTS ────────────────────────────────────────
 
     def insert(self, args: list):
-        """@db.insert[table; {col: val}]  → lastrowid."""
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.insert requires table and data dict."
-            )
-        table = str(args[0])
-        data = args[1]
-        if not isinstance(data, dict):
-            raise RuntimeError("[cruhon-db] @db.insert: second argument must be a dict.")
-        if not data:
-            raise RuntimeError("[cruhon-db] @db.insert: data dict is empty.")
+            raise RuntimeError("[cruhon-db] @db.insert requires table and data dict.")
+        table, data = str(args[0]), args[1]
+        if not isinstance(data, dict) or not data:
+            raise RuntimeError("[cruhon-db] @db.insert: data must be a non-empty dict.")
         cols = list(data.keys())
-        vals = list(data.values())
         ph = "?" if self._db_type == "sqlite" else "%s"
         sql = (
             f"INSERT INTO {table} ({', '.join(cols)}) "
             f"VALUES ({', '.join(ph for _ in cols)})"
         )
-        self._cursor.execute(sql, vals)
+        self._cursor.execute(sql, list(data.values()))
         self._last_id = self._cursor.lastrowid
         self._last_rowcount = 1
         self._auto_commit()
         return self._last_id
 
     def insertmany(self, args: list):
-        """
-        @db.insertmany[table; [{col: val}, ...]]
-        Bulk INSERT a list of dicts. All dicts must have identical keys.
-        """
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.insertmany requires table and rows_list."
-            )
-        table = str(args[0])
-        rows = args[1]
+            raise RuntimeError("[cruhon-db] @db.insertmany requires table and rows_list.")
+        table, rows = str(args[0]), args[1]
         if not isinstance(rows, (list, tuple)) or not rows:
-            raise RuntimeError(
-                "[cruhon-db] @db.insertmany: rows_list must be a non-empty list of dicts."
-            )
-        if not isinstance(rows[0], dict):
-            raise RuntimeError("[cruhon-db] @db.insertmany: each row must be a dict.")
+            raise RuntimeError("[cruhon-db] @db.insertmany: rows must be a non-empty list.")
         cols = list(rows[0].keys())
         ph = "?" if self._db_type == "sqlite" else "%s"
         sql = (
             f"INSERT INTO {table} ({', '.join(cols)}) "
             f"VALUES ({', '.join(ph for _ in cols)})"
         )
-        param_rows = [tuple(r[c] for c in cols) for r in rows]
-        self._cursor.executemany(sql, param_rows)
+        self._cursor.executemany(sql, [tuple(r[c] for c in cols) for r in rows])
         self._last_rowcount = len(rows)
         self._auto_commit()
 
     def update(self, args: list):
-        """@db.update[table; {col: val}; where; params...]  → rowcount."""
         self._require_conn()
         if len(args) < 3:
-            raise RuntimeError(
-                "[cruhon-db] @db.update requires table, data dict, and where clause."
-            )
-        table = str(args[0])
-        data = args[1]
-        where = str(args[2])
+            raise RuntimeError("[cruhon-db] @db.update requires table, data, where.")
+        table, data, where = str(args[0]), args[1], str(args[2])
         where_params = list(args[3:])
-        if not isinstance(data, dict):
-            raise RuntimeError("[cruhon-db] @db.update: second argument must be a dict.")
         ph = "?" if self._db_type == "sqlite" else "%s"
         set_parts = [f"{k} = {ph}" for k in data.keys()]
         sql = f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where}"
         self._cursor.execute(sql, list(data.values()) + where_params)
-        self._last_rowcount = self._cursor.rowcount if self._cursor.rowcount >= 0 else 0
+        self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
         return self._last_rowcount
 
     def delete(self, args: list):
-        """@db.delete[table; where; params...]  → rowcount."""
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.delete requires table and where clause."
-            )
-        table = str(args[0])
-        where = str(args[1])
+            raise RuntimeError("[cruhon-db] @db.delete requires table and where.")
+        table, where = str(args[0]), str(args[1])
         params = list(args[2:])
-        sql = f"DELETE FROM {table} WHERE {where}"
-        self._cursor.execute(sql, params)
-        self._last_rowcount = self._cursor.rowcount if self._cursor.rowcount >= 0 else 0
+        self._cursor.execute(f"DELETE FROM {table} WHERE {where}", params)
+        self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
         return self._last_rowcount
 
     def get(self, args: list):
-        """
-        @db.get[table; where; params...]  → first matching row dict or None.
-        Stores result in last-result (single-item list or empty).
-        """
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError("[cruhon-db] @db.get requires table and where clause.")
-        table = str(args[0])
-        where = str(args[1])
+            raise RuntimeError("[cruhon-db] @db.get requires table and where.")
+        table, where = str(args[0]), str(args[1])
         params = tuple(args[2:])
-        sql = f"SELECT * FROM {table} WHERE {where} LIMIT 1"
-        self._cursor.execute(sql, params)
+        self._cursor.execute(f"SELECT * FROM {table} WHERE {where} LIMIT 1", params)
         row = self._cursor.fetchone()
         result = [self._row_to_dict(row)] if row is not None else []
         self._store_result(result)
         return result[0] if result else None
 
     def getall(self, args: list):
-        """
-        @db.getall[table]                → all rows
-        @db.getall[table; where; params...] → filtered rows
-        """
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.getall requires a table name.")
         table = str(args[0])
         if len(args) > 1:
-            where = str(args[1])
-            params = tuple(args[2:])
-            sql = f"SELECT * FROM {table} WHERE {where}"
+            where, params = str(args[1]), tuple(args[2:])
+            self._cursor.execute(f"SELECT * FROM {table} WHERE {where}", params)
         else:
-            sql = f"SELECT * FROM {table}"
-            params = ()
-        self._cursor.execute(sql, params)
+            self._cursor.execute(f"SELECT * FROM {table}")
         return self._store_result(self._cursor.fetchall())
 
     def truncate(self, args: list):
-        """@db.truncate[table]  — remove all rows from table."""
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.truncate requires a table name.")
@@ -510,10 +713,9 @@ class _DB:
             self._cursor.execute(f"TRUNCATE TABLE {table}")
         self._auto_commit()
 
-    # ── Schema helpers ─────────────────────────────────────────
+    # ── SCHEMA ────────────────────────────────────────────────
 
     def create(self, args: list):
-        """@db.create[sql]  — execute a CREATE TABLE statement."""
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.create requires CREATE TABLE SQL.")
@@ -521,7 +723,6 @@ class _DB:
         self._auto_commit()
 
     def drop(self, args: list):
-        """@db.drop[table]  — DROP TABLE IF EXISTS."""
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.drop requires a table name.")
@@ -529,7 +730,6 @@ class _DB:
         self._auto_commit()
 
     def exists(self, args: list):
-        """@db.exists[table]  → True if table exists, False otherwise."""
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.exists requires a table name.")
@@ -541,15 +741,13 @@ class _DB:
         elif self._db_type == "postgres":
             self._cursor.execute(
                 "SELECT 1 FROM information_schema.tables "
-                "WHERE table_schema='public' AND table_name=%s",
-                (table,),
+                "WHERE table_schema='public' AND table_name=%s", (table,)
             )
         elif self._db_type == "mysql":
             self._cursor.execute("SHOW TABLES LIKE %s", (table,))
         return self._cursor.fetchone() is not None
 
     def tables(self, args: list):
-        """@db.tables[]  → sorted list of table names."""
         self._require_conn()
         if self._db_type == "sqlite":
             self._cursor.execute(
@@ -568,7 +766,6 @@ class _DB:
         return []
 
     def views(self, args: list):
-        """@db.views[]  → sorted list of view names."""
         self._require_conn()
         if self._db_type == "sqlite":
             self._cursor.execute(
@@ -587,27 +784,19 @@ class _DB:
         return []
 
     def schema(self, args: list):
-        """
-        @db.schema[table]
-        Returns list of dicts: {name, type, nullable, default, pk}.
-        """
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.schema requires a table name.")
         table = str(args[0])
         if self._db_type == "sqlite":
             self._cursor.execute(f"PRAGMA table_info({table})")
-            cols = []
-            for row in self._cursor.fetchall():
-                r = dict(row)
-                cols.append({
-                    "name":     r["name"],
-                    "type":     r["type"],
-                    "nullable": not r["notnull"],
-                    "default":  r["dflt_value"],
-                    "pk":       bool(r["pk"]),
-                })
-            return cols
+            return [{
+                "name":     dict(r)["name"],
+                "type":     dict(r)["type"],
+                "nullable": not dict(r)["notnull"],
+                "default":  dict(r)["dflt_value"],
+                "pk":       bool(dict(r)["pk"]),
+            } for r in self._cursor.fetchall()]
         elif self._db_type == "postgres":
             self._cursor.execute(
                 "SELECT column_name, data_type, is_nullable, column_default, "
@@ -640,10 +829,6 @@ class _DB:
         return []
 
     def indexes(self, args: list):
-        """
-        @db.indexes[table]
-        Returns list of index info dicts for the given table.
-        """
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.indexes requires a table name.")
@@ -655,30 +840,23 @@ class _DB:
             for idx in idx_list:
                 self._cursor.execute(f"PRAGMA index_info({idx['name']})")
                 cols = [dict(r)["name"] for r in self._cursor.fetchall()]
-                result.append({
-                    "name":    idx["name"],
-                    "unique":  bool(idx["unique"]),
-                    "columns": cols,
-                })
+                result.append({"name": idx["name"], "unique": bool(idx["unique"]), "columns": cols})
             return result
         elif self._db_type == "postgres":
             self._cursor.execute(
-                "SELECT indexname, indexdef FROM pg_indexes "
-                "WHERE tablename=%s ORDER BY indexname",
+                "SELECT indexname, indexdef FROM pg_indexes WHERE tablename=%s ORDER BY indexname",
                 (table,),
             )
-            return [{"name": r["indexname"], "def": r["indexdef"]}
-                    for r in self._cursor.fetchall()]
+            return [{"name": r["indexname"], "def": r["indexdef"]} for r in self._cursor.fetchall()]
         elif self._db_type == "mysql":
             self._cursor.execute(f"SHOW INDEX FROM {table}")
             return self._cursor.fetchall()
         return []
 
     def rename(self, args: list):
-        """@db.rename[old_table; new_table]  — rename a table."""
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError("[cruhon-db] @db.rename requires old and new table names.")
+            raise RuntimeError("[cruhon-db] @db.rename requires old and new names.")
         old, new = str(args[0]), str(args[1])
         if self._db_type == "mysql":
             self._cursor.execute(f"RENAME TABLE {old} TO {new}")
@@ -687,99 +865,65 @@ class _DB:
         self._auto_commit()
 
     def index_create(self, args: list):
-        """@db.index_create[table; col]  — CREATE INDEX IF NOT EXISTS."""
         self._require_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.index_create requires table and column."
-            )
+            raise RuntimeError("[cruhon-db] @db.index_create requires table and col.")
         table, col = str(args[0]), str(args[1])
-        idx_name = f"idx_{table}_{col}"
-        if self._db_type == "sqlite":
-            self._cursor.execute(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({col})"
-            )
-        elif self._db_type == "postgres":
-            self._cursor.execute(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({col})"
-            )
-        elif self._db_type == "mysql":
-            # MySQL doesn't support IF NOT EXISTS on CREATE INDEX before 8.0
-            try:
-                self._cursor.execute(
-                    f"CREATE INDEX {idx_name} ON {table}({col})"
-                )
-            except Exception:
-                pass
+        idx = f"idx_{table}_{col}"
+        if self._db_type == "mysql":
+            try: self._cursor.execute(f"CREATE INDEX {idx} ON {table}({col})")
+            except Exception: pass
+        else:
+            self._cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx} ON {table}({col})")
         self._auto_commit()
 
     def index_drop(self, args: list):
-        """@db.index_drop[index_name]  — DROP INDEX IF EXISTS."""
         self._require_conn()
         if not args:
             raise RuntimeError("[cruhon-db] @db.index_drop requires an index name.")
         idx = str(args[0])
-        if self._db_type == "sqlite":
-            self._cursor.execute(f"DROP INDEX IF EXISTS {idx}")
-        elif self._db_type == "postgres":
-            self._cursor.execute(f"DROP INDEX IF EXISTS {idx}")
-        elif self._db_type == "mysql":
-            # MySQL needs the table name — skip silently if not provided
+        if self._db_type == "mysql":
             raise RuntimeError(
-                "[cruhon-db] MySQL @db.index_drop requires format: "
-                "ALTER TABLE <table> DROP INDEX <idx>. Use @db.exec directly."
+                "[cruhon-db] MySQL @db.index_drop: use @db.exec[\"ALTER TABLE t DROP INDEX name\"]"
             )
+        self._cursor.execute(f"DROP INDEX IF EXISTS {idx}")
         self._auto_commit()
 
-    # ── Result access ──────────────────────────────────────────
+    # ── RESULT ACCESS ─────────────────────────────────────────
 
     def rows(self, args: list):
-        """@db.rows[]  → last result; @db.rows[result]  → pass-through."""
         return args[0] if args else self._last_result
 
     def one(self, args: list):
-        """@db.one[] / @db.one[result]  → first row dict or None."""
         result = args[0] if args else self._last_result
         if isinstance(result, (list, tuple)):
             return result[0] if result else None
         return result
 
     def row(self, args: list):
-        """@db.row[n]  → nth row dict (0-indexed) from last result, or None."""
         n = int(args[0]) if args else 0
-        if 0 <= n < len(self._last_result):
-            return self._last_result[n]
-        return None
+        return self._last_result[n] if 0 <= n < len(self._last_result) else None
 
     def col(self, args: list):
-        """@db.col[name]  → value of named column from first row of last result."""
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.col requires a column name.")
-        if not self._last_result:
-            return None
-        return self._last_result[0].get(str(args[0]))
+        if not args: raise RuntimeError("[cruhon-db] @db.col requires a column name.")
+        return self._last_result[0].get(str(args[0])) if self._last_result else None
 
     def cols(self, args: list):
-        """@db.cols[]  → list of column names from the last query."""
         return list(self._last_cols)
 
     def count(self, args: list):
-        """@db.count[] → len of last result; @db.count[result] → len of given list."""
         result = args[0] if args else self._last_result
         return len(result) if isinstance(result, (list, tuple)) else 0
 
     def rowcount(self, args: list):
-        """@db.rowcount[]  → rows affected by last exec / update / delete."""
         return self._last_rowcount
 
     def lastid(self, args: list):
-        """@db.lastid[]  → rowid of the last INSERT."""
         return self._last_id
 
-    # ── Transactions ───────────────────────────────────────────
+    # ── TRANSACTIONS ──────────────────────────────────────────
 
     def begin(self, args: list):
-        """@db.begin[]  → start an explicit transaction."""
         self._require_conn()
         if self._in_transaction:
             return
@@ -788,102 +932,409 @@ class _DB:
             self._cursor.execute("BEGIN")
         elif self._db_type == "mysql":
             self._cursor.execute("START TRANSACTION")
-        # psycopg2: transaction is already open implicitly
 
     def commit(self, args: list):
-        """@db.commit[]"""
         self._require_conn()
         self._conn.commit()
         self._in_transaction = False
 
     def rollback(self, args: list):
-        """@db.rollback[]"""
         self._require_conn()
         self._conn.rollback()
         self._in_transaction = False
 
     def savepoint(self, args: list):
-        """@db.savepoint[name]  — create a named savepoint."""
         self._require_conn()
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.savepoint requires a name.")
+        if not args: raise RuntimeError("[cruhon-db] @db.savepoint requires a name.")
         self._cursor.execute(f"SAVEPOINT {args[0]}")
 
     def release(self, args: list):
-        """@db.release[name]  — release a named savepoint."""
         self._require_conn()
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.release requires a savepoint name.")
-        if self._db_type == "mysql":
-            self._cursor.execute(f"RELEASE SAVEPOINT {args[0]}")
-        else:
-            self._cursor.execute(f"RELEASE SAVEPOINT {args[0]}")
+        if not args: raise RuntimeError("[cruhon-db] @db.release requires a name.")
+        self._cursor.execute(f"RELEASE SAVEPOINT {args[0]}")
 
     def rollback_to(self, args: list):
-        """@db.rollback_to[name]  — rollback to a named savepoint."""
         self._require_conn()
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.rollback_to requires a savepoint name.")
-        if self._db_type == "mysql":
-            self._cursor.execute(f"ROLLBACK TO SAVEPOINT {args[0]}")
-        else:
-            self._cursor.execute(f"ROLLBACK TO SAVEPOINT {args[0]}")
+        if not args: raise RuntimeError("[cruhon-db] @db.rollback_to requires a name.")
+        self._cursor.execute(f"ROLLBACK TO SAVEPOINT {args[0]}")
 
-    # ── SQLite-specific ────────────────────────────────────────
+    # ── SQLITE-SPECIFIC ───────────────────────────────────────
 
     def pragma(self, args: list):
-        """
-        @db.pragma[name]          → current value
-        @db.pragma[name; value]   — set value
-        """
-        self._require_conn()
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.pragma requires a PRAGMA name.")
+        self._require_sqlite("pragma")
+        if not args: raise RuntimeError("[cruhon-db] @db.pragma requires a name.")
         name = str(args[0])
         if len(args) > 1:
-            val = args[1]
-            self._cursor.execute(f"PRAGMA {name} = {val}")
-            return val
-        else:
-            self._cursor.execute(f"PRAGMA {name}")
-            row = self._cursor.fetchone()
-            return dict(row)[name] if row is not None else None
+            self._cursor.execute(f"PRAGMA {name} = {args[1]}")
+            return args[1]
+        self._cursor.execute(f"PRAGMA {name}")
+        row = self._cursor.fetchone()
+        return dict(row)[name] if row is not None else None
 
     def vacuum(self, args: list):
-        """@db.vacuum[]  — VACUUM the SQLite database."""
-        self._require_conn()
-        if self._db_type != "sqlite":
-            raise RuntimeError("[cruhon-db] @db.vacuum is only supported for SQLite.")
+        self._require_sqlite("vacuum")
         self._cursor.execute("VACUUM")
 
     def backup(self, args: list):
-        """
-        @db.backup[path]
-        Backup the current SQLite database to a file using the sqlite3 backup API.
-        """
-        self._require_conn()
-        if self._db_type != "sqlite":
-            raise RuntimeError("[cruhon-db] @db.backup is only supported for SQLite.")
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.backup requires a destination path.")
+        self._require_sqlite("backup")
+        if not args: raise RuntimeError("[cruhon-db] @db.backup requires a path.")
         import sqlite3
         dest = sqlite3.connect(str(args[0]))
         self._conn.backup(dest)
         dest.close()
 
     def restore(self, args: list):
-        """
-        @db.restore[path]
-        Connect to a SQLite file (shorthand for @db.connect["sqlite:///path"]).
-        """
-        if not args:
-            raise RuntimeError("[cruhon-db] @db.restore requires a file path.")
+        if not args: raise RuntimeError("[cruhon-db] @db.restore requires a path.")
         self.connect([f"sqlite:///{args[0]}"])
 
-    # ── Async methods ──────────────────────────────────────────
+    def script(self, args: list):
+        """@db.script[sql]  — execute multiple ; separated SQL statements (sqlite)."""
+        self._require_sqlite("script")
+        if not args: raise RuntimeError("[cruhon-db] @db.script requires SQL.")
+        self._conn.executescript(str(args[0]))
+
+    def func(self, args: list):
+        """@db.func[name; nargs; callable]  — register Python fn as SQLite SQL function."""
+        self._require_sqlite("func")
+        if len(args) < 3:
+            raise RuntimeError("[cruhon-db] @db.func requires name, nargs, callable.")
+        self._conn.create_function(str(args[0]), int(args[1]), args[2])
+
+    def aggregate(self, args: list):
+        """@db.aggregate[name; nargs; class]  — register aggregate function (sqlite)."""
+        self._require_sqlite("aggregate")
+        if len(args) < 3:
+            raise RuntimeError("[cruhon-db] @db.aggregate requires name, nargs, class.")
+        self._conn.create_aggregate(str(args[0]), int(args[1]), args[2])
+
+    def collation(self, args: list):
+        """@db.collation[name; callable]  — register custom collation (sqlite)."""
+        self._require_sqlite("collation")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.collation requires name and callable.")
+        self._conn.create_collation(str(args[0]), args[1])
+
+    def dump(self, args: list):
+        """@db.dump[]  → list of SQL strings that recreate the database (sqlite)."""
+        self._require_sqlite("dump")
+        return list(self._conn.iterdump())
+
+    def serialize(self, args: list):
+        """@db.serialize[]  → bytes snapshot of the SQLite database (py 3.11+)."""
+        self._require_sqlite("serialize")
+        if not hasattr(self._conn, "serialize"):
+            raise RuntimeError(
+                "[cruhon-db] @db.serialize requires Python 3.11+ and sqlite3 >= 3.37."
+            )
+        name = str(args[0]) if args else "main"
+        return self._conn.serialize(name=name)
+
+    def deserialize(self, args: list):
+        """@db.deserialize[data]  — load a byte-serialized SQLite snapshot (py 3.11+)."""
+        self._require_sqlite("deserialize")
+        if not hasattr(self._conn, "deserialize"):
+            raise RuntimeError(
+                "[cruhon-db] @db.deserialize requires Python 3.11+ and sqlite3 >= 3.37."
+            )
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.deserialize requires bytes data.")
+        name = str(args[1]) if len(args) > 1 else "main"
+        self._conn.deserialize(args[0], name=name)
+
+    def text_factory(self, args: list):
+        """@db.text_factory[callable]  — set sqlite3 text decoding callable."""
+        self._require_sqlite("text_factory")
+        if not args:
+            return self._conn.text_factory
+        self._conn.text_factory = args[0]
+        return args[0]
+
+    def trace(self, args: list):
+        """@db.trace[callable]  — set SQL trace callback (sqlite)."""
+        self._require_sqlite("trace")
+        fn = args[0] if args else None
+        self._conn.set_trace_callback(fn)
+
+    def progress(self, args: list):
+        """@db.progress[n; callable]  — call fn every n SQLite VM opcodes."""
+        self._require_sqlite("progress")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.progress requires n and callable.")
+        self._conn.set_progress_handler(args[1], int(args[0]))
+
+    def authorizer(self, args: list):
+        """@db.authorizer[callable]  — set sqlite3 authorizer callback."""
+        self._require_sqlite("authorizer")
+        fn = args[0] if args else None
+        self._conn.set_authorizer(fn)
+
+    def enable_ext(self, args: list):
+        """@db.enable_ext[bool]  — enable or disable SQLite C extension loading."""
+        self._require_sqlite("enable_ext")
+        value = bool(args[0]) if args else True
+        self._conn.enable_load_extension(value)
+
+    def load_ext(self, args: list):
+        """@db.load_ext[path]  — load a SQLite C extension from file path."""
+        self._require_sqlite("load_ext")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.load_ext requires a path.")
+        self._conn.load_extension(str(args[0]))
+
+    def row_factory(self, args: list):
+        """@db.row_factory[callable]  — set the row_factory on the connection."""
+        self._require_conn()
+        if not args:
+            return self._conn.row_factory
+        self._conn.row_factory = args[0]
+        if self._db_type == "sqlite":
+            self._cursor = self._conn.cursor()
+        return args[0]
+
+    # ── POSTGRESQL-SPECIFIC ───────────────────────────────────
+
+    def pg_copy_from(self, args: list):
+        """@db.pg_copy_from[path; table]  — COPY file data INTO table."""
+        self._require_postgres("pg_copy_from")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.pg_copy_from requires path and table.")
+        with open(str(args[0]), "r") as f:
+            self._cursor.copy_from(f, str(args[1]))
+        self._conn.commit()
+
+    def pg_copy_to(self, args: list):
+        """@db.pg_copy_to[path; table]  — COPY table data TO file."""
+        self._require_postgres("pg_copy_to")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.pg_copy_to requires path and table.")
+        with open(str(args[0]), "w") as f:
+            self._cursor.copy_to(f, str(args[1]))
+
+    def pg_copy_expert(self, args: list):
+        """@db.pg_copy_expert[sql; path]  — COPY with custom SQL (read or write)."""
+        self._require_postgres("pg_copy_expert")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.pg_copy_expert requires sql and path.")
+        sql = str(args[0])
+        path = str(args[1])
+        mode = "r" if "FROM STDIN" in sql.upper() else "w"
+        with open(path, mode) as f:
+            self._cursor.copy_expert(sql, f)
+        if mode == "r":
+            self._conn.commit()
+
+    def pg_mogrify(self, args: list):
+        """@db.pg_mogrify[sql; params]  → SQL string with params substituted (no exec)."""
+        self._require_postgres("pg_mogrify")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_mogrify requires SQL.")
+        sql = str(args[0])
+        params = args[1] if len(args) > 1 else None
+        result = self._cursor.mogrify(sql, params)
+        return result.decode() if isinstance(result, bytes) else result
+
+    def pg_listen(self, args: list):
+        """@db.pg_listen[channel]  — LISTEN to a PostgreSQL NOTIFY channel."""
+        self._require_postgres("pg_listen")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_listen requires a channel name.")
+        self._cursor.execute(f"LISTEN {args[0]}")
+        self._conn.commit()
+
+    def pg_unlisten(self, args: list):
+        """@db.pg_unlisten[channel]  — UNLISTEN from a channel."""
+        self._require_postgres("pg_unlisten")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_unlisten requires a channel name.")
+        self._cursor.execute(f"UNLISTEN {args[0]}")
+        self._conn.commit()
+
+    def pg_notify(self, args: list):
+        """@db.pg_notify[channel; payload]  — send a NOTIFY message."""
+        self._require_postgres("pg_notify")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_notify requires a channel.")
+        channel = str(args[0])
+        payload = str(args[1]) if len(args) > 1 else ""
+        self._cursor.execute(f"NOTIFY {channel}, %s", (payload,))
+        self._conn.commit()
+
+    def pg_poll(self, args: list):
+        """@db.pg_poll[]  — check for incoming async NOTIFY messages."""
+        self._require_postgres("pg_poll")
+        import select
+        select.select([self._conn], [], [], 0)
+        self._conn.poll()
+
+    def pg_notifications(self, args: list):
+        """@db.pg_notifications[]  → list of pending NOTIFY dicts."""
+        self._require_postgres("pg_notifications")
+        notes = []
+        while self._conn.notifies:
+            n = self._conn.notifies.pop(0)
+            notes.append({
+                "pid":     n.pid,
+                "channel": n.channel,
+                "payload": n.payload,
+            })
+        return notes
+
+    def pg_notices(self, args: list):
+        """@db.pg_notices[]  → list of server notice strings."""
+        self._require_postgres("pg_notices")
+        return list(self._conn.notices)
+
+    def pg_cancel(self, args: list):
+        """@db.pg_cancel[]  — cancel the currently running query."""
+        self._require_postgres("pg_cancel")
+        self._conn.cancel()
+
+    def pg_reset(self, args: list):
+        """@db.pg_reset[]  — reset the connection to a clean state."""
+        self._require_postgres("pg_reset")
+        self._conn.reset()
+
+    def pg_pid(self, args: list):
+        """@db.pg_pid[]  → PostgreSQL backend process PID."""
+        self._require_postgres("pg_pid")
+        return self._conn.get_backend_pid()
+
+    def pg_param(self, args: list):
+        """@db.pg_param[name]  → server parameter value (e.g. 'server_version')."""
+        self._require_postgres("pg_param")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_param requires a parameter name.")
+        return self._conn.get_parameter_status(str(args[0]))
+
+    def pg_isolation(self, args: list):
+        """@db.pg_isolation[level]  — set PostgreSQL transaction isolation level."""
+        self._require_postgres("pg_isolation")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_isolation requires a level.")
+        import psycopg2.extensions as ext
+        levels = {
+            "SERIALIZABLE":    ext.ISOLATION_LEVEL_SERIALIZABLE,
+            "REPEATABLE READ": ext.ISOLATION_LEVEL_REPEATABLE_READ,
+            "READ COMMITTED":  ext.ISOLATION_LEVEL_READ_COMMITTED,
+            "READ UNCOMMITTED":ext.ISOLATION_LEVEL_READ_UNCOMMITTED,
+            "AUTOCOMMIT":      ext.ISOLATION_LEVEL_AUTOCOMMIT,
+        }
+        level = str(args[0]).upper()
+        self._conn.set_isolation_level(levels.get(level, int(args[0])))
+
+    def pg_encoding(self, args: list):
+        """@db.pg_encoding[enc]  — set client encoding (e.g. 'UTF8')."""
+        self._require_postgres("pg_encoding")
+        if not args:
+            return self._conn.encoding
+        self._conn.set_client_encoding(str(args[0]))
+
+    def pg_autocommit(self, args: list):
+        """@db.pg_autocommit[bool]  — set psycopg2 autocommit mode."""
+        self._require_postgres("pg_autocommit")
+        if not args:
+            return self._conn.autocommit
+        self._conn.autocommit = bool(args[0])
+
+    def pg_status(self, args: list):
+        """@db.pg_status[]  → transaction status constant int."""
+        self._require_postgres("pg_status")
+        return self._conn.get_transaction_status()
+
+    def pg_server_version(self, args: list):
+        """@db.pg_server_version[]  → integer version (e.g. 140001 = 14.0.1)."""
+        self._require_postgres("pg_server_version")
+        return self._conn.server_version
+
+    def pg_tpc_begin(self, args: list):
+        """@db.pg_tpc_begin[xid]  — begin a two-phase commit transaction."""
+        self._require_postgres("pg_tpc_begin")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.pg_tpc_begin requires an xid.")
+        xid = args[0]
+        if isinstance(xid, (list, tuple)):
+            xid = self._conn.xid(*xid)
+        self._conn.tpc_begin(xid)
+
+    def pg_tpc_prepare(self, args: list):
+        """@db.pg_tpc_prepare[]  — prepare the two-phase commit transaction."""
+        self._require_postgres("pg_tpc_prepare")
+        self._conn.tpc_prepare()
+
+    def pg_tpc_commit(self, args: list):
+        """@db.pg_tpc_commit[]  — commit the prepared two-phase transaction."""
+        self._require_postgres("pg_tpc_commit")
+        self._conn.tpc_commit()
+
+    def pg_tpc_rollback(self, args: list):
+        """@db.pg_tpc_rollback[]  — rollback the prepared two-phase transaction."""
+        self._require_postgres("pg_tpc_rollback")
+        self._conn.tpc_rollback()
+
+    def pg_tpc_recover(self, args: list):
+        """@db.pg_tpc_recover[]  → list of pending two-phase transaction XIDs."""
+        self._require_postgres("pg_tpc_recover")
+        return self._conn.tpc_recover()
+
+    # ── MYSQL-SPECIFIC ────────────────────────────────────────
+
+    def my_select_db(self, args: list):
+        """@db.my_select_db[name]  — switch to a different database."""
+        self._require_mysql("my_select_db")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.my_select_db requires a database name.")
+        self._conn.select_db(str(args[0]))
+
+    def my_server_info(self, args: list):
+        """@db.my_server_info[]  → MySQL server version string."""
+        self._require_mysql("my_server_info")
+        return self._conn.get_server_info()
+
+    def my_thread_id(self, args: list):
+        """@db.my_thread_id[]  → current connection thread ID."""
+        self._require_mysql("my_thread_id")
+        return self._conn.thread_id()
+
+    def my_charset(self, args: list):
+        """
+        @db.my_charset[]        → current charset name
+        @db.my_charset[name]    — set charset
+        """
+        self._require_mysql("my_charset")
+        if not args:
+            return getattr(self._conn, "charset", None)
+        self._conn.set_charset(str(args[0]))
+
+    def my_kill(self, args: list):
+        """@db.my_kill[thread_id]  — kill a MySQL thread."""
+        self._require_mysql("my_kill")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.my_kill requires a thread ID.")
+        self._conn.kill(int(args[0]))
+
+    def my_warnings(self, args: list):
+        """@db.my_warnings[]  → list of MySQL warning dicts from last statement."""
+        self._require_mysql("my_warnings")
+        self._cursor.execute("SHOW WARNINGS")
+        return self._cursor.fetchall()
+
+    def my_nextset(self, args: list):
+        """@db.my_nextset[]  — advance to the next MySQL result set."""
+        self._require_mysql("my_nextset")
+        result = self._cursor.nextset()
+        if result:
+            return self._store_result(self._cursor.fetchall())
+        return None
+
+    # ── ASYNC METHODS ─────────────────────────────────────────
+
+    def _require_async_conn(self):
+        if self._async_conn is None:
+            raise RuntimeError(
+                "[cruhon-db] No async connection. Call @db.async_connect first."
+            )
 
     async def async_connect(self, args: list):
-        """@db.async_connect[dsn]  — open async connection."""
         if not args:
             raise RuntimeError("[cruhon-db] @db.async_connect requires a DSN.")
         if self._async_conn is not None:
@@ -896,8 +1347,7 @@ class _DB:
                 import aiosqlite
             except ImportError:
                 raise RuntimeError(
-                    "[cruhon-db] Async SQLite requires aiosqlite. "
-                    "Install: pip install aiosqlite"
+                    "[cruhon-db] Async SQLite requires aiosqlite. pip install aiosqlite"
                 )
             self._async_conn = await aiosqlite.connect(kwargs["database"])
             self._async_conn.row_factory = aiosqlite.Row
@@ -906,8 +1356,7 @@ class _DB:
                 import asyncpg
             except ImportError:
                 raise RuntimeError(
-                    "[cruhon-db] Async PostgreSQL requires asyncpg. "
-                    "Install: pip install asyncpg"
+                    "[cruhon-db] Async PostgreSQL requires asyncpg. pip install asyncpg"
                 )
             dsn_str = (
                 f"postgresql://{kwargs.get('user','')}:{kwargs.get('password','')}@"
@@ -920,8 +1369,7 @@ class _DB:
                 import aiomysql
             except ImportError:
                 raise RuntimeError(
-                    "[cruhon-db] Async MySQL requires aiomysql. "
-                    "Install: pip install aiomysql"
+                    "[cruhon-db] Async MySQL requires aiomysql. pip install aiomysql"
                 )
             self._async_conn = await aiomysql.connect(
                 host=kwargs.get("host", "localhost"),
@@ -933,55 +1381,54 @@ class _DB:
             )
 
     async def async_close(self, args: list):
-        """@db.async_close[]"""
+        if self._async_cursor is not None:
+            try:
+                await self._async_cursor.close()
+            except Exception:
+                pass
+            self._async_cursor = None
         if self._async_conn is not None:
             try:
-                if self._async_db_type in ("sqlite", "postgres"):
-                    await self._async_conn.close()
-                else:
-                    self._async_conn.close()
+                await self._async_conn.close()
             except Exception:
                 pass
             self._async_conn = None
             self._async_db_type = None
 
     async def async_query(self, args: list):
-        """@db.async_query[sql; params...]  → list of dicts."""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if not args:
-            raise RuntimeError("[cruhon-db] @db.async_query requires a SQL argument.")
+            raise RuntimeError("[cruhon-db] @db.async_query requires SQL.")
         sql = str(args[0])
         params = tuple(args[1:]) if len(args) > 1 else ()
         if self._async_db_type == "sqlite":
             async with self._async_conn.execute(sql, params) as cur:
                 rows = await cur.fetchall()
+                if cur.description:
+                    self._async_last_cols = [d[0] for d in cur.description]
             self._async_last_result = [dict(r) for r in rows]
         elif self._async_db_type == "postgres":
             rows = await self._async_conn.fetch(sql, *params)
             self._async_last_result = [dict(r) for r in rows]
+            self._async_last_cols = list(rows[0].keys()) if rows else []
         elif self._async_db_type == "mysql":
             async with self._async_conn.cursor() as cur:
                 await cur.execute(sql, params)
                 rows = await cur.fetchall()
+                self._async_last_cols = [d[0] for d in cur.description] if cur.description else []
             self._async_last_result = list(rows)
         return self._async_last_result
 
     async def async_exec(self, args: list):
-        """@db.async_exec[sql; params...]  → lastrowid."""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if not args:
-            raise RuntimeError("[cruhon-db] @db.async_exec requires a SQL argument.")
+            raise RuntimeError("[cruhon-db] @db.async_exec requires SQL.")
         sql = str(args[0])
         params = tuple(args[1:]) if len(args) > 1 else ()
         if self._async_db_type == "sqlite":
             async with self._async_conn.execute(sql, params) as cur:
                 self._async_last_id = cur.lastrowid
+                self._async_last_rowcount = max(cur.rowcount or 0, 0)
             await self._async_conn.commit()
         elif self._async_db_type == "postgres":
             await self._async_conn.execute(sql, *params)
@@ -990,177 +1437,452 @@ class _DB:
             async with self._async_conn.cursor() as cur:
                 await cur.execute(sql, params)
                 self._async_last_id = cur.lastrowid
+                self._async_last_rowcount = max(cur.rowcount or 0, 0)
             await self._async_conn.commit()
         return self._async_last_id
 
-    async def async_insert(self, args: list):
-        """@db.async_insert[table; {col: val}]  → lastrowid."""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+    async def async_execmany(self, args: list):
+        """@db.async_execmany[sql; rows]  — execute parameterized SQL for each row."""
+        self._require_async_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.async_insert requires table and data dict."
-            )
-        table = str(args[0])
-        data = args[1]
+            raise RuntimeError("[cruhon-db] @db.async_execmany requires sql and rows.")
+        sql, rows = str(args[0]), args[1]
+        if self._async_db_type == "sqlite":
+            await self._async_conn.executemany(sql, rows)
+            await self._async_conn.commit()
+        elif self._async_db_type == "postgres":
+            await self._async_conn.executemany(sql, rows)
+        elif self._async_db_type == "mysql":
+            async with self._async_conn.cursor() as cur:
+                await cur.executemany(sql, rows)
+            await self._async_conn.commit()
+
+    async def async_insert(self, args: list):
+        self._require_async_conn()
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.async_insert requires table and data.")
+        table, data = str(args[0]), args[1]
         if not isinstance(data, dict) or not data:
             raise RuntimeError("[cruhon-db] @db.async_insert: data must be a non-empty dict.")
         cols = list(data.keys())
         vals = list(data.values())
-        ph = "?" if self._async_db_type == "sqlite" else (
-            ", ".join(f"${i+1}" for i in range(len(cols)))
-            if self._async_db_type == "postgres" else "%s"
-        )
         if self._async_db_type == "postgres":
             placeholders = ", ".join(f"${i+1}" for i in range(len(cols)))
         else:
-            placeholders = ", ".join("?" if self._async_db_type == "sqlite" else "%s"
-                                     for _ in cols)
-        sql = (
-            f"INSERT INTO {table} ({', '.join(cols)}) "
-            f"VALUES ({placeholders})"
-        )
+            ph = "?" if self._async_db_type == "sqlite" else "%s"
+            placeholders = ", ".join(ph for _ in cols)
+        sql = f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
         return await self.async_exec([sql] + vals)
 
     async def async_insertmany(self, args: list):
-        """@db.async_insertmany[table; [{col: val}, ...]]  — bulk async INSERT."""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if len(args) < 2:
-            raise RuntimeError(
-                "[cruhon-db] @db.async_insertmany requires table and rows list."
-            )
-        table = str(args[0])
-        rows = args[1]
+            raise RuntimeError("[cruhon-db] @db.async_insertmany requires table and rows.")
+        table, rows = str(args[0]), args[1]
         if not isinstance(rows, (list, tuple)) or not rows:
-            raise RuntimeError(
-                "[cruhon-db] @db.async_insertmany: rows must be a non-empty list of dicts."
-            )
+            raise RuntimeError("[cruhon-db] @db.async_insertmany: rows must be non-empty list.")
         cols = list(rows[0].keys())
         if self._async_db_type == "postgres":
             placeholders = ", ".join(f"${i+1}" for i in range(len(cols)))
         else:
             ph = "?" if self._async_db_type == "sqlite" else "%s"
             placeholders = ", ".join(ph for _ in cols)
-        sql = (
-            f"INSERT INTO {table} ({', '.join(cols)}) "
-            f"VALUES ({placeholders})"
-        )
+        sql = f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
         param_rows = [tuple(r[c] for c in cols) for r in rows]
-        if self._async_db_type == "sqlite":
-            await self._async_conn.executemany(sql, param_rows)
-            await self._async_conn.commit()
-        elif self._async_db_type == "postgres":
-            await self._async_conn.executemany(sql, param_rows)
-        elif self._async_db_type == "mysql":
-            async with self._async_conn.cursor() as cur:
-                await cur.executemany(sql, param_rows)
-            await self._async_conn.commit()
+        await self.async_execmany([sql, param_rows])
 
     async def async_get(self, args: list):
-        """@db.async_get[table; where; params...]  → first row dict or None."""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if len(args) < 2:
-            raise RuntimeError("[cruhon-db] @db.async_get requires table and where clause.")
+            raise RuntimeError("[cruhon-db] @db.async_get requires table and where.")
         table, where = str(args[0]), str(args[1])
         params = tuple(args[2:])
-        sql = f"SELECT * FROM {table} WHERE {where} LIMIT 1"
-        result = await self.async_query([sql] + list(params))
+        result = await self.async_query([f"SELECT * FROM {table} WHERE {where} LIMIT 1"] + list(params))
         return result[0] if result else None
 
     async def async_getall(self, args: list):
-        """
-        @db.async_getall[table]
-        @db.async_getall[table; where; params...]
-        """
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if not args:
-            raise RuntimeError("[cruhon-db] @db.async_getall requires a table name.")
+            raise RuntimeError("[cruhon-db] @db.async_getall requires a table.")
         table = str(args[0])
         if len(args) > 1:
             where = str(args[1])
             params = tuple(args[2:])
-            sql = f"SELECT * FROM {table} WHERE {where}"
-        else:
-            sql = f"SELECT * FROM {table}"
-            params = ()
-        return await self.async_query([sql] + list(params))
+            return await self.async_query([f"SELECT * FROM {table} WHERE {where}"] + list(params))
+        return await self.async_query([f"SELECT * FROM {table}"])
 
     async def async_begin(self, args: list):
-        """@db.async_begin[]"""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         if self._async_db_type == "sqlite":
             await self._async_conn.execute("BEGIN")
         elif self._async_db_type == "mysql":
             await self._async_conn.begin()
 
     async def async_commit(self, args: list):
-        """@db.async_commit[]"""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         await self._async_conn.commit()
 
     async def async_rollback(self, args: list):
-        """@db.async_rollback[]"""
-        if self._async_conn is None:
-            raise RuntimeError(
-                "[cruhon-db] No async connection. Call @db.async_connect first."
-            )
+        self._require_async_conn()
         await self._async_conn.rollback()
 
     def async_one(self, args: list):
-        """@db.async_one[]  → first row of last async query result."""
         return self._async_last_result[0] if self._async_last_result else None
 
     def async_rows(self, args: list):
-        """@db.async_rows[]  → last async query result (list of dicts)."""
         return self._async_last_result
 
     def async_count(self, args: list):
-        """@db.async_count[]  → row count of last async query result."""
         return len(self._async_last_result)
 
+    def async_rowcount(self, args: list):
+        """@db.async_rowcount[]  → rows affected by last async exec."""
+        return self._async_last_rowcount
+
+    def async_cols(self, args: list):
+        """@db.async_cols[]  → column names from last async query."""
+        return list(self._async_last_cols)
+
+    # ── Async streaming cursor ────────────────────────────────
+
+    async def async_cursor_open(self, args: list):
+        """
+        @db.async_cursor_open[sql; params...]
+        Open a streaming cursor — does NOT fetch rows immediately.
+        Use async_fetchone / async_fetchmany to iterate.
+        """
+        self._require_async_conn()
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_cursor_open requires SQL.")
+        sql = str(args[0])
+        params = tuple(args[1:]) if len(args) > 1 else ()
+        if self._async_cursor is not None:
+            try: await self._async_cursor.close()
+            except Exception: pass
+            self._async_cursor = None
+        if self._async_db_type == "sqlite":
+            self._async_cursor = await self._async_conn.execute(sql, params)
+        elif self._async_db_type == "mysql":
+            cur = await self._async_conn.cursor()
+            await cur.execute(sql, params)
+            self._async_cursor = cur
+        elif self._async_db_type == "postgres":
+            # asyncpg: requires transaction for cursor usage
+            self._async_cursor = await self._async_conn.cursor(sql, *params)
+
+    async def async_fetchone(self, args: list):
+        """@db.async_fetchone[]  → next row dict from open streaming cursor, or None."""
+        if self._async_cursor is None:
+            raise RuntimeError(
+                "[cruhon-db] No open async cursor. Call @db.async_cursor_open first."
+            )
+        if self._async_db_type in ("sqlite", "mysql"):
+            row = await self._async_cursor.fetchone()
+            if row is None:
+                return None
+            return dict(row) if hasattr(row, "keys") else dict(row)
+        elif self._async_db_type == "postgres":
+            row = await self._async_cursor.fetchrow()
+            return dict(row) if row is not None else None
+
+    async def async_fetchmany(self, args: list):
+        """@db.async_fetchmany[n]  → next n row dicts from open streaming cursor."""
+        if self._async_cursor is None:
+            raise RuntimeError(
+                "[cruhon-db] No open async cursor. Call @db.async_cursor_open first."
+            )
+        n = int(args[0]) if args else 1
+        if self._async_db_type in ("sqlite", "mysql"):
+            rows = await self._async_cursor.fetchmany(n)
+            return [dict(r) if hasattr(r, "keys") else dict(r) for r in rows]
+        elif self._async_db_type == "postgres":
+            rows = await self._async_cursor.fetch(n)
+            return [dict(r) for r in rows]
+
+    async def async_cursor_close(self, args: list):
+        """@db.async_cursor_close[]  — close the open streaming cursor."""
+        if self._async_cursor is not None:
+            try: await self._async_cursor.close()
+            except Exception: pass
+            self._async_cursor = None
+
+    def async_in_transaction(self, args: list):
+        """@db.async_in_transaction[]  → bool (aiosqlite)."""
+        if self._async_conn is None:
+            return False
+        if self._async_db_type == "sqlite":
+            return getattr(self._async_conn, "in_transaction", False)
+        return None
+
+    # ── Async aiosqlite extras ────────────────────────────────
+
+    async def async_script(self, args: list):
+        """@db.async_script[sql]  — executescript (aiosqlite)."""
+        self._require_async_conn()
+        if self._async_db_type != "sqlite":
+            raise RuntimeError("[cruhon-db] @db.async_script is aiosqlite-only.")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_script requires SQL.")
+        await self._async_conn.executescript(str(args[0]))
+
+    async def async_func(self, args: list):
+        """@db.async_func[name; nargs; callable]  — register Python fn as SQL function (aiosqlite)."""
+        self._require_async_conn()
+        if self._async_db_type != "sqlite":
+            raise RuntimeError("[cruhon-db] @db.async_func is aiosqlite-only.")
+        if len(args) < 3:
+            raise RuntimeError("[cruhon-db] @db.async_func requires name, nargs, callable.")
+        self._async_conn._connection.create_function(str(args[0]), int(args[1]), args[2])
+
+    async def async_total_changes(self, args: list):
+        """@db.async_total_changes[]  → total_changes (aiosqlite)."""
+        self._require_async_conn()
+        if self._async_db_type != "sqlite":
+            raise RuntimeError("[cruhon-db] @db.async_total_changes is aiosqlite-only.")
+        return self._async_conn.total_changes
+
+    async def async_dump(self, args: list):
+        """@db.async_dump[]  → list of SQL strings (aiosqlite iterdump)."""
+        self._require_async_conn()
+        if self._async_db_type != "sqlite":
+            raise RuntimeError("[cruhon-db] @db.async_dump is aiosqlite-only.")
+        result = []
+        async for line in self._async_conn.iterdump():
+            result.append(line)
+        return result
+
+    # ── Async asyncpg extras ──────────────────────────────────
+
+    async def async_fetchrow(self, args: list):
+        """@db.async_fetchrow[sql; params...]  → single row dict or None (asyncpg)."""
+        self._require_async_conn()
+        if self._async_db_type != "postgres":
+            # Fallback: use async_query and return first
+            result = await self.async_query(args)
+            return result[0] if result else None
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_fetchrow requires SQL.")
+        sql = str(args[0])
+        params = tuple(args[1:])
+        row = await self._async_conn.fetchrow(sql, *params)
+        return dict(row) if row is not None else None
+
+    async def async_fetchval(self, args: list):
+        """@db.async_fetchval[sql; col_index; params...]  → scalar value (asyncpg)."""
+        self._require_async_conn()
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_fetchval requires SQL.")
+        sql = str(args[0])
+        if self._async_db_type == "postgres":
+            column = int(args[1]) if len(args) > 1 and isinstance(args[1], int) else 0
+            params = tuple(args[2:]) if len(args) > 2 else ()
+            return await self._async_conn.fetchval(sql, *params, column=column)
+        # Fallback
+        result = await self.async_query(args[:1] + list(args[2:]))
+        if not result:
+            return None
+        return list(result[0].values())[0]
+
+    async def async_copy_from(self, args: list):
+        """@db.async_copy_from[table; records]  — copy records list to table (asyncpg)."""
+        self._require_async_conn()
+        if self._async_db_type != "postgres":
+            raise RuntimeError("[cruhon-db] @db.async_copy_from is asyncpg-only.")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.async_copy_from requires table and records.")
+        await self._async_conn.copy_records_to_table(str(args[0]), records=args[1])
+
+    async def async_copy_to(self, args: list):
+        """@db.async_copy_to[table; path]  — copy table to file (asyncpg)."""
+        self._require_async_conn()
+        if self._async_db_type != "postgres":
+            raise RuntimeError("[cruhon-db] @db.async_copy_to is asyncpg-only.")
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.async_copy_to requires table and path.")
+        with open(str(args[1]), "w") as f:
+            await self._async_conn.copy_from_table(str(args[0]), output=f)
+
+    async def async_server_version(self, args: list):
+        """@db.async_server_version[]  → version info (asyncpg namedtuple or string)."""
+        self._require_async_conn()
+        if self._async_db_type == "postgres":
+            return self._async_conn.get_server_version()
+        return None
+
+    async def async_pid(self, args: list):
+        """@db.async_pid[]  → backend server PID (asyncpg)."""
+        self._require_async_conn()
+        if self._async_db_type == "postgres":
+            return self._async_conn.get_server_pid()
+        return None
+
+    async def async_is_closed(self, args: list):
+        """@db.async_is_closed[]  → bool (asyncpg)."""
+        if self._async_conn is None:
+            return True
+        if self._async_db_type == "postgres":
+            return self._async_conn.is_closed()
+        return False
+
+    async def async_terminate(self, args: list):
+        """@db.async_terminate[]  — forcefully close async connection (asyncpg)."""
+        self._require_async_conn()
+        if self._async_db_type == "postgres":
+            self._async_conn.terminate()
+            self._async_conn = None
+            self._async_db_type = None
+        else:
+            await self.async_close([])
+
+    async def async_reset(self, args: list):
+        """@db.async_reset[]  — reset async connection state."""
+        self._require_async_conn()
+        if self._async_db_type == "postgres":
+            await self._async_conn.reset()
+        elif self._async_db_type in ("sqlite", "mysql"):
+            dsn = None
+            if self._async_db_type == "sqlite":
+                dsn = "sqlite:///" + getattr(
+                    self._async_conn, "_connection", self._async_conn
+                ).database if hasattr(
+                    getattr(self._async_conn, "_connection", None), "database"
+                ) else None
+            await self.async_close([])
+            if dsn:
+                await self.async_connect([dsn])
+
+    # ── Async aiomysql extras ─────────────────────────────────
+
+    async def async_select_db(self, args: list):
+        """@db.async_select_db[name]  — switch database (aiomysql)."""
+        self._require_async_conn()
+        if self._async_db_type != "mysql":
+            raise RuntimeError("[cruhon-db] @db.async_select_db is aiomysql-only.")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_select_db requires a database name.")
+        await self._async_conn.select_db(str(args[0]))
+
+    async def async_charset(self, args: list):
+        """@db.async_charset[name]  — set character set (aiomysql)."""
+        self._require_async_conn()
+        if self._async_db_type != "mysql":
+            raise RuntimeError("[cruhon-db] @db.async_charset is aiomysql-only.")
+        if not args:
+            return getattr(self._async_conn, "charset", None)
+        await self._async_conn.set_charset(str(args[0]))
+
+    async def async_ping(self, args: list):
+        """@db.async_ping[]  → bool — test async connection (aiomysql)."""
+        if self._async_conn is None:
+            return False
+        if self._async_db_type == "mysql":
+            try:
+                await self._async_conn.ping()
+                return True
+            except Exception:
+                return False
+        return self._async_conn is not None
+
+    async def async_callproc(self, args: list):
+        """@db.async_callproc[name; args_list]  — call stored procedure (aiomysql)."""
+        self._require_async_conn()
+        if self._async_db_type != "mysql":
+            raise RuntimeError("[cruhon-db] @db.async_callproc is aiomysql-only.")
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.async_callproc requires a procedure name.")
+        name = str(args[0])
+        proc_args = args[1] if len(args) > 1 else []
+        async with self._async_conn.cursor() as cur:
+            await cur.callproc(name, proc_args)
+            rows = await cur.fetchall()
+        self._async_last_result = list(rows)
+        return self._async_last_result
+
+    async def async_scroll(self, args: list):
+        """@db.async_scroll[n]  — scroll open async cursor (aiomysql)."""
+        if self._async_cursor is None:
+            raise RuntimeError(
+                "[cruhon-db] No open async cursor. Call @db.async_cursor_open first."
+            )
+        if self._async_db_type != "mysql":
+            raise RuntimeError("[cruhon-db] @db.async_scroll is aiomysql cursor-only.")
+        n = int(args[0]) if args else 0
+        mode = str(args[1]).strip('"\'') if len(args) > 1 else "relative"
+        await self._async_cursor.scroll(n, mode=mode)
+
 
 # ─────────────────────────────────────────────────────────────
-# ALL REGISTERED METHOD NAMES
+# METHOD REGISTRIES
 # ─────────────────────────────────────────────────────────────
 
-# Sync methods — generate:  __ns__["db"].call("method", args...)
 _SYNC_METHODS = (
+    # Connection
     "connect", "close", "ping", "reconnect", "in_transaction",
+    # Connection info & raw access
+    "connection", "cursor_obj", "db_type", "dsn", "closed", "conn_info",
+    "server_version", "autocommit", "isolation_level", "total_changes",
+    # Core exec/query
     "exec", "execmany", "query", "fetchone", "fetchmany", "fetchall",
+    # CRUD
     "insert", "insertmany", "update", "delete", "get", "getall", "truncate",
+    # Cursor control
+    "scroll", "rownumber", "arraysize", "callproc", "nextset", "cursor_close",
+    # Schema
     "create", "drop", "exists", "tables", "views",
     "schema", "indexes", "rename", "index_create", "index_drop",
+    # Result access
     "rows", "one", "row", "col", "cols", "count", "rowcount", "lastid",
+    # Transactions
     "begin", "commit", "rollback", "savepoint", "release", "rollback_to",
+    # SQLite-specific
     "pragma", "vacuum", "backup", "restore",
+    "script", "func", "aggregate", "collation", "dump",
+    "serialize", "deserialize", "text_factory", "trace", "progress",
+    "authorizer", "enable_ext", "load_ext", "row_factory",
+    # PostgreSQL-specific
+    "pg_copy_from", "pg_copy_to", "pg_copy_expert", "pg_mogrify",
+    "pg_listen", "pg_unlisten", "pg_notify", "pg_poll", "pg_notifications",
+    "pg_notices", "pg_cancel", "pg_reset", "pg_pid", "pg_param",
+    "pg_isolation", "pg_encoding", "pg_autocommit", "pg_status",
+    "pg_server_version",
+    "pg_tpc_begin", "pg_tpc_prepare", "pg_tpc_commit",
+    "pg_tpc_rollback", "pg_tpc_recover",
+    # MySQL-specific
+    "my_select_db", "my_server_info", "my_thread_id", "my_charset",
+    "my_kill", "my_warnings", "my_nextset",
 )
 
-# Async methods — generate:  (await __ns__["db"].call("method", args...))
 _ASYNC_METHODS = (
+    # Core async
     "async_connect", "async_close",
-    "async_query", "async_exec",
+    "async_query", "async_exec", "async_execmany",
     "async_insert", "async_insertmany",
     "async_get", "async_getall",
     "async_begin", "async_commit", "async_rollback",
+    # Async result access (sync wrappers)
     "async_one", "async_rows", "async_count",
+    "async_rowcount", "async_cols",
+    # Streaming cursor
+    "async_cursor_open", "async_fetchone", "async_fetchmany", "async_cursor_close",
+    "async_in_transaction",
+    # aiosqlite extras
+    "async_script", "async_func", "async_total_changes", "async_dump",
+    # asyncpg extras
+    "async_fetchrow", "async_fetchval",
+    "async_copy_from", "async_copy_to",
+    "async_server_version", "async_pid", "async_is_closed",
+    "async_terminate", "async_reset",
+    # aiomysql extras
+    "async_select_db", "async_charset", "async_ping",
+    "async_callproc", "async_scroll",
 )
+
+# Sync result-accessor methods that are actually synchronous even though
+# they have the async_ prefix — they just read stored state.
+_ASYNC_SYNC_ACCESSORS = {
+    "async_one", "async_rows", "async_count",
+    "async_rowcount", "async_cols", "async_in_transaction",
+}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1168,10 +1890,8 @@ _ASYNC_METHODS = (
 # ─────────────────────────────────────────────────────────────
 
 def register(api):
-    # Register 'db' as a lib namespace — no Python import at file level needed.
     api.lib("db", None)
 
-    # Sync lib_call handlers → __ns__["db"].call("method", args...)
     def _make_sync_handler(method_name: str):
         def handler(args: list) -> str:
             if args:
@@ -1179,9 +1899,10 @@ def register(api):
             return f'__ns__["db"].call("{method_name}")'
         return handler
 
-    # Async lib_call handlers → (await __ns__["db"].call("method", args...))
-    # call() returns a coroutine from the registered async def; awaiting it works.
     def _make_async_handler(method_name: str):
+        # Accessors that only read stored state are NOT coroutines — no await
+        if method_name in _ASYNC_SYNC_ACCESSORS:
+            return _make_sync_handler(method_name)
         def handler(args: list) -> str:
             if args:
                 return f'(await __ns__["db"].call("{method_name}", {", ".join(args)}))'
@@ -1194,17 +1915,13 @@ def register(api):
     for m in _ASYNC_METHODS:
         api.lib_call("db", m, _make_async_handler(m))
 
-    # One _DB instance per mod session
     db = _DB()
-
-    # Register namespace dispatch table
     ns = api.namespace("db")
     for m in _SYNC_METHODS:
         ns.register(m, getattr(db, m))
     for m in _ASYNC_METHODS:
         ns.register(m, getattr(db, m))
 
-    # Auto-close both sync and async connections after each script
     def _destroy(ns_obj):
         db.close([])
         import asyncio

@@ -2835,3 +2835,377 @@ class TestCruhonDB:
             '@end',
         )
         assert "0" in capsys.readouterr().out
+
+    # ── new group: connection info & raw access ───────────────
+
+    def test_connection_returns_object(self, capsys):
+        """@db.connection[] returns the raw connection object (not None)."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[c; @db.connection[]]',
+            '@print[{c is not None}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_cursor_obj_returns_object(self, capsys):
+        """@db.cursor_obj[] returns the raw cursor (not None)."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[c; @db.cursor_obj[]]',
+            '@print[{c is not None}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_db_type(self, capsys):
+        """@db.db_type[] returns 'sqlite' for an in-memory connection."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[t; @db.db_type[]]',
+            '@print[{t}]',
+        )
+        assert "sqlite" in capsys.readouterr().out
+
+    def test_dsn(self, capsys):
+        """@db.dsn[] returns the DSN string used to connect."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[d; @db.dsn[]]',
+            '@print[{d}]',
+        )
+        assert "sqlite" in capsys.readouterr().out
+
+    def test_closed_false_when_open(self, capsys):
+        """@db.closed[] is False when connection is active."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[c; @db.closed[]]',
+            '@print[{c}]',
+        )
+        assert "False" in capsys.readouterr().out
+
+    def test_closed_true_after_close(self, capsys):
+        """@db.closed[] is True after @db.close[]."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.close[]',
+            '@var[c; @db.closed[]]',
+            '@print[{c}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_conn_info_has_type(self, capsys):
+        """@db.conn_info[] dict contains 'type' key."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[info; @db.conn_info[]]',
+            '@print[{info["type"]}]',
+        )
+        assert "sqlite" in capsys.readouterr().out
+
+    def test_server_version_returns_string(self, capsys):
+        """@db.server_version[] returns a non-empty string."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[v; @db.server_version[]]',
+            '@print[{len(v) > 0}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_autocommit_get(self, capsys):
+        """@db.autocommit[] returns a bool."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[a; @db.autocommit[]]',
+            '@print[{isinstance(a, bool)}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_isolation_level_get(self, capsys):
+        """@db.isolation_level[] returns a value without error."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[il; @db.isolation_level[]]',
+            '@print["ok"]',
+        )
+        assert "ok" in capsys.readouterr().out
+
+    def test_total_changes(self, capsys):
+        """@db.total_changes[] reflects inserts."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE tc (x INTEGER)"]',
+            '@db.exec["INSERT INTO tc VALUES (1)"]',
+            '@db.exec["INSERT INTO tc VALUES (2)"]',
+            '@var[n; @db.total_changes[]]',
+            '@print[{n >= 2}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_arraysize_get_set(self, capsys):
+        """@db.arraysize[] get/set round-trip."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.arraysize[50]',
+            '@var[a; @db.arraysize[]]',
+            '@print[{a}]',
+        )
+        assert "50" in capsys.readouterr().out
+
+    def test_cursor_close_reopens(self, capsys):
+        """@db.cursor_close[] closes and reopens a fresh cursor."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE cc (x INTEGER)"]',
+            '@db.cursor_close[]',
+            '@db.exec["INSERT INTO cc VALUES (7)"]',
+            '@db.query["SELECT * FROM cc"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    # ── SQLite advanced ───────────────────────────────────────
+
+    def test_script_multi_statement(self, capsys):
+        """@db.script executes multiple ; separated SQL statements."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.script["CREATE TABLE s1 (x INT); CREATE TABLE s2 (y INT);"]',
+            '@var[t; @db.tables[]]',
+            '@print[{len(t)}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_func_custom_sql_function(self, capsys):
+        """@db.func registers a Python callable as a SQLite SQL function."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.func["double"; 1; lambda x: x * 2]',
+            '@db.query["SELECT double(21) AS r"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["r"]}]',
+        )
+        assert "42" in capsys.readouterr().out
+
+    def test_aggregate_custom(self, capsys):
+        """@db.aggregate registers a custom aggregate class."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            (
+                '@db.aggregate["mysum"; 1; type("MySum", (), {'
+                '"__init__": lambda self: setattr(self, "v", 0),'
+                '"step": lambda self, x: setattr(self, "v", self.v + x),'
+                '"finalize": lambda self: self.v'
+                '})]'
+            ),
+            '@db.exec["CREATE TABLE ag (x INTEGER)"]',
+            '@db.exec["INSERT INTO ag VALUES (3)"]',
+            '@db.exec["INSERT INTO ag VALUES (7)"]',
+            '@db.query["SELECT mysum(x) AS s FROM ag"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["s"]}]',
+        )
+        assert "10" in capsys.readouterr().out
+
+    def test_collation(self, capsys):
+        """@db.collation registers a custom collation affecting ORDER BY."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.collation["rev"; lambda a, b: (a < b) - (a > b)]',
+            '@db.exec["CREATE TABLE cl (name TEXT)"]',
+            '@db.exec["INSERT INTO cl VALUES (\'alpha\')"]',
+            '@db.exec["INSERT INTO cl VALUES (\'zeta\')"]',
+            '@db.query["SELECT name FROM cl ORDER BY name COLLATE rev"]',
+            '@var[first; @db.row[0]["name"]]',
+            '@print[{first}]',
+        )
+        assert "zeta" in capsys.readouterr().out
+
+    def test_dump_returns_sql_list(self, capsys):
+        """@db.dump returns a list of SQL strings."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE d1 (x INTEGER)"]',
+            '@var[lines; @db.dump[]]',
+            '@print[{len(lines) > 0}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_text_factory_set_get(self, capsys):
+        """@db.text_factory[fn] sets the text decoding callable."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.text_factory[str]',
+            '@var[fn; @db.text_factory[]]',
+            '@print[{fn is str}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_trace_callback(self, capsys):
+        """@db.trace registers an SQL trace callback."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[seen; []]',
+            '@db.trace[lambda sql: seen.append(sql)]',
+            '@db.exec["CREATE TABLE tr_t (x INT)"]',
+            '@print[{len(seen) > 0}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_progress_handler(self, capsys):
+        """@db.progress registers a progress callback without error."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[calls; [0]]',
+            '@db.progress[1; lambda: calls.__setitem__(0, calls[0] + 1) or None]',
+            '@db.exec["CREATE TABLE ph (x INT)"]',
+            '@print["ok"]',
+        )
+        assert "ok" in capsys.readouterr().out
+
+    def test_row_factory_callable(self, capsys):
+        """@db.row_factory[fn] sets a custom row factory."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.row_factory[lambda cur, row: {d[0]: v for d, v in zip(cur.description, row)}]',
+            '@db.exec["CREATE TABLE rf (id INTEGER, name TEXT)"]',
+            '@db.insert["rf"; {"id": 1, "name": "Bob"}]',
+            '@db.query["SELECT * FROM rf"]',
+            '@var[r; @db.one[]]',
+            '@print[{r["name"]}]',
+        )
+        assert "Bob" in capsys.readouterr().out
+
+    def test_serialize_deserialize(self, capsys):
+        """@db.serialize + @db.deserialize round-trip preserves data (py 3.11+)."""
+        import sys
+        if sys.version_info < (3, 11):
+            pytest.skip("serialize/deserialize require Python 3.11+")
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE ser (val INTEGER)"]',
+            '@db.exec["INSERT INTO ser VALUES (99)"]',
+            '@var[data; @db.serialize[]]',
+            '@db.close[]',
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.deserialize[data]',
+            '@db.query["SELECT * FROM ser"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["val"]}]',
+        )
+        assert "99" in capsys.readouterr().out
+
+    # ── async new methods ─────────────────────────────────────
+
+    def test_async_execmany(self, capsys):
+        """@db.async_execmany runs parameterized SQL for a list of rows."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE aem (x INTEGER)"]',
+            '    @db.async_execmany["INSERT INTO aem VALUES (?)"; [(1,),(2,),(3,)]]',
+            '    @var[rows; @db.async_query["SELECT * FROM aem"]]',
+            '    @print[{@db.async_count[]}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "3" in capsys.readouterr().out
+
+    def test_async_fetchrow(self, capsys):
+        """@db.async_fetchrow returns a single row dict."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE afr (name TEXT)"]',
+            '    @db.async_insert["afr"; {"name": "Alice"}]',
+            '    @var[row; @db.async_fetchrow["SELECT * FROM afr"]]',
+            '    @print[{row["name"]}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "Alice" in capsys.readouterr().out
+
+    def test_async_cursor_streaming(self, capsys):
+        """async_cursor_open + async_fetchone streams rows one at a time."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE acs (val INTEGER)"]',
+            '    @db.async_exec["INSERT INTO acs VALUES (10)"]',
+            '    @db.async_exec["INSERT INTO acs VALUES (20)"]',
+            '    @db.async_cursor_open["SELECT * FROM acs ORDER BY val"]',
+            '    @var[r1; @db.async_fetchone[]]',
+            '    @var[r2; @db.async_fetchone[]]',
+            '    @var[r3; @db.async_fetchone[]]',
+            '    @db.async_cursor_close[]',
+            '    @print[{r1["val"]}]',
+            '    @print[{r2["val"]}]',
+            '    @print[{r3 is None}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        out = capsys.readouterr().out.strip().splitlines()
+        assert out[0] == "10"
+        assert out[1] == "20"
+        assert out[2] == "True"
+
+    def test_async_script(self, capsys):
+        """@db.async_script runs multiple statements (aiosqlite)."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_script["CREATE TABLE as1 (x INT); CREATE TABLE as2 (y INT);"]',
+            '    @var[rows; @db.async_query["SELECT name FROM sqlite_master WHERE type=\'table\'"]]',
+            '    @print[{len(rows)}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_async_func(self, capsys):
+        """@db.async_func registers a Python SQL function (aiosqlite)."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_func["triple"; 1; lambda x: x * 3]',
+            '    @var[rows; @db.async_query["SELECT triple(7) AS r"]]',
+            '    @print[{rows[0]["r"]}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "21" in capsys.readouterr().out
+
+    def test_async_dump(self, capsys):
+        """@db.async_dump returns a list of SQL strings (aiosqlite)."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE dump_t (x INT)"]',
+            '    @var[lines; @db.async_dump[]]',
+            '    @print[{len(lines) > 0}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_async_rowcount_and_cols(self, capsys):
+        """@db.async_rowcount and @db.async_cols return correct values."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE arc (id INTEGER, name TEXT)"]',
+            '    @db.async_insert["arc"; {"id": 1, "name": "x"}]',
+            '    @db.async_query["SELECT * FROM arc"]',
+            '    @var[cols; @db.async_cols[]]',
+            '    @print[{len(cols)}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "2" in capsys.readouterr().out
