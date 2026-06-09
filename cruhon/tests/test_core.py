@@ -2524,3 +2524,314 @@ class TestCruhonDB:
         code = _transpile('@db.insert["users"; {"name": "Alice"}]')
         assert '__ns__["db"].call("insert"' in code
         assert '"users"' in code
+
+    def test_async_method_transpiles_with_await(self):
+        """@db.async_query generates (await __ns__[\"db\"].call(...))."""
+        code = _transpile('@var[r; @db.async_query["SELECT 1"]]')
+        assert "await" in code
+        assert '__ns__["db"].call("async_query"' in code
+
+    # ── new sync methods ──────────────────────────────────────
+
+    def test_insertmany(self, capsys):
+        """@db.insertmany inserts all rows from a list of dicts."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE bulk (name TEXT)"]',
+            '@db.insertmany["bulk"; [{"name": "A"}, {"name": "B"}, {"name": "C"}]]',
+            '@db.query["SELECT * FROM bulk"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "3" in capsys.readouterr().out
+
+    def test_execmany(self, capsys):
+        """@db.execmany runs parameterized SQL for each row in a list."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE em (x INTEGER)"]',
+            '@db.execmany["INSERT INTO em VALUES (?)"; [(1,), (2,), (3,)]]',
+            '@db.query["SELECT * FROM em"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "3" in capsys.readouterr().out
+
+    def test_get_returns_first_matching(self, capsys):
+        """@db.get returns only the first row matching the WHERE clause."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE g (name TEXT, age INTEGER)"]',
+            '@db.insert["g"; {"name": "Alice", "age": 30}]',
+            '@db.insert["g"; {"name": "Bob", "age": 25}]',
+            '@var[row; @db.get["g"; "age > ?"; 20]]',
+            '@print[{row["name"]}]',
+        )
+        assert "Alice" in capsys.readouterr().out
+
+    def test_getall_no_filter(self, capsys):
+        """@db.getall with no WHERE returns every row."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE ga (x INTEGER)"]',
+            '@db.exec["INSERT INTO ga VALUES (1)"]',
+            '@db.exec["INSERT INTO ga VALUES (2)"]',
+            '@var[rows; @db.getall["ga"]]',
+            '@print[{len(rows)}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_getall_with_filter(self, capsys):
+        """@db.getall with WHERE returns only matching rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE gaf (x INTEGER)"]',
+            '@db.exec["INSERT INTO gaf VALUES (1)"]',
+            '@db.exec["INSERT INTO gaf VALUES (2)"]',
+            '@db.exec["INSERT INTO gaf VALUES (3)"]',
+            '@var[rows; @db.getall["gaf"; "x > ?"; 1]]',
+            '@print[{len(rows)}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_truncate(self, capsys):
+        """@db.truncate removes all rows."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE tr (x INTEGER)"]',
+            '@db.exec["INSERT INTO tr VALUES (1)"]',
+            '@db.exec["INSERT INTO tr VALUES (2)"]',
+            '@db.truncate["tr"]',
+            '@db.query["SELECT * FROM tr"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "0" in capsys.readouterr().out
+
+    def test_schema(self, capsys):
+        """@db.schema returns column definitions."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE s (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"]',
+            '@var[cols; @db.schema["s"]]',
+            '@print[{len(cols)}]',
+            '@print[{cols[0]["name"]}]',
+        )
+        out = capsys.readouterr().out
+        assert "2" in out
+        assert "id" in out
+
+    def test_views_empty(self, capsys):
+        """@db.views returns empty list when no views exist."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[v; @db.views[]]',
+            '@print[{len(v)}]',
+        )
+        assert "0" in capsys.readouterr().out
+
+    def test_cols(self, capsys):
+        """@db.cols returns column names of the last query result."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE c (id INTEGER, name TEXT)"]',
+            '@db.exec["INSERT INTO c VALUES (1, \'x\')"]',
+            '@db.query["SELECT * FROM c"]',
+            '@var[c; @db.cols[]]',
+            '@print[{len(c)}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_row_by_index(self, capsys):
+        """@db.row[n] returns the nth row from the last result."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE ri (val INTEGER)"]',
+            '@db.exec["INSERT INTO ri VALUES (10)"]',
+            '@db.exec["INSERT INTO ri VALUES (20)"]',
+            '@db.query["SELECT * FROM ri ORDER BY val"]',
+            '@var[r; @db.row[1]]',
+            '@print[{r["val"]}]',
+        )
+        assert "20" in capsys.readouterr().out
+
+    def test_col_by_name(self, capsys):
+        """@db.col[name] returns that column's value from the first row."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE cn (id INTEGER, name TEXT)"]',
+            '@db.insert["cn"; {"id": 1, "name": "Alice"}]',
+            '@db.query["SELECT * FROM cn"]',
+            '@var[v; @db.col["name"]]',
+            '@print[{v}]',
+        )
+        assert "Alice" in capsys.readouterr().out
+
+    def test_rowcount_after_update(self, capsys):
+        """@db.rowcount returns the number of rows affected by the last update."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE rc (x INTEGER)"]',
+            '@db.exec["INSERT INTO rc VALUES (1)"]',
+            '@db.exec["INSERT INTO rc VALUES (1)"]',
+            '@db.update["rc"; {"x": 2}; "x = ?"; 1]',
+            '@var[n; @db.rowcount[]]',
+            '@print[{n}]',
+        )
+        assert "2" in capsys.readouterr().out
+
+    def test_indexes(self, capsys):
+        """@db.index_create then @db.indexes returns the index info."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE idx (id INTEGER, name TEXT)"]',
+            '@db.index_create["idx"; "name"]',
+            '@var[idxs; @db.indexes["idx"]]',
+            '@print[{len(idxs)}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    def test_rename_table(self, capsys):
+        """@db.rename renames a table."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE old_name (x INTEGER)"]',
+            '@db.rename["old_name"; "new_name"]',
+            '@var[ok; @db.exists["new_name"]]',
+            '@print[{ok}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_pragma_get(self, capsys):
+        """@db.pragma[name] returns current PRAGMA value."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[v; @db.pragma["journal_mode"]]',
+            '@print[{v is not None}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_savepoint_rollback(self, capsys):
+        """@db.savepoint + @db.rollback_to reverts to the savepoint."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE sp (val INTEGER)"]',
+            '@db.begin[]',
+            '@db.exec["INSERT INTO sp VALUES (1)"]',
+            '@db.savepoint["s1"]',
+            '@db.exec["INSERT INTO sp VALUES (2)"]',
+            '@db.rollback_to["s1"]',
+            '@db.commit[]',
+            '@db.query["SELECT * FROM sp"]',
+            '@var[n; @db.count[]]',
+            '@print[{n}]',
+        )
+        assert "1" in capsys.readouterr().out
+
+    def test_in_transaction_flag(self, capsys):
+        """@db.in_transaction returns True inside a transaction, False outside."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[before; @db.in_transaction[]]',
+            '@db.begin[]',
+            '@var[during; @db.in_transaction[]]',
+            '@db.rollback[]',
+            '@var[after; @db.in_transaction[]]',
+            '@print[{before}]',
+            '@print[{during}]',
+            '@print[{after}]',
+        )
+        out = capsys.readouterr().out.strip().splitlines()
+        assert out[0] == "False"
+        assert out[1] == "True"
+        assert out[2] == "False"
+
+    def test_ping_returns_true(self, capsys):
+        """@db.ping returns True on a live connection."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@var[ok; @db.ping[]]',
+            '@print[{ok}]',
+        )
+        assert "True" in capsys.readouterr().out
+
+    def test_ping_returns_false_no_conn(self, capsys):
+        """@db.ping returns False when no connection is open."""
+        self._run('@var[ok; @db.ping[]]\n@print[{ok}]')
+        assert "False" in capsys.readouterr().out
+
+    def test_vacuum_runs(self, capsys):
+        """@db.vacuum executes without error on SQLite."""
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.vacuum[]',
+            '@print["ok"]',
+        )
+        assert "ok" in capsys.readouterr().out
+
+    def test_backup_and_restore(self, tmp_path, capsys):
+        """@db.backup writes a valid SQLite file; @db.restore connects to it."""
+        backup_path = str(tmp_path / "backup.db")
+        self._run(
+            '@db.connect["sqlite:///:memory:"]',
+            '@db.exec["CREATE TABLE bk (x INTEGER)"]',
+            '@db.exec["INSERT INTO bk VALUES (42)"]',
+            f'@db.backup["{backup_path}"]',
+            '@db.close[]',
+            f'@db.restore["{backup_path}"]',
+            '@db.query["SELECT * FROM bk"]',
+            '@var[row; @db.one[]]',
+            '@print[{row["x"]}]',
+        )
+        assert "42" in capsys.readouterr().out
+
+    # ── async ──────────────────────────────────────────────────
+
+    def test_async_connect_query(self, capsys):
+        """@db.async_connect + @db.async_query works in async context."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE at (val INTEGER)"]',
+            '    @db.async_exec["INSERT INTO at VALUES (7)"]',
+            '    @var[rows; @db.async_query["SELECT * FROM at"]]',
+            '    @var[n; @db.async_count[]]',
+            '    @print[{n}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "1" in capsys.readouterr().out
+
+    def test_async_insert_and_get(self, capsys):
+        """@db.async_insert + @db.async_get round-trip works."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE ai (id INTEGER PRIMARY KEY, name TEXT)"]',
+            '    @db.async_insert["ai"; {"name": "Alice"}]',
+            '    @var[row; @db.async_get["ai"; "name = ?"; "Alice"]]',
+            '    @print[{row["name"]}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "Alice" in capsys.readouterr().out
+
+    def test_async_rollback_discards(self, capsys):
+        """@db.async_rollback undoes inserts since @db.async_begin."""
+        pytest.importorskip("aiosqlite")
+        self._run(
+            '@async[main]',
+            '    @db.async_connect["sqlite:///:memory:"]',
+            '    @db.async_exec["CREATE TABLE arb (val INTEGER)"]',
+            '    @db.async_begin[]',
+            '    @db.async_exec["INSERT INTO arb VALUES (99)"]',
+            '    @db.async_rollback[]',
+            '    @var[rows; @db.async_query["SELECT * FROM arb"]]',
+            '    @var[n; @db.async_count[]]',
+            '    @print[{n}]',
+            '    @db.async_close[]',
+            '@end',
+        )
+        assert "0" in capsys.readouterr().out
