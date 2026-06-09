@@ -280,8 +280,10 @@ class Transpiler:
                 if '"' in v:
                     return f"f'{v}'"
                 return f'f"{v}"'
-            # Fallthrough: display → f-string interpolation; expr → raw expression
-            if context == "display":
+            # Fallthrough: only wrap as f-string in display context if { is followed
+            # by an identifier start — this handles {A + B} templates while leaving
+            # set literals like {1, 2} and CSS-like {!value} as raw expressions.
+            if context == "display" and re.search(r'\{[a-zA-Z_]', v):
                 if '"' in v:
                     return f"f'{v}'"
                 return f'f"{v}"'
@@ -706,11 +708,11 @@ class Transpiler:
                 body_nodes.append(n)
 
         # No @export directive → export all non-private top-level names
-        if not export_names:
+        if not export_names and not export_star:
             export_star = True
 
-        if export_star:
-            export_names = []
+        # Auto-derive only when no explicit names given; explicit list takes priority
+        if export_star and not export_names:
             for n in body_nodes:
                 if isinstance(n, (FuncNode, ClassNode, VarNode, ConstNode)):
                     if isinstance(n.name, str) and not n.name.startswith("_"):
@@ -766,7 +768,7 @@ class Transpiler:
 def _walk_ast(node):
     """Yield all nodes in the AST recursively."""
     yield node
-    for attr in ("body", "else_body", "catch_body", "finally_body"):
+    for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
         children = getattr(node, attr, None)
         if children:
             for child in children:
@@ -774,6 +776,10 @@ def _walk_ast(node):
     if hasattr(node, "elif_branches"):
         for _cond, branch_body in (node.elif_branches or []):
             for child in branch_body:
+                yield from _walk_ast(child)
+    if hasattr(node, "cases"):
+        for _pat, case_body in (node.cases or []):
+            for child in case_body:
                 yield from _walk_ast(child)
 
 

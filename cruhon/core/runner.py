@@ -170,7 +170,7 @@ def resolve_modules(
 
             new_body.append(mod_node)
         else:
-            for attr in ("body", "else_body", "catch_body", "finally_body"):
+            for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
                 children = getattr(node, attr, None)
                 if isinstance(children, list):
                     sub_prog = ProgramNode(body=children)
@@ -183,6 +183,13 @@ def resolve_modules(
                     resolved = resolve_modules(sub_prog, base_dir, loading)
                     new_branches.append((cond, resolved.body))
                 node.elif_branches = new_branches
+            if hasattr(node, "cases") and node.cases:
+                new_cases = []
+                for pattern, case_body in node.cases:
+                    sub_prog = ProgramNode(body=case_body)
+                    resolved = resolve_modules(sub_prog, base_dir, loading)
+                    new_cases.append((pattern, resolved.body))
+                node.cases = new_cases
             new_body.append(node)
 
     ast.body = new_body
@@ -290,12 +297,25 @@ def run_source(
         # Parse
         ast = parse(source)
 
+        # Snapshot inline-command flags before sub-parses reset them.
+        # resolve_includes/resolve_modules call parse() on sub-files, clobbering
+        # the singleton parser's _needs_os/_needs_requests flags.
+        from .parser import get_parser as _get_parser
+        _pp = _get_parser()
+        _inline_needs_os = _pp._needs_os
+        _inline_needs_requests = _pp._needs_requests
+
         # Resolve @include nodes before transpilation.
         # Seed the included set with the root file so indirect cycles (A→B→C→A)
         # are caught in addition to direct cycles (A→B→A).
         initial_included = {_root_path} if _root_path else set()
         ast = resolve_includes(ast, base_dir, initial_included)
         ast = resolve_modules(ast, base_dir)
+
+        # Restore flags so _needs_os_import/_needs_requests_import read the
+        # correct value for the main file's inline commands.
+        _pp._needs_os = _inline_needs_os
+        _pp._needs_requests = _inline_needs_requests
 
         # Transpile
         python_code = transpile(ast)
@@ -323,6 +343,8 @@ def run_source(
                 fn(plugin_name, args or [])
 
         # Build exec globals: fixed builtins + plugin injections
+        # Reserved keys cannot be overridden by api.inject()
+        _RESERVED = {"__name__", "__ns__", "__ctx__", "__ctx_stack__", "__ph__"}
         exec_globals = {
             "__name__": "__main__",
             "__ns__": ns_registry,
@@ -330,7 +352,9 @@ def run_source(
             "__ctx_stack__": [],
             "__ph__": _ph,
         }
-        exec_globals.update(get_inject_globals())
+        for _k, _v in get_inject_globals().items():
+            if _k not in _RESERVED:
+                exec_globals[_k] = _v
 
         try:
             exec(
