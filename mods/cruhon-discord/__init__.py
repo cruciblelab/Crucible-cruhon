@@ -138,7 +138,36 @@ import re
 # BLOCK COMMANDS — rewritten by lexer hook before tokenization
 # ─────────────────────────────────────────────────────────────
 
-_BLOCK_CMDS = {"on", "command", "slash", "task", "listen"}
+_BLOCK_CMDS = {"on", "command", "slash", "task", "listen",
+               "view", "button", "cog", "group"}
+
+# Friendly button style names → discord.ButtonStyle member (komple geniş)
+_BUTTON_STYLES = {
+    "primary": "primary", "blurple": "primary", "blue": "primary",
+    "secondary": "secondary", "grey": "secondary", "gray": "secondary",
+    "success": "success", "green": "success",
+    "danger": "danger", "red": "danger",
+    "link": "link", "url": "link",
+}
+
+
+def _slug(s: str) -> str:
+    """Bir etiketten geçerli Python tanımlayıcısı üret (buton metod adı)."""
+    s = (s or "").strip().strip("\"'")
+    s = re.sub(r"\W+", "_", s, flags=re.UNICODE).strip("_").lower()
+    if not s or not (s[0].isalpha() or s[0] == "_"):
+        s = "btn_" + s
+    return s or "button"
+
+
+def _style_expr(raw: str) -> str:
+    """style=green → discord.ButtonStyle.success (bilinmeyen → olduğu gibi)."""
+    key = raw.strip().strip("\"'").lower()
+    member = _BUTTON_STYLES.get(key)
+    if member:
+        return f"discord.ButtonStyle.{member}"
+    # Kullanıcı zaten discord.ButtonStyle.X yazdıysa veya bilinmeyen ad
+    return raw.strip() if "." in raw else f"discord.ButtonStyle.{key}"
 
 # Nested namespace: @discord.ui.Button[  /  @discord.utils.get[  /  @discord.Color.blue[
 # Matches @discord. followed by 2+ dotted segments, then "[".
@@ -345,6 +374,81 @@ def _visit_dc_listen(transpiler, node):
         f"{indent}async def on_{event_name}({params_str}):",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
+# UI BLOCK VISITORS — View / Button (interaktif bileşenler)
+# ─────────────────────────────────────────────────────────────
+
+def _render_button(transpiler, btn):
+    """
+    @discord.button[Onayla; style=green; emoji="✅"; row=0]
+        <callback gövdesi>
+    @end
+    → @discord.ui.button(...) + async def <slug>(self, interaction, button):
+    callback gövdesinde `interaction` kullanılır.
+    """
+    args = btn.args
+    kw = btn.kwargs
+    label = args[0].strip() if args else '"Button"'
+    name = _slug(label)
+
+    deco = [f"label={label}"]
+    if "style" in kw:
+        deco.append(f"style={_style_expr(kw['style'])}")
+    if "emoji" in kw:
+        deco.append(f"emoji={kw['emoji'].strip()}")
+    if "row" in kw:
+        deco.append(f"row={kw['row'].strip()}")
+    if "custom_id" in kw:
+        deco.append(f"custom_id={kw['custom_id'].strip()}")
+
+    base = "    " * transpiler._indent
+    body_code = transpiler._block(btn.body)  # _indent+1 seviyesinde render
+    return "\n".join([
+        f"{base}@discord.ui.button({', '.join(deco)})",
+        f"{base}async def {name}(self, interaction, button):",
+        body_code if body_code.strip() else f"{base}    pass",
+    ])
+
+
+def _visit_dc_button(transpiler, node):
+    """Tek başına @discord.button — sınıf gövdesi bağlamında metod üretir."""
+    return _render_button(transpiler, node)
+
+
+def _visit_dc_view(transpiler, node):
+    """
+    @discord.view[ConfirmView; timeout=60]
+        @discord.button[...] ... @end
+    @end
+    → class ConfirmView(discord.ui.View): __init__ + buton metodları
+    """
+    from cruhon.core.ast_nodes import PluginBlockNode
+
+    name = (node.args[0].strip().strip("\"'")) if node.args else "MyView"
+    timeout = node.kwargs.get("timeout", "180").strip()
+
+    base = "    " * transpiler._indent
+    lines = [
+        f"{base}class {name}(discord.ui.View):",
+        f"{base}    def __init__(self):",
+        f"{base}        super().__init__(timeout={timeout})",
+    ]
+
+    transpiler._indent += 1  # sınıf gövdesi seviyesi
+    try:
+        for child in node.body:
+            if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_button":
+                lines.append(_render_button(transpiler, child))
+            else:
+                rendered = child.accept(transpiler)
+                if rendered:
+                    lines.append(rendered)
+    finally:
+        transpiler._indent -= 1
+
     return "\n".join(lines)
 
 
@@ -947,6 +1051,8 @@ def register(api):
     api.block_command("_dc_slash",   _visit_dc_slash)
     api.block_command("_dc_task",    _visit_dc_task)
     api.block_command("_dc_listen",  _visit_dc_listen)
+    api.block_command("_dc_view",    _visit_dc_view)
+    api.block_command("_dc_button",  _visit_dc_button)
 
     # Lib call handlers for all inline/statement discord commands
     for method, handler in _build_handlers().items():

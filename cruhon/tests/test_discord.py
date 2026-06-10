@@ -405,3 +405,76 @@ class TestNestedNamespace:
     def test_nested_with_variable_arg_not_quoted(self):
         code = _compile('@var[v; @discord.ui.View[timeout=my_timeout]]')
         assert "v = discord.ui.View(timeout=my_timeout)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# UI — View + Button (Faz 2)
+# ─────────────────────────────────────────────────────────────
+
+class TestUIView:
+    def test_view_class_header(self):
+        src = (
+            "@discord.view[ConfirmView; timeout=60]\n"
+            '    @discord.button[Onayla; style=green]\n'
+            '        @discord.respond[interaction; "✅"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class ConfirmView(discord.ui.View):" in code
+        assert "super().__init__(timeout=60)" in code
+
+    def test_button_decorator_and_method(self):
+        src = (
+            "@discord.view[V]\n"
+            '    @discord.button[Onayla; style=green]\n'
+            '        @discord.respond[interaction; "ok"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.ui.button(label=" in code
+        assert "discord.ButtonStyle.success" in code
+        assert "async def onayla(self, interaction, button):" in code
+        assert 'await interaction.response.send_message("ok")' in code
+
+    def test_button_style_aliases(self):
+        src = (
+            "@discord.view[V]\n"
+            '    @discord.button[A; style=red]\n'
+            '        @discord.respond[interaction; "a"]\n'
+            "    @end\n"
+            '    @discord.button[B; style=blurple]\n'
+            '        @discord.respond[interaction; "b"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "discord.ButtonStyle.danger" in code
+        assert "discord.ButtonStyle.primary" in code
+
+    def test_view_default_timeout(self):
+        src = (
+            "@discord.view[V]\n"
+            '    @discord.button[X; style=green]\n'
+            '        @discord.respond[interaction; "x"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "super().__init__(timeout=180)" in code
+
+    def test_two_buttons_distinct_methods(self):
+        src = (
+            "@discord.view[V]\n"
+            '    @discord.button[Evet; style=green]\n'
+            '        @discord.respond[interaction; "evet"]\n'
+            "    @end\n"
+            '    @discord.button[Hayır; style=red]\n'
+            '        @discord.respond[interaction; "hayır"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def evet(self, interaction, button):" in code
+        assert "async def hay" in code  # slug of Hayır
