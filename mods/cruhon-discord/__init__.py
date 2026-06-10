@@ -453,6 +453,102 @@ def _visit_dc_view(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
+# COG BLOCK VISITOR — modüler bot (komut grubu sınıfı)
+# ─────────────────────────────────────────────────────────────
+
+def _render_cog_method(transpiler, child):
+    """Cog içindeki @discord.command / @discord.slash → self'li metod."""
+    args = child.args
+    base = "    " * transpiler._indent
+
+    if child.plugin_name == "_dc_command":
+        name = args[0].strip() if args else "cmd"
+        ctx = args[1].strip() if len(args) > 1 else "ctx"
+        extra = [a.strip() for a in args[2:]]
+        params = ", ".join(["self", ctx] + extra)
+        body_code = transpiler._block(child.body)
+        return "\n".join([
+            f"{base}@commands.command(name={name!r})",
+            f"{base}async def {name}({params}):",
+            body_code if body_code.strip() else f"{base}    pass",
+        ])
+
+    if child.plugin_name == "_dc_slash":
+        name = args[0].strip() if args else "cmd"
+        desc = args[1].strip() if len(args) > 1 else repr(name)
+        ctx = args[2].strip() if len(args) > 2 else "interaction"
+        extra = [a.strip() for a in args[3:]]
+        params = ", ".join(["self", ctx] + extra)
+        body_code = transpiler._block(child.body)
+        return "\n".join([
+            f"{base}@discord.app_commands.command(name={name!r}, description={desc})",
+            f"{base}async def {name}({params}):",
+            body_code if body_code.strip() else f"{base}    pass",
+        ])
+
+    # Diğer düğümleri olduğu gibi render et
+    return child.accept(transpiler)
+
+
+def _visit_dc_cog(transpiler, node):
+    """
+    @discord.cog[Moderation]
+        @discord.command[ban; ctx; member] ... @end
+    @end
+    → class Moderation(commands.Cog): __init__(self, bot) + metodlar
+    Kayıt: @discord.add_cog[Moderation] (on_ready/setup içinde).
+    """
+    name = (node.args[0].strip().strip("\"'")) if node.args else "MyCog"
+    base = "    " * transpiler._indent
+    lines = [
+        f"{base}class {name}(commands.Cog):",
+        f"{base}    def __init__(self, bot):",
+        f"{base}        self.bot = bot",
+    ]
+    transpiler._indent += 1
+    try:
+        for child in node.body:
+            rendered = _render_cog_method(transpiler, child)
+            if rendered:
+                lines.append(rendered)
+    finally:
+        transpiler._indent -= 1
+    return "\n".join(lines)
+
+
+def _visit_dc_group(transpiler, node):
+    """
+    @discord.group[admin; "Yönetici komutları"]
+        @discord.slash[ban; "Yasakla"; interaction; member] ... @end
+    @end
+    → app_commands.Group alt sınıfı + alt komut metodları.
+    """
+    name = (node.args[0].strip().strip("\"'")) if node.args else "MyGroup"
+    desc = node.args[1].strip() if len(node.args) > 1 else repr(name)
+    cls = name.capitalize() + "Group"
+    base = "    " * transpiler._indent
+    lines = [
+        f"{base}class {cls}(discord.app_commands.Group):",
+        f"{base}    pass",
+        f"{base}{name} = {cls}(name={name!r}, description={desc})",
+    ]
+    # Alt komutları @<group>.command dekoratörüyle bağla
+    for child in node.body:
+        if isinstance(child, type(node)) and child.plugin_name == "_dc_slash":
+            cargs = child.args
+            cname = cargs[0].strip() if cargs else "sub"
+            cdesc = cargs[1].strip() if len(cargs) > 1 else repr(cname)
+            ctx = cargs[2].strip() if len(cargs) > 2 else "interaction"
+            extra = [a.strip() for a in cargs[3:]]
+            params = ", ".join([ctx] + extra)
+            body_code = transpiler._block(child.body)
+            lines.append(f"{base}@{name}.command(name={cname!r}, description={cdesc})")
+            lines.append(f"{base}async def {cname}({params}):")
+            lines.append(body_code if body_code.strip() else f"{base}    pass")
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
 # @embed / @discord.quick_embed — tek satırda tam embed
 # ─────────────────────────────────────────────────────────────
 
@@ -619,6 +715,18 @@ def _build_handlers() -> dict:
     def sync_commands(args):
         return "await __bot__.tree.sync()"
     h["sync_commands"] = sync_commands
+
+    def add_cog(args):
+        # @discord.add_cog[Moderation] — async bağlamda (on_ready/setup) kullan
+        name = args[0].strip() if args else "MyCog"
+        return f"await __bot__.add_cog({name}(__bot__))"
+    h["add_cog"] = add_cog
+
+    def add_view(args):
+        # @discord.add_view[ConfirmView] — kalıcı view kaydı
+        name = args[0].strip() if args else "MyView"
+        return f"__bot__.add_view({name}())"
+    h["add_view"] = add_view
 
     def start_task(args):
         name = args[0] if args else "background_task"
@@ -1053,6 +1161,8 @@ def register(api):
     api.block_command("_dc_listen",  _visit_dc_listen)
     api.block_command("_dc_view",    _visit_dc_view)
     api.block_command("_dc_button",  _visit_dc_button)
+    api.block_command("_dc_cog",     _visit_dc_cog)
+    api.block_command("_dc_group",   _visit_dc_group)
 
     # Lib call handlers for all inline/statement discord commands
     for method, handler in _build_handlers().items():

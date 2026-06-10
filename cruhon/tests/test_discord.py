@@ -478,3 +478,67 @@ class TestUIView:
         code = _compile(src)
         assert "async def evet(self, interaction, button):" in code
         assert "async def hay" in code  # slug of Hayır
+
+
+# ─────────────────────────────────────────────────────────────
+# COG + GROUP (Faz 2)
+# ─────────────────────────────────────────────────────────────
+
+class TestCog:
+    def test_cog_class_and_init(self):
+        src = (
+            "@discord.cog[Moderation]\n"
+            "    @discord.command[ban; ctx; member]\n"
+            "        @discord.ban[member]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class Moderation(commands.Cog):" in code
+        assert "def __init__(self, bot):" in code
+        assert "self.bot = bot" in code
+
+    def test_cog_command_has_self(self):
+        src = (
+            "@discord.cog[Mod]\n"
+            "    @discord.command[ban; ctx; member]\n"
+            "        @discord.ban[member]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@commands.command(name='ban')" in code
+        assert "async def ban(self, ctx, member):" in code
+        assert "await member.ban()" in code
+
+    def test_cog_slash_method(self):
+        src = (
+            "@discord.cog[Util]\n"
+            '    @discord.slash[ping; "Ping at"; ctx]\n'
+            '        @discord.respond[ctx; "pong"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "discord.app_commands.command(name='ping'" in code
+        assert "async def ping(self, ctx):" in code
+
+    def test_add_cog_registration(self):
+        code = _compile("@discord.add_cog[Moderation]")
+        assert "await __bot__.add_cog(Moderation(__bot__))" in code
+
+
+class TestGroup:
+    def test_group_class_and_instance(self):
+        src = (
+            '@discord.group[admin; "Yönetici"]\n'
+            '    @discord.slash[ban; "Yasakla"; interaction; member]\n'
+            '        @discord.respond[interaction; "ok"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "discord.app_commands.Group" in code
+        assert "admin = AdminGroup(name='admin'" in code
+        assert "@admin.command(name='ban'" in code
+        assert "async def ban(interaction, member):" in code
