@@ -180,11 +180,13 @@ def list_mods() -> list[str]:
 def _register_stdlib():
     from .libs.file_  import register as _r_file
     from .libs.time_  import register as _r_time
+    from .libs.date_  import register as _r_date
     from .libs.math_  import register as _r_math
     from .libs.json_  import register as _r_json
     from .libs.color_ import register as _r_color
     _r_file()
     _r_time()
+    _r_date()
     _r_math()
     _r_json()
     _r_color()

@@ -5,39 +5,92 @@ The user must have the relevant Python library already installed when using `@im
 
 ---
 
-## ✅ Supported Libraries
+## ✅ Any Python standard-library module just works
 
-| Cruhon               | Python          | Since   |
-|----------------------|-----------------|---------|
-| `@import[requests]`  | `requests`      | ✅ v0.1 |
-| `@import[discord]`   | `discord.py`    | ✅ v0.1 |
-| `@import[json]`      | `json`          | ✅ v0.1 |
-| `@import[os]`        | `os`            | ✅ v0.1 |
-| `@import[sys]`       | `sys`           | ✅ v0.1 |
-| `@import[math]`      | `math`          | ✅ v0.1 |
-| `@import[random]`    | `random`        | ✅ v0.1 |
-| `@import[time]`      | `time`          | ✅ v0.1 |
-| `@import[datetime]`  | `datetime`      | ✅ v0.1 |
-| `@import[re]`        | `re`            | ✅ v0.1 |
-| `@import[pathlib]`   | `pathlib`       | ✅ v0.1 |
-| `@import[asyncio]`   | `asyncio`       | ✅ v0.1 |
+As of the stdlib passthrough, **`@import[<module>]` accepts any module in the
+Python standard library** — no per-module registration needed. The transpiler
+checks `sys.stdlib_module_names`, so these all work out of the box:
+
+```clpy
+@import[sqlite3]
+@import[collections]
+@import[hashlib]
+@import[csv]
+@import[itertools]
+@import[subprocess]
+@import[uuid]
+@import[secrets]
+# … every stdlib module
+```
+
+Once imported, call into them with plain Python expressions:
+
+```clpy
+@import[sqlite3]
+@var[conn; sqlite3.connect("data.db")]
+@var[rows; conn.execute("SELECT * FROM users").fetchall()]
+```
+
+Third-party packages (not in the stdlib) must be registered explicitly — see
+the table below and the Contributing section.
 
 ---
 
-## 🔜 Coming Soon
+## ✅ Registered third-party libraries
 
-| Cruhon               | Python           | Planned |
-|----------------------|------------------|---------|
-| `@import[sqlite]`    | `sqlite3`        | v0.2    |
-| `@import[postgres]`  | `psycopg2`       | v0.2    |
-| `@import[flask]`     | `flask`          | v0.2    |
-| `@import[fastapi]`   | `fastapi`        | v0.2    |
-| `@import[pandas]`    | `pandas`         | v0.3    |
-| `@import[numpy]`     | `numpy`          | v0.3    |
-| `@import[redis]`     | `redis`          | v0.3    |
-| `@import[dotenv]`    | `python-dotenv`  | v0.2    |
-| `@import[bs4]`       | `beautifulsoup4` | v0.3    |
-| `@import[pillow]`    | `Pillow`         | v0.4    |
+| Cruhon               | Python          |
+|----------------------|-----------------|
+| `@import[requests]`  | `requests`      |
+| `@import[discord]`   | `discord.py`    |
+| `@import[httpx]`     | `httpx`         |
+
+---
+
+## ✨ Helper namespaces (simplified, non-coder friendly)
+
+These are Cruhon-native command sets that wrap stdlib modules with a far
+simpler surface. You do **not** need `@import` for them.
+
+| Namespace   | Wraps                                   | Commands |
+|-------------|-----------------------------------------|----------|
+| `@file.*`   | `pathlib` / `os` / `shutil` / `glob` / `tempfile` | read, write, append, copy, move, glob, mkdir, json … |
+| `@date.*`   | `datetime` / `time` / `calendar`        | now, format, parse, add, diff, weekday, make … |
+| `@http.*`   | `requests`                              | get, post, put, delete |
+| `@json.*`   | `json`                                  | load, dump |
+| `@db.*`     | `sqlite3` / `psycopg2` / `pymysql` (+ async) | 138 commands — see `mods/cruhon-db` |
+| `@discord.*`| `discord.py`                            | ~60 commands — see `mods/cruhon-discord` |
+| `@store.*`  | in-memory key/value                     | set, get, clear |
+| `@ctx.*`    | execution context dict                  | set, get, push, pop |
+
+### `@file` quick reference
+
+```clpy
+@file.write["notes.txt"; "hello"]      # overwrite (creates parent dirs)
+@file.append["notes.txt"; " more"]     # append
+@var[text; @file.read["notes.txt"]]    # read full text
+@var[rows; @file.lines["notes.txt"]]   # list of lines
+@file.copy["a.txt"; "b.txt"]           # copy / move / rename / delete
+@var[found; @file.glob["*.txt"]]       # glob, list, walk
+@file.write_json["d.json"; {"k": 1}]   # JSON read/write
+@var[data; @file.read_json["d.json"]]
+```
+
+All path-taking `@file` commands are sandboxed to the working directory —
+traversal outside cwd (`../../etc/passwd`) is blocked.
+
+### `@date` quick reference
+
+```clpy
+@var[now; @date.now[]]
+@var[stamp; @date.format["%Y-%m-%d %H:%M"]]   # format now
+@var[when; @date.parse["2024-03-10"; "%Y-%m-%d"]]
+@var[future; @date.add[@date.now[]; days=7]]   # arithmetic
+@var[gap; @date.diff_days[future; @date.now[]]]
+@var[name; @date.weekday_name[@date.now[]]]    # "Monday"
+@var[d; @date.make[2024; 1; 15]]               # build a date
+```
+
+`@date` commands accept either a datetime object or an ISO string.
 
 ---
 
@@ -47,14 +100,16 @@ The user must have the relevant Python library already installed when using `@im
 @import[pandas]
 # Error: Library 'pandas' is not yet supported in Cruhon.
 # See library.md for the full list.
-# Want to add it? github.com/cruciblelab/cruhon/blob/main/CONTRIBUTING.md
 ```
+
+This only happens for **third-party** packages that haven't been registered.
+Standard-library modules never hit this error.
 
 ---
 
 ## Contributing
 
-Adding a new library wrapper is straightforward:
+Adding a third-party library wrapper is straightforward:
 
 1. Add `register_lib("libname", "python_module")` to `cruhon/core/registry.py`
 2. If needed, customize method calls with `register_lib_call()`
