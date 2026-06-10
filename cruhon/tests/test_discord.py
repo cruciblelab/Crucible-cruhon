@@ -542,3 +542,80 @@ class TestGroup:
         assert "admin = AdminGroup(name='admin'" in code
         assert "@admin.command(name='ban'" in code
         assert "async def ban(interaction, member):" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# MODAL + SELECT (Faz 2) — alt bloklar @field/@option/@on_submit/@body
+# ─────────────────────────────────────────────────────────────
+
+class TestModal:
+    def test_modal_class_with_title(self):
+        src = (
+            "@discord.modal[Geri Bildirim; FeedbackModal]\n"
+            '    @field[Başlık; placeholder="Konu"]\n'
+            "    @on_submit[interaction]\n"
+            '        @discord.respond[interaction; "Teşekkürler"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class FeedbackModal(discord.ui.Modal, title=" in code
+        assert "Geri Bildirim" in code
+        assert "discord.ui.TextInput(label=" in code
+        assert "Konu" in code
+        assert "async def on_submit(self, interaction):" in code
+        assert 'await interaction.response.send_message("Teşekkürler")' in code
+
+    def test_field_style_and_maxlength(self):
+        src = (
+            "@discord.modal[F; M]\n"
+            '    @field[Mesaj; style=long; max=500]\n'
+            "    @on_submit[interaction]\n"
+            '        @discord.respond[interaction; "ok"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "discord.TextStyle.long" in code
+        assert "max_length=500" in code
+
+
+class TestSelect:
+    def test_select_in_view(self):
+        src = (
+            "@discord.view[Menu]\n"
+            "    @discord.select[Renk seç; min=1; max=1]\n"
+            "        @option[Kırmızı; value=red]\n"
+            "        @option[Mavi; value=blue]\n"
+            "        @body[interaction; selection]\n"
+            '            @discord.respond[interaction; "seçildi"]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class Menu(discord.ui.View):" in code
+        assert "@discord.ui.select(placeholder=" in code
+        assert "min_values=1" in code
+        assert "max_values=1" in code
+        assert "discord.SelectOption(label=" in code
+        assert "value='red'" in code
+        assert "async def" in code
+        assert "self, interaction, selection" in code
+        assert 'await interaction.response.send_message("seçildi")' in code
+
+    def test_select_options_count(self):
+        src = (
+            "@discord.view[M]\n"
+            "    @discord.select[Seç]\n"
+            "        @option[A; value=a]\n"
+            "        @option[B; value=b]\n"
+            "        @option[C; value=c]\n"
+            "        @body[interaction; sel]\n"
+            '            @discord.respond[interaction; "x"]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert code.count("discord.SelectOption(") == 3

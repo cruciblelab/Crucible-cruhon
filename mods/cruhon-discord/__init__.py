@@ -139,7 +139,7 @@ import re
 # ─────────────────────────────────────────────────────────────
 
 _BLOCK_CMDS = {"on", "command", "slash", "task", "listen",
-               "view", "button", "cog", "group"}
+               "view", "button", "cog", "group", "modal", "select"}
 
 # Friendly button style names → discord.ButtonStyle member (komple geniş)
 _BUTTON_STYLES = {
@@ -158,6 +158,15 @@ def _slug(s: str) -> str:
     if not s or not (s[0].isalpha() or s[0] == "_"):
         s = "btn_" + s
     return s or "button"
+
+
+def _as_str(a: str) -> str:
+    """Görünen metin argümanı → string literal. Tırnaklı/f-string ise olduğu gibi.
+    Bare metin (boşluklu olabilir) → repr ile string'e çevrilir."""
+    a = (a or "").strip()
+    if a[:1] in ('"', "'") or a[:2] in ('f"', "f'"):
+        return a
+    return repr(a)
 
 
 def _style_expr(raw: str) -> str:
@@ -391,8 +400,8 @@ def _render_button(transpiler, btn):
     """
     args = btn.args
     kw = btn.kwargs
-    label = args[0].strip() if args else '"Button"'
-    name = _slug(label)
+    label = _as_str(args[0]) if args else '"Button"'
+    name = _slug(args[0] if args else 'button')
 
     deco = [f"label={label}"]
     if "style" in kw:
@@ -442,6 +451,8 @@ def _visit_dc_view(transpiler, node):
         for child in node.body:
             if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_button":
                 lines.append(_render_button(transpiler, child))
+            elif isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_select":
+                lines.append(_render_select(transpiler, child))
             else:
                 rendered = child.accept(transpiler)
                 if rendered:
@@ -546,6 +557,184 @@ def _visit_dc_group(transpiler, node):
             lines.append(f"{base}async def {cname}({params}):")
             lines.append(body_code if body_code.strip() else f"{base}    pass")
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
+# ALT-BLOK PARSER'LARI — @field / @option (tek satır), @body / @on_submit (block)
+# ─────────────────────────────────────────────────────────────
+
+def _make_oneliner_parser(plugin_name: str):
+    """@field[...] / @option[...] gibi gövdesiz tek-satır alt komutları parse eder."""
+    def _p(parser):
+        from cruhon.core.ast_nodes import PluginBlockNode
+        line = parser.current.line
+        parser.advance()  # @field / @option
+        args, kwargs = parser.parse_named_args()
+        return PluginBlockNode(plugin_name=plugin_name, args=args,
+                               kwargs=kwargs, body=[], line=line)
+    return _p
+
+
+def _noop_visit(transpiler, node):
+    """field/option tek başına render edilirse (normalde ebeveyn işler)."""
+    return f"{'    ' * transpiler._indent}pass"
+
+
+_TEXT_STYLES = {"short": "short", "long": "long", "paragraph": "paragraph",
+                "kısa": "short", "uzun": "long"}
+
+
+def _render_field(field_node) -> str:
+    """@field[Başlık; placeholder=..; max=..; style=long] → TextInput attribute."""
+    args = field_node.args
+    kw = field_node.kwargs
+    label = _as_str(args[0]) if args else '"Field"'
+    attr = _slug(args[0] if args else 'field')
+    parts = [f"label={label}"]
+    if "placeholder" in kw:
+        parts.append(f"placeholder={kw['placeholder'].strip()}")
+    if "style" in kw:
+        st = kw["style"].strip().strip("\"'").lower()
+        parts.append(f"style=discord.TextStyle.{_TEXT_STYLES.get(st, st)}")
+    if "required" in kw:
+        parts.append(f"required={kw['required'].strip()}")
+    if "max" in kw:
+        parts.append(f"max_length={kw['max'].strip()}")
+    if "min" in kw:
+        parts.append(f"min_length={kw['min'].strip()}")
+    if "default" in kw:
+        parts.append(f"default={kw['default'].strip()}")
+    return f"{attr} = discord.ui.TextInput({', '.join(parts)})"
+
+
+def _render_option(opt_node) -> str:
+    """@option[Kırmızı; value=red; emoji=🔴] → discord.SelectOption(...)."""
+    args = opt_node.args
+    kw = opt_node.kwargs
+    label = _as_str(args[0]) if args else '"Option"'
+    parts = [f"label={label}"]
+    if "value" in kw:
+        v = kw["value"].strip()
+        # value=red gibi tırnaksız → string yap
+        if not (v.startswith('"') or v.startswith("'")):
+            v = repr(v.strip("\"'"))
+        parts.append(f"value={v}")
+    if "description" in kw:
+        parts.append(f"description={kw['description'].strip()}")
+    if "emoji" in kw:
+        parts.append(f"emoji={kw['emoji'].strip()}")
+    if "default" in kw:
+        parts.append(f"default={kw['default'].strip()}")
+    return f"discord.SelectOption({', '.join(parts)})"
+
+
+# ─────────────────────────────────────────────────────────────
+# MODAL BLOCK VISITOR — form penceresi
+# ─────────────────────────────────────────────────────────────
+
+def _visit_dc_modal(transpiler, node):
+    """
+    @discord.modal[Geri Bildirim; FeedbackModal]
+        @field[Başlık; placeholder="Konu"]
+        @on_submit[interaction] ... @end
+    @end
+    → class FeedbackModal(discord.ui.Modal, title="Geri Bildirim"): ...
+    """
+    from cruhon.core.ast_nodes import PluginBlockNode
+
+    title = _as_str(node.args[0]) if node.args else '"Form"'
+    cls = (node.args[1].strip().strip("\"'")) if len(node.args) > 1 else "MyModal"
+
+    base = "    " * transpiler._indent
+    lines = [f"{base}class {cls}(discord.ui.Modal, title={title}):"]
+
+    transpiler._indent += 1
+    inner = "    " * transpiler._indent
+    submit_node = None
+    field_count = 0
+    try:
+        for child in node.body:
+            if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_field":
+                lines.append(f"{inner}{_render_field(child)}")
+                field_count += 1
+            elif isinstance(child, PluginBlockNode) and child.plugin_name == "on_submit":
+                submit_node = child
+
+        # on_submit metodu
+        if submit_node is not None:
+            ctx = submit_node.args[0].strip() if submit_node.args else "interaction"
+            body_code = transpiler._block(submit_node.body)
+            lines.append(f"{inner}async def on_submit(self, {ctx}):")
+            lines.append(body_code if body_code.strip() else f"{inner}    pass")
+        if field_count == 0 and submit_node is None:
+            lines.append(f"{inner}pass")
+    finally:
+        transpiler._indent -= 1
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
+# SELECT — dropdown (view içinde veya tek başına dekoratörlü metod)
+# ─────────────────────────────────────────────────────────────
+
+def _render_select(transpiler, node):
+    """
+    @discord.select[Renk seç; min=1; max=1]
+        @option[Kırmızı; value=red] ...
+        @body[interaction; selection] ... @end
+    @end
+    → @discord.ui.select(...) + async def <slug>(self, interaction, selection):
+    """
+    from cruhon.core.ast_nodes import PluginBlockNode
+
+    placeholder = _as_str(node.args[0]) if node.args else '"Seç"'
+    kw = node.kwargs
+    name = _slug(node.args[0] if node.args else 'select')
+
+    deco = [f"placeholder={placeholder}"]
+    if "min" in kw:
+        deco.append(f"min_values={kw['min'].strip()}")
+    if "max" in kw:
+        deco.append(f"max_values={kw['max'].strip()}")
+
+    options = []
+    body_node = None
+    for child in node.body:
+        if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_option":
+            options.append(_render_option(child))
+        elif isinstance(child, PluginBlockNode) and child.plugin_name == "body":
+            body_node = child
+    if options:
+        deco.append(f"options=[{', '.join(options)}]")
+
+    if body_node is not None:
+        ctx = body_node.args[0].strip() if body_node.args else "interaction"
+        sel = body_node.args[1].strip() if len(body_node.args) > 1 else "select"
+        body_src = body_node.body
+    else:
+        ctx, sel, body_src = "interaction", "select", []
+
+    base = "    " * transpiler._indent
+
+    # callback gövdesini doğru indent ile render et
+    saved = transpiler._indent
+    transpiler._indent += 1
+    inner_body = "\n".join(
+        filter(None, ((n.accept(transpiler)) for n in body_src))
+    )
+    transpiler._indent = saved
+
+    return "\n".join([
+        f"{base}@discord.ui.select({', '.join(deco)})",
+        f"{base}async def {name}(self, {ctx}, {sel}):",
+        inner_body if inner_body.strip() else f"{base}    pass",
+    ])
+
+
+def _visit_dc_select(transpiler, node):
+    """Tek başına @discord.select — sınıf gövdesi bağlamında metod üretir."""
+    return _render_select(transpiler, node)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1163,6 +1352,16 @@ def register(api):
     api.block_command("_dc_button",  _visit_dc_button)
     api.block_command("_dc_cog",     _visit_dc_cog)
     api.block_command("_dc_group",   _visit_dc_group)
+    api.block_command("_dc_modal",   _visit_dc_modal)
+    api.block_command("_dc_select",  _visit_dc_select)
+
+    # Alt-bloklar: @on_submit / @body (gövdeli) — modal/select içinde
+    api.block_command("on_submit", _noop_visit)
+    api.block_command("body",      _noop_visit)
+
+    # Alt-bloklar: @field / @option (tek satır) — modal/select içinde
+    api.command("field",  _make_oneliner_parser("_dc_field"),  _noop_visit)
+    api.command("option", _make_oneliner_parser("_dc_option"), _noop_visit)
 
     # Lib call handlers for all inline/statement discord commands
     for method, handler in _build_handlers().items():
