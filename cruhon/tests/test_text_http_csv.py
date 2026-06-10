@@ -182,6 +182,22 @@ class TestTextRegex:
     def test_groups_no_match(self):
         assert _eval('@text.groups["(\\d+)"; "abc"]') == []
 
+    def test_match_case_insensitive(self):
+        import re as _re
+        # pass flag as integer literal so no re import is needed in exec context
+        flag = _re.IGNORECASE
+        code = transpile(parse(f'@import[re]\n@var[__r__; @text.match["hello"; "HELLO"; re.IGNORECASE]]'))
+        ns: dict = {}
+        exec(compile(code, "<t>", "exec"), ns)
+        assert ns["__r__"] is True
+
+    def test_findall_case_insensitive(self):
+        import re as _re
+        code = transpile(parse(f'@import[re]\n@var[__r__; @text.findall["[a-z]+"; "Hello World"; re.IGNORECASE]]'))
+        ns: dict = {}
+        exec(compile(code, "<t>", "exec"), ns)
+        assert ns["__r__"] == ["Hello", "World"]
+
 
 # ════════════════════════════════════════════════════════════
 #  @text — html escape
@@ -252,20 +268,49 @@ class TestHttpTranspile:
     def test_async_text(self):assert ".text" in self._t_async('@http.async_text["https://x.com"]')
 
 
-class TestHttpSsrf:
-    def test_localhost_blocked(self):
+class TestHttpNoRestrictions:
+    def test_any_url_passes(self):
         from cruhon.core.libs.http_ import _check_url
-        with pytest.raises(PermissionError):
-            _check_url("http://localhost/secret")
-
-    def test_private_blocked(self):
-        from cruhon.core.libs.http_ import _check_url
-        with pytest.raises(PermissionError):
-            _check_url("http://192.168.1.1/admin")
-
-    def test_public_allowed(self):
-        from cruhon.core.libs.http_ import _check_url
+        assert _check_url("http://localhost/secret") == "http://localhost/secret"
+        assert _check_url("http://192.168.1.1/admin") == "http://192.168.1.1/admin"
         assert _check_url("https://api.example.com/data") == "https://api.example.com/data"
+
+    def test_custom_timeout_no_conflict(self):
+        code = transpile(parse('@var[r; @http.get["https://x.com"; timeout=60]]'))
+        assert code.count("timeout=") == 1
+        assert "timeout=60" in code
+
+    def test_default_timeout_added(self):
+        code = transpile(parse('@var[r; @http.get["https://x.com"]]'))
+        assert f"timeout={30}" in code
+
+
+class TestHttpSession:
+    def _t(self, expr):
+        code = transpile(parse(f"@var[__r__; {expr}]"))
+        compile(code, "<t>", "exec")
+        return code
+
+    def test_session_create(self):
+        assert "requests.Session()" in self._t('@http.session[]')
+
+    def test_session_get(self):
+        assert ".get(" in self._t('@http.session_get[s; "https://x.com"]')
+
+    def test_session_post(self):
+        assert ".post(" in self._t('@http.session_post[s; "https://x.com"; {}]')
+
+    def test_session_put(self):
+        assert ".put(" in self._t('@http.session_put[s; "https://x.com"; {}]')
+
+    def test_session_patch(self):
+        assert ".patch(" in self._t('@http.session_patch[s; "https://x.com"; {}]')
+
+    def test_session_delete(self):
+        assert ".delete(" in self._t('@http.session_delete[s; "https://x.com"]')
+
+    def test_session_close(self):
+        assert ".close()" in self._t('@http.session_close[s]')
 
 
 # ════════════════════════════════════════════════════════════

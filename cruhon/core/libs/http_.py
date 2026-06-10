@@ -54,82 +54,109 @@ _DEFAULT_TIMEOUT = 30
 
 
 def _check_url(url: str) -> str:
-    """Block SSRF: reject requests to localhost, link-local, and private ranges."""
-    import re
-    blocked = re.compile(
-        r"^https?://(localhost|127\.|0\.0\.0\.0|::1"
-        r"|169\.254\."
-        r"|10\."
-        r"|172\.(1[6-9]|2[0-9]|3[01])\."
-        r"|192\.168\.)",
-        re.IGNORECASE,
-    )
-    if blocked.match(str(url)):
-        raise PermissionError(
-            f"[Cruhon] @http: URL '{url}' is blocked (private/loopback address)."
-        )
-    return url
+    """Pass URL through — no restriction, full Python freedom."""
+    return str(url)
 
 
 def _chk(url_expr: str) -> str:
     return f"{_SSRF_CHECK}({url_expr})"
 
 
-def _kwargs(args: list, start: int) -> str:
-    """Join args[start:] as extra kwargs (already key=value strings)."""
-    extra = ", ".join(args[start:])
-    return (", " + extra) if extra else ""
+def _kw(args: list, start: int) -> str:
+    """Join args[start:] as extra kwargs. Already key=value strings."""
+    extra = args[start:]
+    return (", " + ", ".join(extra)) if extra else ""
+
+
+def _timeout(args: list, start: int) -> str:
+    """Return timeout kwarg — use default unless user already passed timeout=."""
+    has = any(str(a).startswith("timeout=") for a in args[start:])
+    return "" if has else f", timeout={_DEFAULT_TIMEOUT}"
 
 
 # ── SYNC ─────────────────────────────────────────────────────────────────────
 
 def _handler_get(args):
     url = args[0] if args else '""'
-    kw = _kwargs(args, 1)
-    return f"requests.get({_chk(url)}, timeout={_DEFAULT_TIMEOUT}{kw})"
+    return f"requests.get({_chk(url)}{_timeout(args,1)}{_kw(args,1)})"
 
 
 def _handler_post(args):
     url  = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    kw   = _kwargs(args, 2)
-    return f"requests.post({_chk(url)}, json={data}, timeout={_DEFAULT_TIMEOUT}{kw})"
+    return f"requests.post({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
 
 
 def _handler_put(args):
     url  = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    kw   = _kwargs(args, 2)
-    return f"requests.put({_chk(url)}, json={data}, timeout={_DEFAULT_TIMEOUT}{kw})"
+    return f"requests.put({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
 
 
 def _handler_patch(args):
     url  = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    kw   = _kwargs(args, 2)
-    return f"requests.patch({_chk(url)}, json={data}, timeout={_DEFAULT_TIMEOUT}{kw})"
+    return f"requests.patch({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
 
 
 def _handler_delete(args):
     url = args[0] if args else '""'
-    kw  = _kwargs(args, 1)
-    return f"requests.delete({_chk(url)}, timeout={_DEFAULT_TIMEOUT}{kw})"
+    return f"requests.delete({_chk(url)}{_timeout(args,1)}{_kw(args,1)})"
 
 
 def _handler_head(args):
     url = args[0] if args else '""'
-    return f"requests.head({_chk(url)}, timeout={_DEFAULT_TIMEOUT})"
+    return f"requests.head({_chk(url)}{_timeout(args,1)}{_kw(args,1)})"
 
 
 def _handler_options(args):
     url = args[0] if args else '""'
-    return f"requests.options({_chk(url)}, timeout={_DEFAULT_TIMEOUT})"
+    return f"requests.options({_chk(url)}{_timeout(args,1)}{_kw(args,1)})"
 
 
 def _handler_form(args):
     url  = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    return f"requests.post({_chk(url)}, data={data}, timeout={_DEFAULT_TIMEOUT})"
+    return f"requests.post({_chk(url)}, data={data}{_timeout(args,2)}{_kw(args,2)})"
+
+
+# ── SESSION ───────────────────────────────────────────────────────────────────
+
+def _handler_session(args):
+    return "requests.Session()"
+
+
+def _handler_session_get(args):
+    s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
+    return f"{s}.get({_chk(url)}{_timeout(args,2)}{_kw(args,2)})"
+
+
+def _handler_session_post(args):
+    s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
+    data = args[2] if len(args) > 2 else "None"
+    return f"{s}.post({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+
+
+def _handler_session_put(args):
+    s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
+    data = args[2] if len(args) > 2 else "None"
+    return f"{s}.put({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+
+
+def _handler_session_patch(args):
+    s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
+    data = args[2] if len(args) > 2 else "None"
+    return f"{s}.patch({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+
+
+def _handler_session_delete(args):
+    s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
+    return f"{s}.delete({_chk(url)}{_timeout(args,2)}{_kw(args,2)})"
+
+
+def _handler_session_close(args):
+    s = args[0] if args else "s"
+    return f"{s}.close()"
 
 
 # ── RESPONSE ACCESSORS ────────────────────────────────────────────────────────
@@ -187,14 +214,14 @@ def _handler_download(args):
 
 def _handler_async_get(args):
     url = args[0] if args else '""'
-    kw  = _kwargs(args, 1)
+    kw  = _kw(args, 1)
     return f"await __import__('httpx').AsyncClient().get({_chk(url)}{kw})"
 
 
 def _handler_async_post(args):
     url  = args[0] if args else '""'
     data = args[1] if len(args) > 1 else "None"
-    kw   = _kwargs(args, 2)
+    kw   = _kw(args, 2)
     return f"await __import__('httpx').AsyncClient().post({_chk(url)}, json={data}{kw})"
 
 
@@ -235,6 +262,14 @@ HTTP_HANDLERS = {
     "head":             _handler_head,
     "options":          _handler_options,
     "form":             _handler_form,
+    # session
+    "session":          _handler_session,
+    "session_get":      _handler_session_get,
+    "session_post":     _handler_session_post,
+    "session_put":      _handler_session_put,
+    "session_patch":    _handler_session_patch,
+    "session_delete":   _handler_session_delete,
+    "session_close":    _handler_session_close,
     # response
     "json":             _handler_json,
     "text":             _handler_text,

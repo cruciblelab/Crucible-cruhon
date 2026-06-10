@@ -197,23 +197,45 @@ def register():
         lambda a: f"{_TW}.dedent(str({a[0]}))")
 
     # ── REGEX ────────────────────────────────────────────────
+    # Optional last arg is flags: re.IGNORECASE, re.MULTILINE, re.DOTALL …
+    # or a combined int: re.IGNORECASE | re.MULTILINE
     register_lib_call("text", "match",
-        lambda a: f"bool({_RE}.match({a[0]}, str({a[1]})))")
+        lambda a: (
+            f"bool({_RE}.match({a[0]}, str({a[1]}), {a[2]}))" if len(a) > 2 else
+            f"bool({_RE}.match({a[0]}, str({a[1]})))"
+        ))
     register_lib_call("text", "search",
-        lambda a: f"bool({_RE}.search({a[0]}, str({a[1]})))")
+        lambda a: (
+            f"bool({_RE}.search({a[0]}, str({a[1]}), {a[2]}))" if len(a) > 2 else
+            f"bool({_RE}.search({a[0]}, str({a[1]})))"
+        ))
     register_lib_call("text", "find",
-        lambda a: f"(_m.group(0) if (_m := {_RE}.search({a[0]}, str({a[1]}))) else None)")
+        lambda a: (
+            f"(_m.group(0) if (_m := {_RE}.search({a[0]}, str({a[1]}), {a[2]})) else None)"
+            if len(a) > 2 else
+            f"(_m.group(0) if (_m := {_RE}.search({a[0]}, str({a[1]}))) else None)"
+        ))
     register_lib_call("text", "findall",
-        lambda a: f"{_RE}.findall({a[0]}, str({a[1]}))")
+        lambda a: (
+            f"{_RE}.findall({a[0]}, str({a[1]}), {a[2]})" if len(a) > 2 else
+            f"{_RE}.findall({a[0]}, str({a[1]}))"
+        ))
     register_lib_call("text", "sub",
         lambda a: (
             f"{_RE}.sub({a[0]}, {a[1]}, str({a[2]}), count={a[3]})" if len(a) > 3 else
             f"{_RE}.sub({a[0]}, {a[1]}, str({a[2]}))"
         ))
     register_lib_call("text", "split_re",
-        lambda a: f"{_RE}.split({a[0]}, str({a[1]}))")
+        lambda a: (
+            f"{_RE}.split({a[0]}, str({a[1]}), flags={a[2]})" if len(a) > 2 else
+            f"{_RE}.split({a[0]}, str({a[1]}))"
+        ))
     register_lib_call("text", "groups",
-        lambda a: f"(list({_RE}.search({a[0]}, str({a[1]})).groups()) if {_RE}.search({a[0]}, str({a[1]})) else [])")
+        lambda a: (
+            f"(list({_RE}.search({a[0]}, str({a[1]}), {a[2]}).groups()) if {_RE}.search({a[0]}, str({a[1]}), {a[2]}) else [])"
+            if len(a) > 2 else
+            f"(list({_RE}.search({a[0]}, str({a[1]})).groups()) if {_RE}.search({a[0]}, str({a[1]})) else [])"
+        ))
 
     # ── HTML ESCAPE ──────────────────────────────────────────
     register_lib_call("text", "escape_html",
