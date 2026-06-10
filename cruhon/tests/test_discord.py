@@ -672,3 +672,44 @@ class TestFaz3Shortcuts:
 
     def test_sync_tree(self):
         assert "await __bot__.tree.sync()" in _compile("@discord.sync_tree[]")
+
+
+# ─────────────────────────────────────────────────────────────
+# İTEM 2 — geniş kapsam (stage/forum/automod/ban/guild/sticker)
+# ─────────────────────────────────────────────────────────────
+
+class TestWideCoverage:
+    def test_stage(self):
+        assert "create_stage_channel(" in _compile('@var[s; @discord.create_stage[guild; "Sahne"]]')
+        assert "create_instance(topic=" in _compile('@discord.start_stage[channel; "Canlı yayın"]')
+
+    def test_forum(self):
+        assert "await guild.create_forum(" in _compile('@var[f; @discord.create_forum[guild; "destek"]]')
+        assert "create_thread(name=" in _compile('@discord.create_post[forum; "yardım"; "içerik"]')
+
+    def test_bans(self):
+        assert "await guild.bulk_ban(users)" in _compile("@discord.bulk_ban[guild; users]")
+        assert "async for" in _compile("@var[b; @discord.fetch_bans[guild]]")
+
+    def test_guild_ops(self):
+        assert "await guild.fetch_roles()" in _compile("@var[r; @discord.fetch_roles[guild]]")
+        assert "prune_members(days=7)" in _compile("@var[p; @discord.prune[guild; 7]]")
+        assert "await guild.leave()" in _compile("@discord.leave_guild[guild]")
+
+    def test_sticker(self):
+        assert "create_sticker(name=" in _compile('@var[s; @discord.create_sticker[guild; "blob"]]')
+
+    def test_channel_extra(self):
+        assert "await channel.clone()" in _compile("@var[c; @discord.clone_channel[channel]]")
+        assert "clear_reaction(" in _compile('@discord.clear_reaction[msg; "👍"]')
+
+    def test_automod(self):
+        code = _compile('@discord.automod_keyword[guild; "Küfür"; bad_words]')
+        assert "create_automod_rule(name=" in code
+        assert "AutoModTrigger" in code
+        assert "keyword_filter=bad_words" in code
+        assert "block_message" in code
+
+    def test_member_roles(self):
+        assert "await member.add_roles(role1, role2)" in _compile("@discord.add_roles[member; role1; role2]")
+        assert "member.roles" in _compile("@var[r; @discord.member_roles[member]]")

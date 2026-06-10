@@ -1589,6 +1589,143 @@ def _build_handlers() -> dict:
         return "await __bot__.tree.sync()"
     h["sync_tree"] = sync_tree
 
+    # ── İTEM 2: GENİŞ KAPSAM ──────────────────────────────────
+
+    # ── STAGE KANAL ───────────────────────────────────────────
+    def create_stage(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"Sahne"'
+        return f"await {g}.create_stage_channel({name})"
+    h["create_stage"] = create_stage
+
+    def start_stage(args):
+        ch = args[0] if args else "channel"
+        topic = _as_str(args[1]) if len(args) > 1 else '"Canlı"'
+        return f"await {ch}.create_instance(topic={topic})"
+    h["start_stage"] = start_stage
+
+    def end_stage(args):
+        ch = args[0] if args else "channel"
+        return f"await {ch}.instance.delete() if {ch}.instance else None"
+    h["end_stage"] = end_stage
+
+    # ── FORUM ─────────────────────────────────────────────────
+    def create_forum(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"forum"'
+        return f"await {g}.create_forum({name})"
+    h["create_forum"] = create_forum
+
+    def create_post(args):
+        forum = args[0] if args else "forum"
+        name = _as_str(args[1]) if len(args) > 1 else '"konu"'
+        content = args[2] if len(args) > 2 else '""'
+        return f"await {forum}.create_thread(name={name}, content={content})"
+    h["create_post"] = create_post
+
+    # ── BAN YÖNETİMİ ──────────────────────────────────────────
+    def bulk_ban(args):
+        g = args[0] if args else "guild"
+        users = args[1] if len(args) > 1 else "[]"
+        return f"await {g}.bulk_ban({users})"
+    h["bulk_ban"] = bulk_ban
+
+    def fetch_ban(args):
+        g = args[0] if args else "guild"
+        user = args[1] if len(args) > 1 else "user"
+        return f"await {g}.fetch_ban({user})"
+    h["fetch_ban"] = fetch_ban
+
+    def fetch_bans(args):
+        g = args[0] if args else "guild"
+        return f"[__b async for __b in {g}.bans()]"
+    h["fetch_bans"] = fetch_bans
+
+    # ── GUILD İŞLEMLERİ ───────────────────────────────────────
+    def edit_guild(args):
+        return _call(args[0] if args else "guild", "edit", [], args, 1)
+    h["edit_guild"] = edit_guild
+
+    def fetch_roles(args):
+        return f"await {args[0] if args else 'guild'}.fetch_roles()"
+    h["fetch_roles"] = fetch_roles
+
+    def fetch_channels(args):
+        return f"await {args[0] if args else 'guild'}.fetch_channels()"
+    h["fetch_channels"] = fetch_channels
+
+    def fetch_emojis(args):
+        return f"await {args[0] if args else 'guild'}.fetch_emojis()"
+    h["fetch_emojis"] = fetch_emojis
+
+    def prune(args):
+        g = args[0] if args else "guild"
+        days = args[1] if len(args) > 1 else "30"
+        return f"await {g}.prune_members(days={days})"
+    h["prune"] = prune
+
+    def leave_guild(args):
+        return f"await {args[0] if args else 'guild'}.leave()"
+    h["leave_guild"] = leave_guild
+
+    # ── STICKER ───────────────────────────────────────────────
+    def create_sticker(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"sticker"'
+        return _call(g, "create_sticker", [f"name={name}"], args, 2)
+    h["create_sticker"] = create_sticker
+
+    def delete_sticker(args):
+        return f"await {args[0] if args else 'sticker'}.delete()"
+    h["delete_sticker"] = delete_sticker
+
+    # ── KANAL EK ──────────────────────────────────────────────
+    def clone_channel(args):
+        return f"await {args[0] if args else 'channel'}.clone()"
+    h["clone_channel"] = clone_channel
+
+    def fetch_pins(args):
+        return f"await {args[0] if args else 'channel'}.pins()"
+    h["fetch_pins"] = fetch_pins
+
+    def clear_reaction(args):
+        msg = args[0] if args else "message"
+        emoji = args[1] if len(args) > 1 else '"👍"'
+        return f"await {msg}.clear_reaction({emoji})"
+    h["clear_reaction"] = clear_reaction
+
+    # ── AUTOMOD (basit kelime filtresi kısayolu) ──────────────
+    def automod_keyword(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"Filtre"'
+        keywords = args[2] if len(args) > 2 else "[]"
+        return (
+            f"await {g}.create_automod_rule(name={name}, "
+            f"event_type=discord.AutoModRuleEventType.message_send, "
+            f"trigger=discord.AutoModTrigger("
+            f"type=discord.AutoModRuleTriggerType.keyword, keyword_filter={keywords}), "
+            f"actions=[discord.AutoModRuleAction("
+            f"type=discord.AutoModRuleActionType.block_message)])"
+        )
+    h["automod_keyword"] = automod_keyword
+
+    # ── MEMBER EK ─────────────────────────────────────────────
+    def add_roles(args):
+        m = args[0] if args else "member"
+        roles = ", ".join(a.strip() for a in args[1:] if "=" not in a)
+        return f"await {m}.add_roles({roles})"
+    h["add_roles"] = add_roles
+
+    def remove_roles(args):
+        m = args[0] if args else "member"
+        roles = ", ".join(a.strip() for a in args[1:] if "=" not in a)
+        return f"await {m}.remove_roles({roles})"
+    h["remove_roles"] = remove_roles
+
+    def fetch_member_roles(args):
+        return f"{args[0] if args else 'member'}.roles"
+    h["member_roles"] = fetch_member_roles
+
     return h
 
 
