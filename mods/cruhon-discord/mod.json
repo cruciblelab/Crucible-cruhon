@@ -1,0 +1,8 @@
+{
+  "name": "cruhon-discord",
+  "version": "1.0.0",
+  "description": "Discord bot plugin for Cruhon — build bots without knowing how to code",
+  "author": "Cruhon",
+  "namespace": "discord",
+  "cruhon": ">=1.0.0"
+}

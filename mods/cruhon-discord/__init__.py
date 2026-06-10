@@ -1,0 +1,784 @@
+"""
+cruhon-discord v1.0.0
+======================
+Discord bot plugin for Cruhon.
+"Even people who don't know coding can quickly and easily do whatever they want."
+
+━━━ BOT KURULUM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.setup["TOKEN"]
+  @discord.setup["TOKEN"; prefix="!"; intents="all"]
+  @discord.run[]                       — botu başlat (blocking)
+  @discord.sync_commands[]             — slash komutlarını senkronize et
+
+━━━ OLAY YÖNETİCİLERİ (blok komutlar) ━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.on[ready]
+  @discord.on[message; msg]
+  @discord.on[join; member]            — sunucuya katılma
+  @discord.on[leave; member]           — sunucudan ayrılma
+  @discord.on[reaction_add; reaction; user]
+  @discord.on[reaction_remove; reaction; user]
+  @discord.on[error; ctx; error]
+  @discord.on[guild_join; guild]
+  @discord.on[guild_leave; guild]
+  @discord.on[message_edit; before; after]
+  @discord.on[message_delete; message]
+  ... (tüm discord.py olay isimleri çalışır)
+
+  @discord.command[ping; ctx]           — metin komutu (!ping)
+  @discord.command[greet; ctx; user]    — parametreli komut
+  @discord.slash[hello; "Merhaba der"; ctx]  — slash komutu (/hello)
+  @discord.slash[roll; "Zar at"; ctx; sides]
+  @discord.task[cleanup; minutes=30]   — arka plan görevi
+  @discord.listen[message; msg]        — ek olay dinleyici
+
+━━━ MESAJLAŞMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.send[channel; "mesaj"]
+  @discord.send[channel; "mesaj"; embed=my_embed]
+  @discord.send_embed[channel; embed]
+  @discord.reply[ctx; "mesaj"]
+  @discord.dm[user; "mesaj"]
+  @discord.respond[interaction; "mesaj"]   — slash yanıt
+  @discord.respond[interaction; "mesaj"; ephemeral=True]
+  @discord.defer[interaction]              — yavaş işlem için beklet
+  @discord.followup[interaction; "mesaj"] — defer sonrası gönder
+  @discord.edit[message; "yeni içerik"]
+  @discord.delete[message]
+  @discord.delete[message; delay=5]
+  @discord.pin[message]
+  @discord.unpin[message]
+  @discord.process_commands[msg]          — on_message içinde komutları işle
+
+━━━ TEPKİLER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.react[message; "👍"]
+  @discord.unreact[message; "👍"; user]
+  @discord.clear_reactions[message]
+
+━━━ EMBED (zengin mesaj) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @var[e; @discord.embed["Başlık"; "Açıklama"]]
+  @var[e; @discord.embed["Başlık"; "Açıklama"; color=0xFF0000]]
+  @discord.add_field[e; "Alan Adı"; "Alan Değeri"]
+  @discord.add_field[e; "Alan Adı"; "Alan Değeri"; inline=False]
+  @discord.set_footer[e; "Alt yazı"]
+  @discord.set_footer[e; "Alt yazı"; icon="icon_url"]
+  @discord.set_image[e; "resim_url"]
+  @discord.set_thumbnail[e; "küçük_resim_url"]
+  @discord.set_author[e; "Yazar Adı"]
+  @discord.set_author[e; "Yazar Adı"; icon="avatar_url"]
+
+━━━ MODERASİON ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.ban[member]
+  @discord.ban[member; reason="Spam"; delete_days=1]
+  @discord.unban[guild; user]
+  @discord.kick[member]
+  @discord.kick[member; reason="Kural ihlali"]
+  @discord.timeout[member; minutes=10]
+  @discord.timeout[member; hours=1]
+  @discord.untimeout[member]
+  @discord.add_role[member; role]
+  @discord.remove_role[member; role]
+  @discord.nickname[member; "Yeni İsim"]
+
+━━━ KANAL İŞLEMLERİ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.purge[channel; 10]
+  @discord.create_text[guild; "kanal-adi"]
+  @discord.create_voice[guild; "ses-kanalı"]
+  @discord.delete_channel[channel]
+
+━━━ ARAMA (inline ifade) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @var[m; @discord.get_member[guild; 123456789]]
+  @var[ch; @discord.get_channel[guild; 987654321]]
+  @var[r; @discord.get_role[guild; "Admin"]]
+  @var[u; @discord.find_member[guild; "kullanici_adi"]]
+  @var[me; @discord.me[]]
+
+━━━ KORUMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.ignore_self[msg]            — bot kendi mesajını yoksay
+  @discord.ignore_bots[msg]            — tüm bot mesajlarını yoksay
+  @discord.require_role[ctx; "Admin"] — rol yoksa durdur
+  @discord.require_guild[]             — DM'de çalışmasın
+
+━━━ DURUM & ÇEŞİTLİ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.status["Oyun oynuyor"]
+  @discord.status["Yayın izliyor"; type="watching"]
+  @discord.status["Müzik dinliyor"; type="listening"]
+  @discord.log["mesaj"]               — [bot] önekiyle yazdır
+  @discord.wait_for["message"; timeout=30]
+  @discord.wait_for["message"; timeout=30; check=my_check_fn]
+  @discord.start_task[task_adi]       — arka plan görevini başlat
+  @discord.stop_task[task_adi]        — arka plan görevini durdur
+
+━━━ SES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.join[voice_channel]        — ses kanalına katıl
+  @discord.leave[guild]               — ses kanalından ayrıl
+"""
+
+from __future__ import annotations
+
+
+# ─────────────────────────────────────────────────────────────
+# BLOCK COMMANDS — rewritten by lexer hook before tokenization
+# ─────────────────────────────────────────────────────────────
+
+_BLOCK_CMDS = {"on", "command", "slash", "task", "listen"}
+
+# Friendly event names → discord.py event function names
+_EVENT_MAP = {
+    "ready":           "ready",
+    "message":         "message",
+    "join":            "member_join",
+    "leave":           "member_remove",
+    "member_join":     "member_join",
+    "member_remove":   "member_remove",
+    "reaction_add":    "reaction_add",
+    "reaction_remove": "reaction_remove",
+    "error":           "command_error",
+    "guild_join":      "guild_join",
+    "guild_leave":     "guild_remove",
+    "message_edit":    "message_edit",
+    "message_delete":  "message_delete",
+    "typing":          "typing",
+    "voice":           "voice_state_update",
+}
+
+
+def _discord_preprocess(source: str) -> str:
+    """
+    Lexer pre-hook: rewrites @discord.BLOCK[... to @_dc_BLOCK[...
+    so block commands can be caught by the AT_CMD branch of the parser.
+    Runs on raw source text before tokenization.
+    """
+    for cmd in _BLOCK_CMDS:
+        source = source.replace(f"@discord.{cmd}[", f"@_dc_{cmd}[")
+    return source
+
+
+# ─────────────────────────────────────────────────────────────
+# BLOCK VISITORS
+# ─────────────────────────────────────────────────────────────
+
+def _visit_dc_on(transpiler, node):
+    """
+    @discord.on[ready]
+    @discord.on[message; msg]
+    @discord.on[join; member]
+    → @__bot__.event + async def on_<event>(<params>):
+    """
+    event = node.args[0].strip() if node.args else "ready"
+    params = [a.strip() for a in node.args[1:]]
+
+    event_name = _EVENT_MAP.get(event, event)
+    params_str = ", ".join(params)
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__bot__.event",
+        f"{indent}async def on_{event_name}({params_str}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+
+    # Auto-inject process_commands for message event so text commands keep working
+    if event in ("message", "on_message") and params:
+        msg_var = params[0]
+        lines.append(f"{indent}    await __bot__.process_commands({msg_var})")
+
+    return "\n".join(lines)
+
+
+def _visit_dc_command(transpiler, node):
+    """
+    @discord.command[ping; ctx]
+    @discord.command[greet; ctx; user; aliases="hi,hey"]
+    → @__bot__.command(name=...) + async def <name>(ctx, ...):
+    """
+    args = node.args
+    kwargs = node.kwargs
+
+    name = args[0].strip() if args else "my_command"
+    ctx = args[1].strip() if len(args) > 1 else "ctx"
+    extra_params = [a.strip() for a in args[2:]]
+    params_str = ", ".join([ctx] + extra_params)
+
+    # Build decorator kwargs from node.kwargs
+    dec_kw_parts = []
+    if "aliases" in kwargs:
+        raw = kwargs["aliases"].strip().strip('"\'')
+        alias_list = ", ".join(f'"{a.strip()}"' for a in raw.split(","))
+        dec_kw_parts.append(f"aliases=[{alias_list}]")
+    if "brief" in kwargs:
+        dec_kw_parts.append(f"brief={kwargs['brief']}")
+    if "description" in kwargs:
+        dec_kw_parts.append(f"description={kwargs['description']}")
+    dec_kw = (", " + ", ".join(dec_kw_parts)) if dec_kw_parts else ""
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__bot__.command(name={name!r}{dec_kw})",
+        f"{indent}async def {name}({params_str}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+    return "\n".join(lines)
+
+
+def _visit_dc_slash(transpiler, node):
+    """
+    @discord.slash[hello; "Merhaba der"; ctx]
+    @discord.slash[roll; "Zar at"; ctx; sides]
+    → @__bot__.tree.command(name=..., description=...) + async def <name>(<params>):
+    """
+    args = node.args
+
+    name = args[0].strip() if args else "slash_cmd"
+    description = args[1].strip() if len(args) > 1 else f'"{args[0].strip() if args else "command"}"'
+    ctx = args[2].strip() if len(args) > 2 else "interaction"
+    extra_params = [a.strip() for a in args[3:]]
+    params_str = ", ".join([ctx] + extra_params)
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__bot__.tree.command(name={name!r}, description={description})",
+        f"{indent}async def {name}({params_str}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+    return "\n".join(lines)
+
+
+def _visit_dc_task(transpiler, node):
+    """
+    @discord.task[cleanup; minutes=30]
+    @discord.task[heartbeat; seconds=10]
+    → @__discord_tasks__.loop(...) + async def <name>():
+    """
+    args = node.args
+    kwargs = node.kwargs
+
+    func_name = args[0].strip() if args else "background_task"
+
+    # Time interval — kwarg takes priority, then second positional arg (minutes)
+    if "minutes" in kwargs:
+        loop_kw = f"minutes={kwargs['minutes']}"
+    elif "seconds" in kwargs:
+        loop_kw = f"seconds={kwargs['seconds']}"
+    elif "hours" in kwargs:
+        loop_kw = f"hours={kwargs['hours']}"
+    elif len(args) > 1:
+        loop_kw = f"minutes={args[1].strip()}"
+    else:
+        loop_kw = "minutes=5"
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__discord_tasks__.loop({loop_kw})",
+        f"{indent}async def {func_name}():",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+    return "\n".join(lines)
+
+
+def _visit_dc_listen(transpiler, node):
+    """
+    @discord.listen[message; msg]
+    → @__bot__.listen() + async def on_<event>(<params>):
+    """
+    event = node.args[0].strip() if node.args else "message"
+    params = [a.strip() for a in node.args[1:]]
+
+    event_name = _EVENT_MAP.get(event, event)
+    params_str = ", ".join(params)
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__bot__.listen()",
+        f"{indent}async def on_{event_name}({params_str}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
+# LIB_CALL HANDLERS — all non-block @discord.X[...] commands
+# ─────────────────────────────────────────────────────────────
+
+def _build_handlers() -> dict:
+    """
+    Returns {method_name: handler(args) -> str} for all
+    inline/statement-level discord commands.
+    handler(args) returns a Python expression or statement string.
+    """
+    h = {}
+
+    # ── BOT KURULUM ───────────────────────────────────────────
+
+    def setup(args):
+        token = args[0] if args else '""'
+        prefix = "!"
+        intents_name = "default"
+        for a in args[1:]:
+            a = a.strip()
+            if a.startswith("prefix="):
+                prefix = a[7:].strip().strip("\"'")
+            elif a.startswith("intents="):
+                intents_name = a[8:].strip().strip("\"'")
+        if intents_name == "all":
+            intents = "discord.Intents.all()"
+        elif intents_name == "none":
+            intents = "discord.Intents.none()"
+        else:
+            intents = "discord.Intents.default()"
+        return (
+            f"import discord\n"
+            f"import asyncio\n"
+            f"from discord.ext import commands\n"
+            f"from discord.ext import tasks as __discord_tasks__\n"
+            f"__discord_token__ = {token}\n"
+            f"__bot__ = commands.Bot(command_prefix={prefix!r}, intents={intents})"
+        )
+    h["setup"] = setup
+
+    def run(args):
+        return "__bot__.run(__discord_token__)"
+    h["run"] = run
+
+    def sync_commands(args):
+        return "await __bot__.tree.sync()"
+    h["sync_commands"] = sync_commands
+
+    def start_task(args):
+        name = args[0] if args else "background_task"
+        return f"{name}.start()"
+    h["start_task"] = start_task
+
+    def stop_task(args):
+        name = args[0] if args else "background_task"
+        return f"{name}.stop()"
+    h["stop_task"] = stop_task
+
+    # ── MESAJLAŞMA ────────────────────────────────────────────
+
+    def send(args):
+        if not args:
+            return 'await ctx.send("")'
+        channel = args[0]
+        if len(args) == 1:
+            return f"await {channel}.send()"
+        # Collect kwargs from remaining args
+        extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
+        text = args[1]
+        # If text is a kwarg (e.g. embed=x), shift
+        if "=" in text.strip() and text.strip().split("=")[0].isidentifier():
+            kw_str = ", ".join([text.strip()] + extra_kw)
+            return f"await {channel}.send({kw_str})"
+        if extra_kw:
+            kw_str = ", ".join(extra_kw)
+            return f"await {channel}.send({text}, {kw_str})"
+        return f"await {channel}.send({text})"
+    h["send"] = send
+
+    def send_embed(args):
+        channel = args[0] if args else "channel"
+        embed = args[1] if len(args) > 1 else "embed"
+        return f"await {channel}.send(embed={embed})"
+    h["send_embed"] = send_embed
+
+    def reply(args):
+        target = args[0] if args else "ctx"
+        text = args[1] if len(args) > 1 else '""'
+        extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
+        if extra_kw:
+            return f"await {target}.reply({text}, {', '.join(extra_kw)})"
+        return f"await {target}.reply({text})"
+    h["reply"] = reply
+
+    def dm(args):
+        user = args[0] if args else "user"
+        text = args[1] if len(args) > 1 else '""'
+        return f"await {user}.send({text})"
+    h["dm"] = dm
+
+    def respond(args):
+        interaction = args[0] if args else "interaction"
+        text = args[1] if len(args) > 1 else '""'
+        extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
+        if extra_kw:
+            return f"await {interaction}.response.send_message({text}, {', '.join(extra_kw)})"
+        return f"await {interaction}.response.send_message({text})"
+    h["respond"] = respond
+
+    def respond_embed(args):
+        interaction = args[0] if args else "interaction"
+        embed = args[1] if len(args) > 1 else "embed"
+        ephemeral = any(a.strip() == "ephemeral=True" for a in args[2:])
+        if ephemeral:
+            return f"await {interaction}.response.send_message(embed={embed}, ephemeral=True)"
+        return f"await {interaction}.response.send_message(embed={embed})"
+    h["respond_embed"] = respond_embed
+
+    def defer(args):
+        interaction = args[0] if args else "interaction"
+        ephemeral = len(args) > 1 and args[1].strip() in ("True", "ephemeral=True")
+        if ephemeral:
+            return f"await {interaction}.response.defer(ephemeral=True)"
+        return f"await {interaction}.response.defer()"
+    h["defer"] = defer
+
+    def followup(args):
+        interaction = args[0] if args else "interaction"
+        text = args[1] if len(args) > 1 else '""'
+        extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
+        if extra_kw:
+            return f"await {interaction}.followup.send({text}, {', '.join(extra_kw)})"
+        return f"await {interaction}.followup.send({text})"
+    h["followup"] = followup
+
+    def edit(args):
+        message = args[0] if args else "message"
+        content = args[1] if len(args) > 1 else '""'
+        return f"await {message}.edit(content={content})"
+    h["edit"] = edit
+
+    def delete(args):
+        message = args[0] if args else "message"
+        for a in args[1:]:
+            if a.strip().startswith("delay="):
+                return f"await {message}.delete(delay={a.strip()[6:]})"
+        return f"await {message}.delete()"
+    h["delete"] = delete
+
+    def pin(args):
+        return f"await {args[0] if args else 'message'}.pin()"
+    h["pin"] = pin
+
+    def unpin(args):
+        return f"await {args[0] if args else 'message'}.unpin()"
+    h["unpin"] = unpin
+
+    def process_commands(args):
+        msg = args[0] if args else "message"
+        return f"await __bot__.process_commands({msg})"
+    h["process_commands"] = process_commands
+
+    # ── TEPKİLER ──────────────────────────────────────────────
+
+    def react(args):
+        message = args[0] if args else "message"
+        emoji = args[1] if len(args) > 1 else '"👍"'
+        return f"await {message}.add_reaction({emoji})"
+    h["react"] = react
+
+    def unreact(args):
+        message = args[0] if args else "message"
+        emoji = args[1] if len(args) > 1 else '"👍"'
+        user = args[2] if len(args) > 2 else "__bot__.user"
+        return f"await {message}.remove_reaction({emoji}, {user})"
+    h["unreact"] = unreact
+
+    def clear_reactions(args):
+        return f"await {args[0] if args else 'message'}.clear_reactions()"
+    h["clear_reactions"] = clear_reactions
+
+    # ── EMBED ──────────────────────────────────────────────────
+
+    def embed(args):
+        title = args[0] if args else '""'
+        description = args[1] if len(args) > 1 else '""'
+        color_val = None
+        for a in args[2:]:
+            a = a.strip()
+            if a.startswith("color=") or a.startswith("colour="):
+                color_val = a.split("=", 1)[1]
+        if color_val:
+            return f"discord.Embed(title={title}, description={description}, color={color_val})"
+        return f"discord.Embed(title={title}, description={description})"
+    h["embed"] = embed
+
+    def add_field(args):
+        emb = args[0] if args else "embed"
+        name = args[1] if len(args) > 1 else '""'
+        value = args[2] if len(args) > 2 else '""'
+        inline = True
+        for a in args[3:]:
+            if a.strip() == "inline=False":
+                inline = False
+        return f"{emb}.add_field(name={name}, value={value}, inline={inline})"
+    h["add_field"] = add_field
+
+    def set_footer(args):
+        emb = args[0] if args else "embed"
+        text = args[1] if len(args) > 1 else '""'
+        for a in args[2:]:
+            if a.strip().startswith("icon="):
+                return f"{emb}.set_footer(text={text}, icon_url={a.strip()[5:]})"
+        return f"{emb}.set_footer(text={text})"
+    h["set_footer"] = set_footer
+
+    def set_image(args):
+        emb = args[0] if args else "embed"
+        url = args[1] if len(args) > 1 else '""'
+        return f"{emb}.set_image(url={url})"
+    h["set_image"] = set_image
+
+    def set_thumbnail(args):
+        emb = args[0] if args else "embed"
+        url = args[1] if len(args) > 1 else '""'
+        return f"{emb}.set_thumbnail(url={url})"
+    h["set_thumbnail"] = set_thumbnail
+
+    def set_author(args):
+        emb = args[0] if args else "embed"
+        name = args[1] if len(args) > 1 else '""'
+        for a in args[2:]:
+            if a.strip().startswith("icon="):
+                return f"{emb}.set_author(name={name}, icon_url={a.strip()[5:]})"
+        return f"{emb}.set_author(name={name})"
+    h["set_author"] = set_author
+
+    # ── MODERASİON ────────────────────────────────────────────
+
+    def ban(args):
+        member = args[0] if args else "member"
+        kw_parts = []
+        for a in args[1:]:
+            a = a.strip()
+            if a.startswith("reason="):
+                kw_parts.append(f"reason={a[7:]}")
+            elif a.startswith("delete_days="):
+                kw_parts.append(f"delete_message_days={a[12:]}")
+        kw = (", " + ", ".join(kw_parts)) if kw_parts else ""
+        return f"await {member}.ban({kw.lstrip(', ')})"
+    h["ban"] = ban
+
+    def unban(args):
+        guild = args[0] if args else "guild"
+        user = args[1] if len(args) > 1 else "user"
+        for a in args[2:]:
+            if a.strip().startswith("reason="):
+                return f"await {guild}.unban({user}, reason={a.strip()[7:]})"
+        return f"await {guild}.unban({user})"
+    h["unban"] = unban
+
+    def kick(args):
+        member = args[0] if args else "member"
+        for a in args[1:]:
+            if a.strip().startswith("reason="):
+                return f"await {member}.kick(reason={a.strip()[7:]})"
+        return f"await {member}.kick()"
+    h["kick"] = kick
+
+    def timeout(args):
+        member = args[0] if args else "member"
+        dt = "__import__('datetime').timedelta"
+        for a in args[1:]:
+            a = a.strip()
+            if a.startswith("minutes="):
+                return f"await {member}.timeout({dt}(minutes={a[8:]}))"
+            if a.startswith("seconds="):
+                return f"await {member}.timeout({dt}(seconds={a[8:]}))"
+            if a.startswith("hours="):
+                return f"await {member}.timeout({dt}(hours={a[6:]}))"
+            if not "=" in a:
+                return f"await {member}.timeout({dt}(minutes={a}))"
+        return f"await {member}.timeout({dt}(minutes=10))"
+    h["timeout"] = timeout
+
+    def untimeout(args):
+        return f"await {args[0] if args else 'member'}.timeout(None)"
+    h["untimeout"] = untimeout
+
+    def add_role(args):
+        member = args[0] if args else "member"
+        role = args[1] if len(args) > 1 else "role"
+        return f"await {member}.add_roles({role})"
+    h["add_role"] = add_role
+
+    def remove_role(args):
+        member = args[0] if args else "member"
+        role = args[1] if len(args) > 1 else "role"
+        return f"await {member}.remove_roles({role})"
+    h["remove_role"] = remove_role
+
+    def nickname(args):
+        member = args[0] if args else "member"
+        nick = args[1] if len(args) > 1 else '""'
+        return f"await {member}.edit(nick={nick})"
+    h["nickname"] = nickname
+
+    # ── KANALLAR ──────────────────────────────────────────────
+
+    def purge(args):
+        channel = args[0] if args else "channel"
+        limit = args[1] if len(args) > 1 else "10"
+        return f"await {channel}.purge(limit={limit})"
+    h["purge"] = purge
+
+    def create_text(args):
+        guild = args[0] if args else "guild"
+        name = args[1] if len(args) > 1 else '"yeni-kanal"'
+        for a in args[2:]:
+            if a.strip().startswith("category="):
+                return f"await {guild}.create_text_channel({name}, category={a.strip()[9:]})"
+        return f"await {guild}.create_text_channel({name})"
+    h["create_text"] = create_text
+
+    def create_voice(args):
+        guild = args[0] if args else "guild"
+        name = args[1] if len(args) > 1 else '"yeni-ses"'
+        return f"await {guild}.create_voice_channel({name})"
+    h["create_voice"] = create_voice
+
+    def delete_channel(args):
+        return f"await {args[0] if args else 'channel'}.delete()"
+    h["delete_channel"] = delete_channel
+
+    # ── ARAMA (expression olarak döner) ───────────────────────
+
+    def get_member(args):
+        guild = args[0] if args else "guild"
+        id_ = args[1] if len(args) > 1 else "0"
+        return f"{guild}.get_member({id_})"
+    h["get_member"] = get_member
+
+    def get_channel(args):
+        guild = args[0] if args else "guild"
+        id_ = args[1] if len(args) > 1 else "0"
+        return f"{guild}.get_channel({id_})"
+    h["get_channel"] = get_channel
+
+    def get_role(args):
+        guild = args[0] if args else "guild"
+        name = args[1] if len(args) > 1 else '""'
+        return f"discord.utils.get({guild}.roles, name={name})"
+    h["get_role"] = get_role
+
+    def find_member(args):
+        guild = args[0] if args else "guild"
+        name = args[1] if len(args) > 1 else '""'
+        return f"discord.utils.find(lambda __m__: __m__.name == {name}, {guild}.members)"
+    h["find_member"] = find_member
+
+    def me(args):
+        return "__bot__.user"
+    h["me"] = me
+
+    def mention(args):
+        return f"{args[0] if args else 'member'}.mention"
+    h["mention"] = mention
+
+    # ── KORUMA ────────────────────────────────────────────────
+
+    def ignore_self(args):
+        msg = args[0] if args else "message"
+        return f"if {msg}.author == __bot__.user: return"
+    h["ignore_self"] = ignore_self
+
+    def ignore_bots(args):
+        msg = args[0] if args else "message"
+        return f"if {msg}.author.bot: return"
+    h["ignore_bots"] = ignore_bots
+
+    def require_role(args):
+        ctx = args[0] if args else "ctx"
+        role = args[1] if len(args) > 1 else '"member"'
+        err = args[2] if len(args) > 2 else '"Bu komutu kullanmak için yetkiniz yok."'
+        return (
+            f"if not discord.utils.get({ctx}.author.roles, name={role}): "
+            f"await {ctx}.send({err}); return"
+        )
+    h["require_role"] = require_role
+
+    def require_guild(args):
+        ctx = args[0] if args else "ctx"
+        return (
+            f'if {ctx}.guild is None: '
+            f'await {ctx}.send("Bu komut sadece sunucularda kullanılabilir."); return'
+        )
+    h["require_guild"] = require_guild
+
+    # ── DURUM & ÇEŞİTLİ ──────────────────────────────────────
+
+    def status(args):
+        text = args[0] if args else '""'
+        activity_type = "game"
+        for a in args[1:]:
+            if a.strip().startswith("type="):
+                activity_type = a.strip()[5:].strip("\"'").lower()
+        if activity_type == "watching":
+            return (
+                f"await __bot__.change_presence("
+                f"activity=discord.Activity(type=discord.ActivityType.watching, name={text}))"
+            )
+        if activity_type == "listening":
+            return (
+                f"await __bot__.change_presence("
+                f"activity=discord.Activity(type=discord.ActivityType.listening, name={text}))"
+            )
+        if activity_type == "streaming":
+            url = args[2] if len(args) > 2 else '""'
+            return (
+                f"await __bot__.change_presence("
+                f"activity=discord.Streaming(name={text}, url={url}))"
+            )
+        return f"await __bot__.change_presence(activity=discord.Game(name={text}))"
+    h["status"] = status
+
+    def log(args):
+        text = args[0] if args else '""'
+        return f'print("[bot]", {text})'
+    h["log"] = log
+
+    def wait_for(args):
+        event = args[0] if args else '"message"'
+        kw_parts = []
+        for a in args[1:]:
+            a = a.strip()
+            if a.startswith("timeout=") or a.startswith("check="):
+                kw_parts.append(a)
+        if kw_parts:
+            return f"await __bot__.wait_for({event}, {', '.join(kw_parts)})"
+        return f"await __bot__.wait_for({event})"
+    h["wait_for"] = wait_for
+
+    # ── SES ───────────────────────────────────────────────────
+
+    def join(args):
+        channel = args[0] if args else "voice_channel"
+        return f"await {channel}.connect()"
+    h["join"] = join
+
+    def leave(args):
+        guild = args[0] if args else "guild"
+        return f"await {guild}.voice_client.disconnect()"
+    h["leave"] = leave
+
+    return h
+
+
+# ─────────────────────────────────────────────────────────────
+# PLUGIN ENTRY POINT
+# ─────────────────────────────────────────────────────────────
+
+def register(api):
+    # Register "discord" as a lib so @discord.X → LibCallNode (code gen)
+    api.lib("discord", "discord")
+
+    # Lexer hook: rewrite @discord.BLOCK[... → @_dc_BLOCK[...
+    api.lexer_hook(_discord_preprocess)
+
+    # Block commands (event handlers, text commands, slash commands, tasks)
+    api.block_command("_dc_on",      _visit_dc_on)
+    api.block_command("_dc_command", _visit_dc_command)
+    api.block_command("_dc_slash",   _visit_dc_slash)
+    api.block_command("_dc_task",    _visit_dc_task)
+    api.block_command("_dc_listen",  _visit_dc_listen)
+
+    # Lib call handlers for all inline/statement discord commands
+    for method, handler in _build_handlers().items():
+        api.lib_call("discord", method, handler)

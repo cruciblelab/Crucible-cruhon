@@ -1,0 +1,68 @@
+# ════════════════════════════════════════════════════════════
+#  ÖRNEK DISCORD BOTU — 3 katmanın hepsi tek dosyada
+#  Kopyala, TOKEN'i değiştir, çalıştır:  cruhon run ornek_bot.clpy
+# ════════════════════════════════════════════════════════════
+
+@import[random]
+
+# Botu kur — token'ı kendi botunun token'ı ile değiştir
+@discord.setup["BURAYA_TOKEN"; prefix="!"; intents="all"]
+
+
+# ── KATMAN 1: Kod bilmeyen — basit komutlar ──────────────────
+
+@discord.on[ready]
+    @discord.log["Bot çalışıyor!"]
+    @discord.status["seni izliyor"; type="watching"]
+@end
+
+@discord.command[selam; ctx]
+    @discord.reply[ctx; "Merhaba! 👋"]
+@end
+
+
+# ── KATMAN 2: Biraz bilen — if/else, değişken, döngü ─────────
+
+@discord.command[zar; ctx]
+    @var[sonuc; random.randint(1, 6)]
+    @if[sonuc == 6]
+        @discord.reply[ctx; "🎉 Altı geldi, kazandın!"]
+    @else
+        @discord.reply[ctx; f"🎲 Zar: {sonuc}"]
+    @end
+@end
+
+@discord.command[temizle; ctx]
+    @discord.require_role[ctx; "Yetkili"]
+    @discord.purge[ctx.channel; 10]
+    @discord.reply[ctx; "10 mesaj silindi."]
+@end
+
+
+# ── KATMAN 3: Cruhon'u iyi bilen — slash, embed, API ─────────
+
+@discord.slash[bilgi; "Sunucu bilgisi gösterir"; ctx]
+    @var[g; ctx.guild]
+    @var[e; @discord.embed[g.name; "Sunucu istatistikleri"; color=0x3498db]]
+    @discord.add_field[e; "Üye Sayısı"; g.member_count]
+    @discord.add_field[e; "Oluşturulma"; g.created_at]
+    @discord.set_thumbnail[e; g.icon.url]
+    @discord.respond_embed[ctx; e]
+@end
+
+# Harici API'den veri çekme — BDFD'nin yapamadığı şey
+@discord.slash[sozluk; "Kelime anlamı"; ctx; kelime]
+    @discord.defer[ctx]
+    @var[cevap; @http.get[f"https://api.dictionaryapi.dev/api/v2/entries/en/{kelime}"]]
+    @var[veri; cevap.json()]
+    @if[isinstance(veri, list)]
+        @var[anlam; veri[0]["meanings"][0]["definitions"][0]["definition"]]
+        @discord.followup[ctx; f"**{kelime}**: {anlam}"]
+    @else
+        @discord.followup[ctx; "Kelime bulunamadı."]
+    @end
+@end
+
+
+# Botu başlat (en sonda olmalı)
+@discord.run[]
