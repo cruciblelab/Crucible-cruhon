@@ -1,9 +1,8 @@
 """
 Mail stdlib wrappers for Cruhon — @mail.*
 
-Covers smtplib / email so a non-coder can send emails, build messages
-and manage attachments with one-liners, without knowing SMTP, MIMEText
-or MIMEMultipart.
+Covers smtplib / imaplib / email so a non-coder can send and receive emails,
+build messages and manage attachments with one-liners.
 
 ━━━ SEND ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @mail.send[to; subject; body]
@@ -31,6 +30,16 @@ or MIMEMultipart.
   @mail.subject[msg]                → subject string
   @mail.sender[msg]                 → From header string
   @mail.body[msg]                   → decoded plain-text body
+
+━━━ IMAP (receive) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @mail.imap_connect[host; user; pass_]       → IMAP4_SSL logged in
+  @mail.imap_connect[host; port; user; pass_] → with custom port
+  @mail.imap_list[conn]                       → list of folder names
+  @mail.imap_select[conn; folder]             → select folder (returns count)
+  @mail.imap_search[conn; query]              → list of message IDs (ALL/UNSEEN/…)
+  @mail.imap_fetch[conn; uid]                 → email message object
+  @mail.imap_fetch_all[conn; folder; n]       → last n messages as list
+  @mail.imap_close[conn]                      — logout and close
 """
 from ..registry import register_lib, register_lib_call
 
@@ -155,6 +164,69 @@ def _attach(msg, file_path: str):
     msg.attach(part)
 
 
+def _imap_connect(host: str, *args):
+    import imaplib
+    if len(args) == 3:
+        port, user, pass_ = int(args[0]), str(args[1]), str(args[2])
+    else:
+        port, user, pass_ = 993, str(args[0]), str(args[1])
+    conn = imaplib.IMAP4_SSL(str(host), port)
+    conn.login(user, pass_)
+    return conn
+
+
+def _imap_list(conn) -> list:
+    status, folders = conn.list()
+    result = []
+    for f in folders:
+        if isinstance(f, bytes):
+            parts = f.decode().split('"')
+            result.append(parts[-1].strip() if len(parts) > 1 else f.decode())
+    return result
+
+
+def _imap_select(conn, folder: str = "INBOX"):
+    status, data = conn.select(str(folder))
+    return int(data[0]) if data and data[0] else 0
+
+
+def _imap_search(conn, query: str = "ALL") -> list:
+    status, data = conn.search(None, str(query))
+    ids = data[0].split() if data and data[0] else []
+    return [uid.decode() if isinstance(uid, bytes) else str(uid) for uid in ids]
+
+
+def _imap_fetch(conn, uid: str):
+    import email as _email
+    status, data = conn.fetch(str(uid), "(RFC822)")
+    for part in data:
+        if isinstance(part, tuple):
+            raw = part[1]
+            if isinstance(raw, bytes):
+                return _email.message_from_bytes(raw)
+            return _email.message_from_string(str(raw))
+    return None
+
+
+def _imap_fetch_all(conn, folder: str = "INBOX", n: int = 10) -> list:
+    _imap_select(conn, folder)
+    ids = _imap_search(conn, "ALL")
+    result = []
+    for uid in ids[-int(n):]:
+        msg = _imap_fetch(conn, uid)
+        if msg:
+            result.append(msg)
+    return result
+
+
+def _imap_close(conn):
+    try:
+        conn.close()
+    except Exception:
+        pass
+    conn.logout()
+
+
 def _body(msg) -> str:
     if msg.is_multipart():
         for part in msg.walk():
@@ -228,3 +300,35 @@ def register():
 
     register_lib_call("mail", "body",
         lambda a: f"{_ref('_body')}({a[0]})")
+
+    # ── IMAP (receive) ───────────────────────────────────────────
+    register_lib_call("mail", "imap_connect",
+        lambda a: f"{_ref('_imap_connect')}({', '.join(a)})")
+
+    register_lib_call("mail", "imap_list",
+        lambda a: f"{_ref('_imap_list')}({a[0]})")
+
+    register_lib_call("mail", "imap_select",
+        lambda a: (
+            f"{_ref('_imap_select')}({a[0]}, {a[1]})" if len(a) > 1 else
+            f"{_ref('_imap_select')}({a[0]})"
+        ))
+
+    register_lib_call("mail", "imap_search",
+        lambda a: (
+            f"{_ref('_imap_search')}({a[0]}, {a[1]})" if len(a) > 1 else
+            f"{_ref('_imap_search')}({a[0]})"
+        ))
+
+    register_lib_call("mail", "imap_fetch",
+        lambda a: f"{_ref('_imap_fetch')}({a[0]}, {a[1]})")
+
+    register_lib_call("mail", "imap_fetch_all",
+        lambda a: (
+            f"{_ref('_imap_fetch_all')}({a[0]}, {a[1]}, {a[2] if len(a)>2 else 10})"
+            if len(a) > 1 else
+            f"{_ref('_imap_fetch_all')}({a[0]})"
+        ))
+
+    register_lib_call("mail", "imap_close",
+        lambda a: f"{_ref('_imap_close')}({a[0]})")

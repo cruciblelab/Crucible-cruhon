@@ -119,6 +119,39 @@ def _handler_form(args):
     return f"requests.post({_chk(url)}, data={data}{_timeout(args,2)}{_kw(args,2)})"
 
 
+def _handler_upload(args):
+    url   = args[0] if args else '""'
+    field = args[1] if len(args) > 1 else '"file"'
+    path  = args[2] if len(args) > 2 else '"file"'
+    return (
+        f"(lambda _u, _f, _p: requests.post({_chk('_u')}, "
+        f"files={{_f: open(_p, 'rb')}}{_timeout(args,3)}{_kw(args,3)}))({url}, {field}, {path})"
+    )
+
+
+def _handler_auth_get(args):
+    url  = args[0] if args else '""'
+    user = args[1] if len(args) > 1 else '""'
+    pw   = args[2] if len(args) > 2 else '""'
+    return f"requests.get({_chk(url)}, auth=({user}, {pw}){_timeout(args,3)}{_kw(args,3)})"
+
+
+def _handler_auth_post(args):
+    url  = args[0] if args else '""'
+    data = args[1] if len(args) > 1 else "None"
+    user = args[2] if len(args) > 2 else '""'
+    pw   = args[3] if len(args) > 3 else '""'
+    return f"requests.post({_chk(url)}, json={data}, auth=({user}, {pw}){_timeout(args,4)}{_kw(args,4)})"
+
+
+def _handler_elapsed(args):
+    return f"{args[0] if args else 'res'}.elapsed.total_seconds()"
+
+
+def _handler_encoding(args):
+    return f"{args[0] if args else 'res'}.encoding"
+
+
 # ── SESSION ───────────────────────────────────────────────────────────────────
 
 def _handler_session(args):
@@ -279,8 +312,15 @@ HTTP_HANDLERS = {
     "cookies":          _handler_cookies,
     "url":              _handler_url,
     "raise_for_status": _handler_raise_for_status,
+    # upload / auth
+    "upload":           _handler_upload,
+    "auth_get":         _handler_auth_get,
+    "auth_post":        _handler_auth_post,
     # download
     "download":         _handler_download,
+    # response extras
+    "elapsed":          _handler_elapsed,
+    "encoding":         _handler_encoding,
     # async
     "async_get":        _handler_async_get,
     "async_post":       _handler_async_post,

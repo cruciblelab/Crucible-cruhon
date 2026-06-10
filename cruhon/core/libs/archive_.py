@@ -1,8 +1,8 @@
 """
 Archive stdlib wrappers for Cruhon — @archive.*
 
-Covers zipfile / tarfile / gzip / shutil so a non-coder can compress,
-extract, inspect and manage archives without knowing any module names.
+Covers zipfile / tarfile / gzip / bz2 / lzma / shutil so a non-coder can
+compress, extract, inspect and manage archives without knowing any module names.
 
 ━━━ ZIP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @archive.zip[src; dest]           — zip file/dir → dest.zip
@@ -21,6 +21,14 @@ extract, inspect and manage archives without knowing any module names.
 ━━━ GZIP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @archive.gzip[src; dest]          — compress single file with gzip
   @archive.gunzip[src; dest]        — decompress .gz file
+
+━━━ BZIP2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @archive.bzip2[src; dest]         — compress single file with bzip2
+  @archive.bunzip2[src; dest]       — decompress .bz2 file
+
+━━━ LZMA / XZ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @archive.lzma[src; dest]          — compress single file with lzma/xz
+  @archive.unlzma[src; dest]        — decompress .xz / .lzma file
 
 ━━━ INSPECT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @archive.is_zip[path]             → bool
@@ -122,6 +130,30 @@ def _gunzip(src: str, dest: str):
         shutil.copyfileobj(f_in, f_out)
 
 
+def _bzip2(src: str, dest: str):
+    import bz2, shutil
+    with open(str(src), "rb") as f_in, bz2.open(str(dest), "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+
+def _bunzip2(src: str, dest: str):
+    import bz2, shutil
+    with bz2.open(str(src), "rb") as f_in, open(str(dest), "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+
+def _lzma_compress(src: str, dest: str):
+    import lzma, shutil
+    with open(str(src), "rb") as f_in, lzma.open(str(dest), "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+
+def _lzma_decompress(src: str, dest: str):
+    import lzma, shutil
+    with lzma.open(str(src), "rb") as f_in, open(str(dest), "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+
 def _archive_size(path: str) -> int:
     import zipfile, tarfile
     path = str(path)
@@ -180,6 +212,20 @@ def register():
 
     register_lib_call("archive", "gunzip",
         lambda a: f"{_ref('_gunzip')}({a[0]}, {a[1]})")
+
+    # ── BZIP2 ─────────────────────────────────────────────────────
+    register_lib_call("archive", "bzip2",
+        lambda a: f"{_ref('_bzip2')}({a[0]}, {a[1]})")
+
+    register_lib_call("archive", "bunzip2",
+        lambda a: f"{_ref('_bunzip2')}({a[0]}, {a[1]})")
+
+    # ── LZMA / XZ ─────────────────────────────────────────────────
+    register_lib_call("archive", "lzma",
+        lambda a: f"{_ref('_lzma_compress')}({a[0]}, {a[1]})")
+
+    register_lib_call("archive", "unlzma",
+        lambda a: f"{_ref('_lzma_decompress')}({a[0]}, {a[1]})")
 
     # ── INSPECT ──────────────────────────────────────────────────
     register_lib_call("archive", "is_zip",

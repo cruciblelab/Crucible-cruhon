@@ -10,8 +10,20 @@ any of those module names.
   @crypto.sha1[s]              → hex digest
   @crypto.sha256[s]            → hex digest
   @crypto.sha512[s]            → hex digest
+  @crypto.sha3_256[s]          → SHA3-256 hex digest
+  @crypto.sha3_512[s]          → SHA3-512 hex digest
+  @crypto.blake2b[s]           → BLAKE2b hex digest
+  @crypto.blake2s[s]           → BLAKE2s hex digest
   @crypto.hash[algo; s]        → hex digest with any hashlib algo name
   @crypto.hash_bytes[algo; b]  → hash raw bytes input
+  @crypto.hash_file[algo; path] → hash file contents (any hashlib algo)
+
+━━━ KEY DERIVATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @crypto.pbkdf2[password; salt]              → PBKDF2-HMAC-SHA256 hex (100k iters)
+  @crypto.pbkdf2[password; salt; iters]       → custom iterations
+  @crypto.pbkdf2[password; salt; iters; algo] → custom algo
+  @crypto.scrypt[password; salt]              → scrypt hex (n=16384)
+  @crypto.scrypt[password; salt; n; r; p]     → custom params
 
 ━━━ HMAC ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @crypto.hmac[key; msg]           → HMAC-SHA256 hex digest
@@ -57,7 +69,8 @@ def register():
     register_lib("crypto", None)
 
     # ── HASH ─────────────────────────────────────────────────
-    for algo in ("md5", "sha1", "sha256", "sha512"):
+    for algo in ("md5", "sha1", "sha256", "sha512", "sha3_256", "sha3_512",
+                 "blake2b", "blake2s"):
         register_lib_call("crypto", algo,
             (lambda a: lambda args: f"{_HL}.{a}({_to_bytes(args[0])}).hexdigest()")(algo))
 
@@ -67,6 +80,28 @@ def register():
     _empty = 'b""'
     register_lib_call("crypto", "hash_bytes",
         lambda a: f"{_HL}.new({a[0]}, {a[1] if len(a)>1 else _empty}).hexdigest()")
+
+    register_lib_call("crypto", "hash_file",
+        lambda a: (
+            f"(lambda _h, _p: (_h.update(open(_p, 'rb').read()), _h.hexdigest())[1])"
+            f"({_HL}.new({a[0]}), {a[1]})"
+        ))
+
+    # ── KEY DERIVATION ────────────────────────────────────────
+    register_lib_call("crypto", "pbkdf2",
+        lambda a: (
+            f"{_HL}.pbkdf2_hmac({a[3] if len(a)>3 else repr('sha256')}, "
+            f"{_to_bytes(a[0])}, {_to_bytes(a[1])}, "
+            f"int({a[2] if len(a)>2 else 100000})).hex()"
+        ))
+
+    register_lib_call("crypto", "scrypt",
+        lambda a: (
+            f"{_HL}.scrypt({_to_bytes(a[0])}, salt={_to_bytes(a[1])}, "
+            f"n={a[2] if len(a)>2 else 16384}, "
+            f"r={a[3] if len(a)>3 else 8}, "
+            f"p={a[4] if len(a)>4 else 1}).hex()"
+        ))
 
     # ── HMAC ─────────────────────────────────────────────────
     register_lib_call("crypto", "hmac",

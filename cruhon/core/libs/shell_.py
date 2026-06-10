@@ -1,7 +1,7 @@
 """
 Shell / system wrappers for Cruhon — @shell.*
 
-Covers subprocess / os / sys / shlex so a non-coder can run system
+Covers subprocess / os / sys / shutil so a non-coder can run system
 commands, check exit codes, read output and manage the process environment
 without knowing Popen, PIPE, or communicate().
 
@@ -14,7 +14,18 @@ without knowing Popen, PIPE, or communicate().
   @shell.code[cmd]                 → exit code int
   @shell.ok[cmd]                   → bool (exit code == 0)
   @shell.bg[cmd]                   → Popen handle (non-blocking)
+  @shell.bg_stdin[cmd]             → Popen with stdin/stdout PIPE (text mode)
   @shell.pipe[cmd1; cmd2]          → stdout of cmd1 piped into cmd2
+
+━━━ PROCESS CONTROL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @shell.kill[proc]                — proc.kill()
+  @shell.terminate[proc]           — proc.terminate()
+  @shell.wait[proc]                → proc.wait()
+  @shell.wait[proc; timeout]       → proc.wait(timeout=n)
+  @shell.communicate[proc]         → (stdout, stderr) tuple
+  @shell.communicate[proc; input]  → with stdin data
+  @shell.poll[proc]                → returncode or None
+  @shell.returncode[proc]          → proc.returncode
 
 ━━━ LOOKUP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @shell.which[cmd]                → full path or None
@@ -25,6 +36,7 @@ without knowing Popen, PIPE, or communicate().
   @shell.env[key; default]
   @shell.env_set[key; value]       — set env var for current process
   @shell.env_del[key]              — unset env var
+  @shell.env_all[]                 → full dict copy of os.environ
   @shell.cwd[]                     → current working directory
   @shell.cd[path]                  — change working directory
   @shell.args[]                    → sys.argv list
@@ -32,6 +44,10 @@ without knowing Popen, PIPE, or communicate().
   @shell.platform[]                → sys.platform string
   @shell.python_version[]          → Python version string
   @shell.pid[]                     → current process PID
+  @shell.cpu_count[]               → os.cpu_count()
+  @shell.hostname[]                → socket.gethostname()
+  @shell.username[]                → getpass.getuser()
+  @shell.home[]                    → user home directory
 """
 from ..registry import register_lib, register_lib_call
 
@@ -75,8 +91,36 @@ def register():
     register_lib_call("shell", "bg",
         lambda a: f"{_SP}.Popen({a[0]}, shell=True)")
 
+    register_lib_call("shell", "bg_stdin",
+        lambda a: f"{_SP}.Popen({a[0]}, shell=True, stdin={_SP}.PIPE, stdout={_SP}.PIPE, text=True)")
+
     register_lib_call("shell", "pipe",
         lambda a: _pipe_cmd(a[0], a[1]))
+
+    # ── PROCESS CONTROL ───────────────────────────────────────
+    register_lib_call("shell", "kill",
+        lambda a: f"{a[0]}.kill()")
+
+    register_lib_call("shell", "terminate",
+        lambda a: f"{a[0]}.terminate()")
+
+    register_lib_call("shell", "wait",
+        lambda a: (
+            f"{a[0]}.wait(timeout={a[1]})" if len(a) > 1 else
+            f"{a[0]}.wait()"
+        ))
+
+    register_lib_call("shell", "communicate",
+        lambda a: (
+            f"{a[0]}.communicate(input={a[1]})" if len(a) > 1 else
+            f"{a[0]}.communicate()"
+        ))
+
+    register_lib_call("shell", "poll",
+        lambda a: f"{a[0]}.poll()")
+
+    register_lib_call("shell", "returncode",
+        lambda a: f"{a[0]}.returncode")
 
     # ── LOOKUP ───────────────────────────────────────────────
     register_lib_call("shell", "which",
@@ -118,3 +162,18 @@ def register():
 
     register_lib_call("shell", "pid",
         lambda a: f"{_OS}.getpid()")
+
+    register_lib_call("shell", "env_all",
+        lambda a: f"dict({_OS}.environ)")
+
+    register_lib_call("shell", "cpu_count",
+        lambda a: f"{_OS}.cpu_count()")
+
+    register_lib_call("shell", "hostname",
+        lambda a: "__import__('socket').gethostname()")
+
+    register_lib_call("shell", "username",
+        lambda a: "__import__('getpass').getuser()")
+
+    register_lib_call("shell", "home",
+        lambda a: f"{_OS}.path.expanduser('~')")

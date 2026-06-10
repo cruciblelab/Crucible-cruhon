@@ -1,14 +1,13 @@
 """
 Date & time stdlib wrappers for Cruhon — @date.*
 
-Covers datetime / date / time / calendar so a non-coder can do every common
-date operation (now, format, parse, add/subtract, diff, weekday, components)
-without writing strftime/timedelta by hand.
+Covers datetime / date / time / calendar / zoneinfo so a non-coder can do
+every common date operation without writing strftime/timedelta by hand.
 
 ━━━ CURRENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @date.now[]                     → datetime.now()
   @date.today[]                   → date.today()
-  @date.utcnow[]                  → datetime.utcnow()
+  @date.utcnow[]                  → datetime aware UTC now
   @date.timestamp[]               → current Unix timestamp (float)
 
 ━━━ FORMAT / PARSE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26,18 +25,34 @@ without writing strftime/timedelta by hand.
   @date.diff[a; b]                → timedelta (a - b)
   @date.diff_days[a; b]           → whole days between a and b
   @date.diff_seconds[a; b]        → total seconds between a and b
+  @date.total_seconds[td]         → timedelta.total_seconds()
+  @date.timedelta[days=; hours=; minutes=; seconds=; weeks=] → timedelta
+
+━━━ MODIFY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @date.replace[dt; year=; month=; day=; hour=; minute=; second=]
+  @date.combine[date; time]       → datetime.combine(date, time)
 
 ━━━ COMPONENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @date.year[dt]   @date.month[dt]   @date.day[dt]
   @date.hour[dt]   @date.minute[dt]  @date.second[dt]
+  @date.microsecond[dt]           → microsecond component
   @date.weekday[dt]               → 0=Monday … 6=Sunday
   @date.weekday_name[dt]          → "Monday" …
   @date.month_name[dt]            → "January" …
   @date.is_weekend[dt]            → bool
+  @date.isocalendar[dt]           → (year, week, weekday) namedtuple
+  @date.isoweek[dt]               → ISO week number
+  @date.isoyear[dt]               → ISO year
+
+━━━ TIMEZONE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @date.utc[]                     → timezone.utc constant
+  @date.timezone["Europe/Istanbul"] → ZoneInfo object
+  @date.to_timezone[dt; "US/Eastern"] → convert datetime to tz
 
 ━━━ BUILD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @date.make[year; month; day]                 → date
   @date.make[year; month; day; hour; minute]   → datetime
+  @date.make_time[hour; minute; second]        → time object
   @date.days_in_month[year; month]             → number of days
 
 ━━━ SLEEP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -145,6 +160,51 @@ def register():
 
     register_lib_call("date", "days_in_month",
         lambda a: f"{_CAL}.monthrange({a[0]}, {a[1]})[1]")
+
+    # ── TIMEDELTA CONSTRUCTOR ─────────────────────────────────
+    register_lib_call("date", "timedelta",
+        lambda a: f"{_DT}.timedelta({', '.join(a) if a else 'days=0'})")
+
+    register_lib_call("date", "total_seconds",
+        lambda a: f"({a[0]}).total_seconds()")
+
+    # ── MODIFY ────────────────────────────────────────────────
+    register_lib_call("date", "replace",
+        lambda a: f"{_coerce(a[0])}.replace({', '.join(a[1:])})")
+
+    register_lib_call("date", "combine",
+        lambda a: f"{_DT}.datetime.combine({a[0]}, {a[1]})")
+
+    # ── EXTRA COMPONENTS ─────────────────────────────────────
+    register_lib_call("date", "microsecond",
+        lambda a: f"{_coerce(a[0])}.microsecond")
+
+    register_lib_call("date", "isocalendar",
+        lambda a: f"{_coerce(a[0])}.isocalendar()")
+
+    register_lib_call("date", "isoweek",
+        lambda a: f"{_coerce(a[0])}.isocalendar().week")
+
+    register_lib_call("date", "isoyear",
+        lambda a: f"{_coerce(a[0])}.isocalendar().year")
+
+    # ── TIMEZONE ─────────────────────────────────────────────
+    register_lib_call("date", "utc",
+        lambda a: f"{_DT}.timezone.utc")
+
+    register_lib_call("date", "timezone",
+        lambda a: f"__import__('zoneinfo').ZoneInfo({a[0]})")
+
+    register_lib_call("date", "to_timezone",
+        lambda a: (
+            f"{_coerce(a[0])}.astimezone(__import__('zoneinfo').ZoneInfo({a[1]}))"
+            if len(a) > 1 else
+            f"{_coerce(a[0])}.astimezone()"
+        ))
+
+    # ── EXTRA BUILD ───────────────────────────────────────────
+    register_lib_call("date", "make_time",
+        lambda a: f"{_DT}.time({', '.join(a)})")
 
     # ── SLEEP ─────────────────────────────────────────────────
     register_lib_call("date", "sleep",

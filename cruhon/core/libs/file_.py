@@ -2,15 +2,15 @@
 File system stdlib wrappers for Cruhon — @file.*
 
 Covers pathlib / os / shutil / glob / tempfile so that a non-coder can do
-every common file operation without touching raw Python. Every path-taking
-command is routed through _vp() which blocks traversal outside the working
-directory.
+every common file operation without touching raw Python.
 
 ━━━ READ / WRITE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @file.read[path]                → full text
+  @file.read[path]                → full text (utf-8)
+  @file.read[path; enc]           → full text with encoding
   @file.lines[path]               → list of lines
   @file.bytes[path]               → raw bytes
   @file.write[path; text]         — overwrite (creates parent dirs)
+  @file.write[path; text; enc]    — overwrite with encoding
   @file.append[path; text]        — append
   @file.write_bytes[path; data]   — write raw bytes
   @file.read_json[path]           → parsed JSON
@@ -20,8 +20,16 @@ directory.
   @file.exists[path]              → bool
   @file.is_file[path]             → bool
   @file.is_dir[path]              → bool
+  @file.is_link[path]             → bool (symlink)
   @file.size[path]                → bytes count
-  @file.mtime[path]               → last-modified timestamp
+  @file.mtime[path]               → last-modified timestamp (float)
+  @file.stat[path]                → os.stat_result object
+
+━━━ CREATE / PERMISSIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @file.touch[path]               — create empty file or update mtime
+  @file.chmod[path; mode]         — change permissions (e.g. 0o755)
+  @file.symlink[src; dest]        — create symlink
+  @file.hardlink[src; dest]       — create hard link
 
 ━━━ COPY / MOVE / DELETE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @file.copy[src; dst]            — copy file (metadata preserved)
@@ -40,12 +48,15 @@ directory.
 ━━━ PATH HELPERS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @file.join[a; b; ...]           → joined path
   @file.abspath[path]             → absolute path
+  @file.realpath[path]            → canonical path (resolve symlinks)
   @file.basename[path]            → file name
   @file.dirname[path]             → parent directory
   @file.ext[path]                 → extension (".txt")
   @file.stem[path]                → name without extension
   @file.cwd[]                     → current working directory
   @file.home[]                    → user home directory
+  @file.samefile[a; b]            → bool (same file on disk)
+  @file.expanduser[path]          → expand ~ in path
 
 ━━━ TEMP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @file.temp[]                    → fresh temp file path
@@ -81,7 +92,10 @@ def register():
 
     # ── READ / WRITE ──────────────────────────────────────────
     register_lib_call("file", "read",
-        lambda a: f"open({vp(a[0])}, encoding='utf-8').read()")
+        lambda a: (
+            f"open({vp(a[0])}, encoding={a[1]}).read()" if len(a) > 1 else
+            f"open({vp(a[0])}, encoding='utf-8').read()"
+        ))
 
     register_lib_call("file", "lines",
         lambda a: f"open({vp(a[0])}, encoding='utf-8').read().splitlines()")
@@ -91,8 +105,8 @@ def register():
 
     register_lib_call("file", "write",
         lambda a: (
-            f"open({_mkparents(vp(a[0]))}, 'w', encoding='utf-8').write({a[1]})"
-            if len(a) > 1 else
+            f"open({_mkparents(vp(a[0]))}, 'w', encoding={a[2]}).write({a[1]})" if len(a) > 2 else
+            f"open({_mkparents(vp(a[0]))}, 'w', encoding='utf-8').write({a[1]})" if len(a) > 1 else
             f"open({_mkparents(vp(a[0]))}, 'w', encoding='utf-8').close()"
         ))
 
@@ -199,3 +213,32 @@ def register():
 
     register_lib_call("file", "tempdir",
         lambda a: "__import__('tempfile').mkdtemp()")
+
+    # ── CREATE / PERMISSIONS ──────────────────────────────────
+    register_lib_call("file", "touch",
+        lambda a: f"__import__('pathlib').Path({vp(a[0])}).touch()")
+
+    register_lib_call("file", "chmod",
+        lambda a: f"__import__('os').chmod({vp(a[0])}, {a[1]})")
+
+    register_lib_call("file", "symlink",
+        lambda a: f"__import__('os').symlink({vp(a[0])}, {vp(a[1])})")
+
+    register_lib_call("file", "hardlink",
+        lambda a: f"__import__('os').link({vp(a[0])}, {vp(a[1])})")
+
+    register_lib_call("file", "is_link",
+        lambda a: f"__import__('os').path.islink({vp(a[0])})")
+
+    register_lib_call("file", "stat",
+        lambda a: f"__import__('os').stat({vp(a[0])})")
+
+    # ── EXTRA PATH HELPERS ────────────────────────────────────
+    register_lib_call("file", "realpath",
+        lambda a: f"__import__('os').path.realpath({a[0]})")
+
+    register_lib_call("file", "samefile",
+        lambda a: f"__import__('os').path.samefile({vp(a[0])}, {vp(a[1])})")
+
+    register_lib_call("file", "expanduser",
+        lambda a: f"__import__('os').path.expanduser({a[0]})")

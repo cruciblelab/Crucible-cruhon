@@ -10,12 +10,15 @@ operation without knowing regex syntax or method names.
   @text.title[s]             → "Hello World"
   @text.capitalize[s]        → "Hello world"
   @text.swapcase[s]          → "hELLO"
+  @text.casefold[s]          → aggressive lowercase (unicode-safe)
 
 ━━━ WHITESPACE / TRIM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.strip[s]             → strip both ends
   @text.lstrip[s]            → strip left
   @text.rstrip[s]            → strip right
   @text.strip[s; chars]      → strip specific chars
+  @text.expandtabs[s]        → replace \\t with spaces (tabsize=8)
+  @text.expandtabs[s; n]     → custom tabsize
 
 ━━━ SEARCH / TEST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.contains[s; sub]     → bool
@@ -23,17 +26,28 @@ operation without knowing regex syntax or method names.
   @text.endswith[s; suf]     → bool
   @text.count[s; sub]        → occurrences
   @text.index[s; sub]        → first position (-1 if not found)
+  @text.rindex[s; sub]       → last position (-1 if not found)
   @text.is_digit[s]          → bool
   @text.is_alpha[s]          → bool
   @text.is_alnum[s]          → bool
   @text.is_space[s]          → bool
   @text.is_upper[s]          → bool
   @text.is_lower[s]          → bool
+  @text.is_numeric[s]        → bool (isnumeric — wider than isdigit)
+  @text.is_decimal[s]        → bool (isdecimal — narrower than isdigit)
+  @text.is_identifier[s]     → bool (valid Python identifier)
+  @text.is_printable[s]      → bool
+  @text.is_ascii[s]          → bool
 
 ━━━ SPLIT / JOIN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.split[s]             → split on whitespace
   @text.split[s; sep]        → split on sep
   @text.split[s; sep; n]     → split max n times
+  @text.rsplit[s]            → rsplit on whitespace
+  @text.rsplit[s; sep]       → rsplit on sep
+  @text.rsplit[s; sep; n]    → rsplit max n times
+  @text.partition[s; sep]    → (before, sep, after) tuple
+  @text.rpartition[s; sep]   → from the right
   @text.join[sep; items]     → sep.join(items)
   @text.lines[s]             → splitlines()
   @text.words[s]             → split on whitespace, filter empty
@@ -45,6 +59,9 @@ operation without knowing regex syntax or method names.
   @text.template[s; dict]               → str.format_map(dict)
   @text.repeat[s; n]                    → s * n
   @text.reverse[s]                      → s[::-1]
+  @text.translate[s; table]             → s.translate(table)
+  @text.maketrans[from; to]             → str.maketrans table
+  @text.maketrans[from; to; delete]     → str.maketrans with deletions
 
 ━━━ SLICE / SIZE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.len[s]               → len
@@ -61,12 +78,20 @@ operation without knowing regex syntax or method names.
   @text.center[s; width]
   @text.center[s; width; char]
   @text.zfill[s; width]              → zero-pad numbers
+  @text.ljust[s; width]              → alias for pad_right
+  @text.rjust[s; width]              → alias for pad_left
 
 ━━━ WRAP / INDENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.wrap[s; width]       → list of lines (default 70)
   @text.fill[s; width]       → single wrapped string
   @text.indent[s; prefix]    → add prefix to every line
   @text.dedent[s]            → remove common leading whitespace
+
+━━━ ENCODE / DECODE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @text.encode[s]            → bytes (utf-8)
+  @text.encode[s; enc]       → bytes with encoding
+  @text.decode[b]            → str (utf-8)
+  @text.decode[b; enc]       → str with encoding
 
 ━━━ REGEX ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @text.match[pattern; s]          → bool (anchored at start)
@@ -104,7 +129,8 @@ def register():
     register_lib_call("text", "lower",      lambda a: f"str({a[0]}).lower()")
     register_lib_call("text", "title",      lambda a: f"str({a[0]}).title()")
     register_lib_call("text", "capitalize", lambda a: f"str({a[0]}).capitalize()")
-    register_lib_call("text", "swapcase",   lambda a: f"str({a[0]}).swapcase()")
+    register_lib_call("text", "swapcase",  lambda a: f"str({a[0]}).swapcase()")
+    register_lib_call("text", "casefold", lambda a: f"str({a[0]}).casefold()")
 
     # ── WHITESPACE / TRIM ────────────────────────────────────
     register_lib_call("text", "strip",
@@ -113,6 +139,8 @@ def register():
         lambda a: f"str({a[0]}).lstrip({a[1] if len(a)>1 else ''})")
     register_lib_call("text", "rstrip",
         lambda a: f"str({a[0]}).rstrip({a[1] if len(a)>1 else ''})")
+    register_lib_call("text", "expandtabs",
+        lambda a: f"str({a[0]}).expandtabs({a[1] if len(a)>1 else 8})")
 
     # ── SEARCH / TEST ────────────────────────────────────────
     register_lib_call("text", "contains",
@@ -125,12 +153,19 @@ def register():
         lambda a: f"str({a[0]}).count({a[1]})")
     register_lib_call("text", "index",
         lambda a: f"(str({a[0]}).find({a[1]}))")
-    register_lib_call("text", "is_digit",   lambda a: f"str({a[0]}).isdigit()")
-    register_lib_call("text", "is_alpha",   lambda a: f"str({a[0]}).isalpha()")
-    register_lib_call("text", "is_alnum",   lambda a: f"str({a[0]}).isalnum()")
-    register_lib_call("text", "is_space",   lambda a: f"str({a[0]}).isspace()")
-    register_lib_call("text", "is_upper",   lambda a: f"str({a[0]}).isupper()")
-    register_lib_call("text", "is_lower",   lambda a: f"str({a[0]}).islower()")
+    register_lib_call("text", "rindex",
+        lambda a: f"(str({a[0]}).rfind({a[1]}))")
+    register_lib_call("text", "is_digit",      lambda a: f"str({a[0]}).isdigit()")
+    register_lib_call("text", "is_alpha",      lambda a: f"str({a[0]}).isalpha()")
+    register_lib_call("text", "is_alnum",      lambda a: f"str({a[0]}).isalnum()")
+    register_lib_call("text", "is_space",      lambda a: f"str({a[0]}).isspace()")
+    register_lib_call("text", "is_upper",      lambda a: f"str({a[0]}).isupper()")
+    register_lib_call("text", "is_lower",      lambda a: f"str({a[0]}).islower()")
+    register_lib_call("text", "is_numeric",    lambda a: f"str({a[0]}).isnumeric()")
+    register_lib_call("text", "is_decimal",    lambda a: f"str({a[0]}).isdecimal()")
+    register_lib_call("text", "is_identifier", lambda a: f"str({a[0]}).isidentifier()")
+    register_lib_call("text", "is_printable",  lambda a: f"str({a[0]}).isprintable()")
+    register_lib_call("text", "is_ascii",      lambda a: f"str({a[0]}).isascii()")
 
     # ── SPLIT / JOIN ─────────────────────────────────────────
     register_lib_call("text", "split",
@@ -139,6 +174,16 @@ def register():
             f"str({a[0]}).split({a[1]})"          if len(a) > 1 else
             f"str({a[0]}).split()"
         ))
+    register_lib_call("text", "rsplit",
+        lambda a: (
+            f"str({a[0]}).rsplit({a[1]}, {a[2]})" if len(a) > 2 else
+            f"str({a[0]}).rsplit({a[1]})"          if len(a) > 1 else
+            f"str({a[0]}).rsplit()"
+        ))
+    register_lib_call("text", "partition",
+        lambda a: f"str({a[0]}).partition({a[1]})")
+    register_lib_call("text", "rpartition",
+        lambda a: f"str({a[0]}).rpartition({a[1]})")
     register_lib_call("text", "join",
         lambda a: f"str({a[0]}).join(str(_i) for _i in {a[1]})")
     register_lib_call("text", "lines",
@@ -160,6 +205,13 @@ def register():
         lambda a: f"(str({a[0]}) * int({a[1]}))")
     register_lib_call("text", "reverse",
         lambda a: f"str({a[0]})[::-1]")
+    register_lib_call("text", "translate",
+        lambda a: f"str({a[0]}).translate({a[1]})")
+    register_lib_call("text", "maketrans",
+        lambda a: (
+            f"str.maketrans({a[0]}, {a[1]}, {a[2]})" if len(a) > 2 else
+            f"str.maketrans({a[0]}, {a[1]})"
+        ))
 
     # ── SLICE / SIZE ─────────────────────────────────────────
     register_lib_call("text", "len",
@@ -185,6 +237,10 @@ def register():
         lambda a: f"str({a[0]}).center(int({a[1]}), {a[2] if len(a)>2 else repr(' ')})")
     register_lib_call("text", "zfill",
         lambda a: f"str({a[0]}).zfill(int({a[1]}))")
+    register_lib_call("text", "ljust",
+        lambda a: f"str({a[0]}).ljust(int({a[1]}), {a[2] if len(a)>2 else repr(' ')})")
+    register_lib_call("text", "rjust",
+        lambda a: f"str({a[0]}).rjust(int({a[1]}), {a[2] if len(a)>2 else repr(' ')})")
 
     # ── WRAP / INDENT ────────────────────────────────────────
     register_lib_call("text", "wrap",
@@ -235,6 +291,18 @@ def register():
             f"(list({_RE}.search({a[0]}, str({a[1]}), {a[2]}).groups()) if {_RE}.search({a[0]}, str({a[1]}), {a[2]}) else [])"
             if len(a) > 2 else
             f"(list({_RE}.search({a[0]}, str({a[1]})).groups()) if {_RE}.search({a[0]}, str({a[1]})) else [])"
+        ))
+
+    # ── ENCODE / DECODE ──────────────────────────────────────
+    register_lib_call("text", "encode",
+        lambda a: (
+            f"str({a[0]}).encode({a[1]})" if len(a) > 1 else
+            f"str({a[0]}).encode('utf-8')"
+        ))
+    register_lib_call("text", "decode",
+        lambda a: (
+            f"({a[0]}).decode({a[1]})" if len(a) > 1 else
+            f"({a[0]}).decode('utf-8')"
         ))
 
     # ── HTML ESCAPE ──────────────────────────────────────────
