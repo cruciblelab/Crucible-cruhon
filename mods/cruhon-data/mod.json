@@ -1,0 +1,8 @@
+{
+    "name": "cruhon-data",
+    "version": "1.0.0",
+    "description": "Fast, zero-config, guild/user-scoped persistent key-value store — syncs with any DB via export/import and raw access",
+    "author": "Crucible",
+    "cruhon": ">=1.0.0",
+    "namespace": "data"
+}
