@@ -49,31 +49,64 @@ Eksik olan **ergonomi ve nested namespace erişimi**.
 
 ## 3. KATMAN 0 — Universal Passthrough (Çekirdek)
 
-### 3.1 Çok seviyeli namespace (lexer + parser)
+> **⚠️ ÖNEMLİ İLKE: SIFIR CORE DEĞİŞİKLİĞİ.**
+> Bir plugin, Cruhon core'una dokunmadan kendini genişletebilmeli.
+> Aksi halde başkaları kendi kütüphane plugin'lerini yazamaz.
+> discord plugin'i her şeyi **plugin API** ile (lexer_hook / token_hook /
+> lib_call / inject) yapar.
 
-**Sorun:** Lexer şu an `@discord.method` → `NAMESPACE(discord) DOT AT_CMD(method)`.
-İkinci nokta (`discord.ui.Button`) RAW olarak okunuyor, kırılıyor.
+### 3.0 Özgürlük zaten var — nested sadece ergonomi
 
-**Çözüm:** Lexer `_tokenize_line` içinde `@a.b.c.d` zincirini topla:
-- Yeni token: `NSPATH` = `["discord","ui","Button"]` veya
-- Mevcut yapıyı koru, parser'da `DOT AT_CMD` zincirini döngüyle yut.
+`discord` import edildiği sürece, discord.py'nin **%100'ü** bugün bile
+erişilebilir (düz Python passthrough):
 
-**Tercih:** Parser'da zincir okuma (lexer'ı az değiştir, geri uyumlu).
-
-```
-@discord.ui.Button[label="Tıkla"; style=discord.ButtonStyle.green]
-   → discord.ui.Button(label="Tıkla", style=discord.ButtonStyle.green)
-
-@discord.utils.get[guild.roles; name="Admin"]
-   → discord.utils.get(guild.roles, name="Admin")
-
-@discord.Color.blue[]
-   → discord.Color.blue()
+```clpy
+@var[btn; discord.ui.Button(label="Tıkla", style=discord.ButtonStyle.green)]
+@var[v;   discord.ui.View()]
+@raw
+    v.add_item(btn)
+@end
 ```
 
-**Etki alanı:** `cruhon/core/lexer.py`, `cruhon/core/parser.py`,
-`cruhon/core/transpiler.py` (LibCallNode nested path emit).
-**Geri uyumluluk:** Tek seviye `@discord.send[...]` aynen çalışmaya devam eder.
+Yani tam Python özgürlüğünün **tek ön koşulu = import garantisi** (3.2).
+Nested namespace (`@discord.ui.Button[...]`) bunun şekerli kısa hâli.
+
+### 3.1 Çok seviyeli namespace (plugin-only, lexer_hook)
+
+**Sorun:** Lexer `@discord.method` → tek seviye okur; `@discord.ui.Button`
+ikinci noktada kırılır.
+
+**Çözüm (core'suz):** Mevcut `_discord_preprocess` lexer_hook'unu genişlet.
+Sadece **nokta içeren** path'leri regex ile dönüştür:
+
+```
+@discord.ui.Button[label="x"]
+   ↓ lexer_hook  (regex: @discord.<path-with-dot>[ )
+@discord.__nested["discord.ui.Button"; label="x"]
+   ↓ kayıtlı lib_call("discord", "__nested", handler)
+discord.ui.Button(label="x")
+```
+
+`__nested` handler: args[0] = path string, kalan args = gerçek argümanlar →
+`{path}({", ".join(rest)})` emit eder. Hem inline (`@var`) hem statement
+bağlamında çalışır (textual rewrite olduğu için).
+
+**Geri uyumluluk:** `@discord.send[...]` içinde nokta yok → regex'e takılmaz,
+mevcut fallback ile `discord.send(...)` (aslında özel handler) çalışır.
+Block komutları (`@_dc_on` vb.) `@discord.` ile başlamadığı için etkilenmez.
+
+```
+@discord.utils.get[guild.roles; name="Admin"]  → discord.utils.get(...)
+@discord.Color.blue[]                           → discord.Color.blue()
+@discord.app_commands.Choice[name="A"; value=1] → discord.app_commands.Choice(...)
+```
+
+**Etki alanı:** SADECE `mods/cruhon-discord/__init__.py`. Core dosyaları
+(lexer.py, parser.py, transpiler.py) **değişmez**.
+
+**Opsiyonel ayrı tartışma:** İleride TÜM modüller (`@os.path.join` gibi)
+nested kazansın istersek, o zaman core'a genel destek eklenebilir — ama bu
+discord için **gerekli değil** ve ayrı bir karardır.
 
 ### 3.2 Import garantisi
 
@@ -216,8 +249,9 @@ Mevcut friendly komutlar korunur. Yüksek-kullanımlı eksikler eklenir:
 
 ## 8. Riskler / Açık Sorular
 
-1. **Lexer değişikliği geri uyumluluğu** — çok seviyeli namespace eklerken
-   tek seviye + RAW expression'ları kırmamak. Kapsamlı regresyon testi şart.
+1. **Regex rewrite kenar durumları** — lexer_hook regex'i nested path'i
+   yakalarken tek-seviye, string içi noktalar, iç içe parantezleri
+   bozmamalı. (Core değişmiyor; risk sadece plugin içinde, izole.)
 2. **`@option` / `@field` / `@body` alt-blokları** — bunlar yeni inline
    komutlar mı yoksa block içi özel parse mı? (Tartışılacak.)
 3. **Stil/enum friendly isimleri** — `green` → `ButtonStyle.green` haritası
