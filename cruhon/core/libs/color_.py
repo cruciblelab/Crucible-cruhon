@@ -26,7 +26,7 @@ def _color_handler(code: str):
 
 
 def register():
-    register_lib("color", "builtins")
+    register_lib("color", None)  # Builtin namespace, no @import needed
 
     for name, code in _CODES.items():
         register_lib_call("color", name, _color_handler(code))

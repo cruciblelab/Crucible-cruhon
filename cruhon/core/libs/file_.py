@@ -86,7 +86,7 @@ def _mkparents(path_expr: str) -> str:
 
 
 def register():
-    register_lib("file", "builtins")
+    register_lib("file", None)  # Builtin namespace, no @import needed
 
     vp = _vp_call
 

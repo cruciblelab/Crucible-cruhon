@@ -86,7 +86,7 @@ def _csv_write_rows(path_expr: str, rows_expr: str) -> str:
 
 
 def register():
-    register_lib("csv", "csv")
+    register_lib("csv", None)  # Builtin namespace, no @import needed
 
     # ── READ ─────────────────────────────────────────────────
     register_lib_call("csv", "read",

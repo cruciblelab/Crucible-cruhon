@@ -74,7 +74,7 @@ def _coerce(expr: str) -> str:
 
 
 def register():
-    register_lib("date", "datetime")
+    register_lib("date", None)  # Builtin namespace, no @import needed
 
     # ── CURRENT ───────────────────────────────────────────────
     register_lib_call("date", "now",

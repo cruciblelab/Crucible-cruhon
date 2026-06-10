@@ -12,7 +12,11 @@ from typing import Optional, Callable
 # LIB REGISTRY
 # ─────────────────────────────────────────────────────────────
 
+# Special sentinel: library is builtin (don't @import)
+_BUILTIN = "__builtin__"
+
 # Supported libraries: clpy name → Python module name
+# Use _BUILTIN sentinel for namespaces that don't need @import
 _LIBS: dict[str, str] = {
     "requests":    "requests",
     "file":        "builtins",
@@ -31,8 +35,17 @@ _LIBS: dict[str, str] = {
     "dataclasses": "dataclasses",
     "http":        "requests",   # @import[http] → import requests
     "httpx":       "httpx",      # async HTTP client
-    "store":       None,         # @import[store] not needed — helpers auto-injected
-    "ctx":         None,         # @ctx.* — context variable access, no import needed
+    "store":       _BUILTIN,     # @import[store] not needed — helpers auto-injected
+    "ctx":         _BUILTIN,     # @ctx.* — context variable access, no import needed
+    "text":        _BUILTIN,     # @text.* — string operations, no import needed
+    "date":        _BUILTIN,     # @date.* — date/time operations, no import needed
+    "crypto":      _BUILTIN,     # @crypto.* — crypto operations, no import needed
+    "log":         _BUILTIN,     # @log.* — logging, no import needed
+    "config":      _BUILTIN,     # @config.* — config file ops, no import needed
+    "shell":       _BUILTIN,     # @shell.* — subprocess operations, no import needed
+    "archive":     _BUILTIN,     # @archive.* — compression, no import needed
+    "mail":        _BUILTIN,     # @mail.* — email operations, no import needed
+    "csv":         _BUILTIN,     # @csv.* — CSV operations, no import needed
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -46,8 +59,10 @@ def register_lib(name: str, python_module: str):
     Example (inside a mod):
         from cruhon.core.registry import register_lib
         register_lib("redis", "redis")
+
+    Passing None is equivalent to _BUILTIN (namespace with no @import needed).
     """
-    _LIBS[name] = python_module
+    _LIBS[name] = python_module if python_module is not None else _BUILTIN
 
 
 def register_lib_call(namespace: str, method: str, handler: Callable):
@@ -78,7 +93,7 @@ def get_lib_call(namespace: str, method: str) -> Optional[Callable]:
 
 
 def list_libs() -> list[str]:
-    return sorted(k for k, v in _LIBS.items() if v is not None)
+    return sorted(k for k, v in _LIBS.items() if v is not None and v != _BUILTIN)
 
 
 # ─────────────────────────────────────────────────────────────

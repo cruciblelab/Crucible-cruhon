@@ -157,7 +157,7 @@ class Transpiler:
         Running after ast_hooks and pre-hooks means _known_modules correctly
         reflects any node renames those hooks may have applied.
         """
-        from .registry import get_lib
+        from .registry import get_lib, is_lib_namespace, _BUILTIN
         from .parser import get_parser as _gp
         lines = []
         seen = set()
@@ -167,9 +167,23 @@ class Transpiler:
             if isinstance(node, ImportNode):
                 lib_module = get_lib(node.lib)
                 if lib_module is None:
+                    # Check if it's a known builtin namespace vs truly unknown
+                    if is_lib_namespace(node.lib):
+                        raise TranspileError(
+                            f"@{node.lib} is a builtin namespace — no @import needed. "
+                            f"Use @{node.lib}.command[...] directly.",
+                            node.line
+                        )
                     raise TranspileError(
                         f"Library '{node.lib}' is not yet supported in Cruhon. "
                         f"See library.md for the full list.",
+                        node.line
+                    )
+                # Skip import for builtin namespaces
+                if lib_module == _BUILTIN:
+                    raise TranspileError(
+                        f"@{node.lib} is a builtin namespace — no @import needed. "
+                        f"Use @{node.lib}.command[...] directly.",
                         node.line
                     )
                 alias = f" as {node.alias}" if node.alias else ""
@@ -179,12 +193,12 @@ class Transpiler:
                     lines.append(stmt)
 
         # Single unified scan: populate _known_modules + all auto-import flags
+        # (Note: _known_modules is already initialized in transpile() at start)
         _p = _gp()
         needs_os = _p._needs_os
         needs_requests = _p._needs_requests
         needs_store = False
         needs_types = False
-        self._known_modules = set()
         for _n in _walk_ast(ast):
             if not needs_os and isinstance(_n, EnvNode):
                 needs_os = True
@@ -676,7 +690,8 @@ class Transpiler:
         if handler:
             return self._line(handler(node.args), node.line)
         # Fallback: direct Python call
-        args = ", ".join(f'"{a}"' if not a.startswith('"') else a for a in node.args)
+        # Args are already parsed Python expressions; don't quote them
+        args = ", ".join(node.args)
         return self._line(f"{node.namespace}.{node.method}({args})", node.line)
 
     def visit_PluginBlockNode(self, node) -> str:
