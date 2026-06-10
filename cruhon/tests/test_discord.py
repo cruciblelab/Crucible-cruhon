@@ -365,3 +365,43 @@ class TestFullBot:
         assert "async def selam(ctx):" in code
         assert "async def zar(ctx):" in code
         assert "__bot__.run(__discord_token__)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# NESTED NAMESPACE — full discord.py passthrough (Faz 1)
+# ─────────────────────────────────────────────────────────────
+
+class TestNestedNamespace:
+    def test_ui_button_statement(self):
+        code = _compile('@discord.ui.Button[label="Tıkla"]')
+        assert 'discord.ui.Button(label="Tıkla")' in code
+
+    def test_ui_button_inline(self):
+        code = _compile('@var[b; @discord.ui.Button[label="x"]]')
+        assert 'b = discord.ui.Button(label="x")' in code
+
+    def test_color_classmethod_empty_args(self):
+        code = _compile('@var[c; @discord.Color.blue[]]')
+        assert "c = discord.Color.blue()" in code
+
+    def test_utils_get_multi_arg(self):
+        code = _compile('@var[r; @discord.utils.get[guild.roles; name="Admin"]]')
+        assert 'r = discord.utils.get(guild.roles, name="Admin")' in code
+
+    def test_app_commands_choice(self):
+        code = _compile('@var[ch; @discord.app_commands.Choice[name="A"; value=1]]')
+        assert 'ch = discord.app_commands.Choice(name="A", value=1)' in code
+
+    def test_three_level_path(self):
+        code = _compile('@var[x; @discord.ext.commands.Bot[]]')
+        assert "x = discord.ext.commands.Bot()" in code
+
+    def test_single_level_unchanged(self):
+        # @discord.send must NOT be rewritten to __nested
+        code = _compile('@discord.send[ch; "hi"]')
+        assert "__nested" not in code
+        assert 'await ch.send("hi")' in code
+
+    def test_nested_with_variable_arg_not_quoted(self):
+        code = _compile('@var[v; @discord.ui.View[timeout=my_timeout]]')
+        assert "v = discord.ui.View(timeout=my_timeout)" in code

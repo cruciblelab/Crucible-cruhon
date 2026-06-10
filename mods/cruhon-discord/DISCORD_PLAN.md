@@ -194,6 +194,21 @@ Stil isimleri friendly: `green/red/blurple/gray` → `discord.ButtonStyle.*`
 
 ---
 
+## 4.7 KARARLAR (kullanıcı onayı)
+
+1. **Alt-bloklar** (`@option`, `@field`, `@body`, `@on_submit`) → **block-içi**
+   parse. Sadece ilgili block bağlamında geçerli, global komut değil.
+2. **Friendly enum haritası** → **KOMPLE GENİŞ**. ButtonStyle, ActivityType,
+   Status, TextStyle, ChannelType, Color/Colour ve mümkün olan tüm enum'lar
+   friendly isimlerle. (Enum üyesi = attribute, classmethod = call ayrımı korunur.)
+3. **Cog'lar** → hem tek dosyada hem `@use` ile ayrı dosyada çalışır. Zorlama yok.
+4. **Ses/müzik** → **SADECE passthrough**. PyNaCl/ffmpeg gibi ekstra
+   bağımlılıklar dayatılmaz. `discord.FFmpegPCMAudio(...)` vb. düz Python /
+   nested ile erişilir; insanlar yt-dlp/ffmpeg ile kendileri entegre eder.
+   Özel `@discord.play[...]` kısayolu **yok** (bağımlılık kilidi yaratmamak için).
+
+---
+
 ## 5. KATMAN 1 — Kısayol Genişletme (~60 → ~90)
 
 Mevcut friendly komutlar korunur. Yüksek-kullanımlı eksikler eklenir:

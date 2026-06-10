@@ -131,12 +131,19 @@ Discord bot plugin for Cruhon.
 
 from __future__ import annotations
 
+import re
+
 
 # ─────────────────────────────────────────────────────────────
 # BLOCK COMMANDS — rewritten by lexer hook before tokenization
 # ─────────────────────────────────────────────────────────────
 
 _BLOCK_CMDS = {"on", "command", "slash", "task", "listen"}
+
+# Nested namespace: @discord.ui.Button[  /  @discord.utils.get[  /  @discord.Color.blue[
+# Matches @discord. followed by 2+ dotted segments, then "[".
+# Single-level (@discord.send[) has no inner dot → not matched.
+_NESTED_RE = re.compile(r"@discord\.([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)\[")
 
 # Friendly event names → discord.py event function names
 _EVENT_MAP = {
@@ -160,12 +167,32 @@ _EVENT_MAP = {
 
 def _discord_preprocess(source: str) -> str:
     """
-    Lexer pre-hook: rewrites @discord.BLOCK[... to @_dc_BLOCK[...
-    so block commands can be caught by the AT_CMD branch of the parser.
-    Runs on raw source text before tokenization.
+    Lexer pre-hook (runs on raw source before tokenization). Two rewrites:
+
+    1) Block commands:  @discord.on[ → @_dc_on[
+       so they hit the AT_CMD branch of the parser.
+
+    2) Nested namespace passthrough (FULL discord.py freedom, no core changes):
+       @discord.ui.Button[label="x"]
+         → @discord.__nested["discord.ui.Button"; label="x"]
+       The __nested lib_call handler then emits  discord.ui.Button(label="x").
+       Works in both statement and inline (@var) context because it is a
+       purely textual rewrite into a normal single-level lib call.
     """
+    # 1) Block commands first (so nested regex never touches them)
     for cmd in _BLOCK_CMDS:
         source = source.replace(f"@discord.{cmd}[", f"@_dc_{cmd}[")
+
+    # 2) Nested dotted paths → __nested call carrying the full path as a string
+    def _repl(m: "re.Match") -> str:
+        path = "discord." + m.group(1)
+        return f'@discord.__nested["{path}"; '
+
+    source = _NESTED_RE.sub(_repl, source)
+
+    # Empty-arg case:  @discord.__nested["path"; ]  →  @discord.__nested["path"]
+    source = re.sub(r'(@discord\.__nested\["[^"]+");\s*\]', r"\1]", source)
+
     return source
 
 
@@ -440,6 +467,18 @@ def _build_handlers() -> dict:
     handler(args) returns a Python expression or statement string.
     """
     h = {}
+
+    # ── NESTED PASSTHROUGH (full discord.py freedom) ──────────
+    # Produced by the lexer hook for @discord.a.b.c[...] forms.
+    # args[0] = "discord.ui.Button" (string literal, with quotes)
+    # rest    = the real call arguments → discord.ui.Button(rest...)
+    def __nested(args):
+        if not args:
+            return "discord"
+        path = args[0].strip().strip("\"'")
+        rest = [a for a in args[1:]]
+        return f"{path}({', '.join(rest)})"
+    h["__nested"] = __nested
 
     # ── BOT KURULUM ───────────────────────────────────────────
 
