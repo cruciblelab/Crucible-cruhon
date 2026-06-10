@@ -60,7 +60,12 @@ def register_lib_call(namespace: str, method: str, handler: Callable):
 
 
 def get_lib(name: str) -> Optional[str]:
-    return _LIBS.get(name)
+    if name in _LIBS:
+        return _LIBS[name]
+    import sys
+    if name in getattr(sys, "stdlib_module_names", set()):
+        return name
+    return None
 
 
 def is_lib_namespace(name: str) -> bool:
