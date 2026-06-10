@@ -619,3 +619,56 @@ class TestSelect:
         )
         code = _compile(src)
         assert code.count("discord.SelectOption(") == 3
+
+
+# ─────────────────────────────────────────────────────────────
+# FAZ 3 — kapsamlı kısayollar
+# ─────────────────────────────────────────────────────────────
+
+class TestFaz3Shortcuts:
+    def test_fetch_family(self):
+        assert "await __bot__.fetch_user(123)" in _compile("@var[u; @discord.fetch_user[123]]")
+        assert "await __bot__.fetch_guild(5)" in _compile("@var[g; @discord.fetch_guild[5]]")
+        assert "await guild.fetch_member(7)" in _compile("@var[m; @discord.fetch_member[guild; 7]]")
+
+    def test_thread(self):
+        assert 'await channel.create_thread(name=' in _compile('@var[t; @discord.create_thread[channel; "tartışma"]]')
+        assert "await thread.join()" in _compile("@discord.join_thread[thread]")
+        assert "await msg.create_thread(name=" in _compile('@var[t; @discord.thread_from[msg; "konu"]]')
+
+    def test_webhook(self):
+        assert "await channel.create_webhook(name=" in _compile('@var[w; @discord.create_webhook[channel; "log"]]')
+        assert "await wh.send(" in _compile('@discord.send_webhook[wh; "merhaba"]')
+
+    def test_invite(self):
+        assert "await channel.create_invite(" in _compile("@var[i; @discord.create_invite[channel]]")
+        assert "await invite.delete()" in _compile("@discord.delete_invite[invite]")
+
+    def test_role_management(self):
+        assert "await guild.create_role(name=" in _compile('@var[r; @discord.create_role[guild; "Üye"]]')
+        assert "await role.delete()" in _compile("@discord.delete_role[role]")
+
+    def test_history_and_audit(self):
+        assert "async for" in _compile("@var[h; @discord.history[channel; 50]]")
+        assert "audit_logs(limit=10)" in _compile("@var[a; @discord.audit_logs[guild; 10]]")
+
+    def test_file_send(self):
+        assert "discord.File(" in _compile('@discord.send_file[channel; "rapor.pdf"]')
+
+    def test_member_voice(self):
+        assert "await member.move_to(channel)" in _compile("@discord.move_to[member; channel]")
+        assert "await member.edit(mute=True)" in _compile("@discord.mute[member]")
+        assert "await member.move_to(None)" in _compile("@discord.disconnect[member]")
+
+    def test_event(self):
+        assert "create_scheduled_event(name=" in _compile('@var[e; @discord.create_event[guild; "Toplantı"]]')
+
+    def test_emoji(self):
+        assert "create_custom_emoji(name=" in _compile('@var[e; @discord.create_emoji[guild; "blob"; data]]')
+
+    def test_slowmode_and_category(self):
+        assert "edit(slowmode_delay=5)" in _compile("@discord.set_slowmode[channel; 5]")
+        assert "await guild.create_category(" in _compile('@var[c; @discord.create_category[guild; "Sesli"]]')
+
+    def test_sync_tree(self):
+        assert "await __bot__.tree.sync()" in _compile("@discord.sync_tree[]")

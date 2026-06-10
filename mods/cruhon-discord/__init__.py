@@ -1328,6 +1328,267 @@ def _build_handlers() -> dict:
         return f"await {guild}.voice_client.disconnect()"
     h["leave"] = leave
 
+    # ── FAZ 3 KISAYOLLARI ─────────────────────────────────────
+    # Yardımcı: pozisyonel + kwargs'ı tek tek geçir
+    def _kw(args, start=0):
+        return [a.strip() for a in args[start:] if "=" in a.strip()
+                and a.strip().split("=")[0].strip().isidentifier()]
+
+    def _call(target, method, pos, args, kw_start):
+        parts = list(pos) + _kw(args, kw_start)
+        return f"await {target}.{method}({', '.join(parts)})"
+
+    # ── FETCH (API çağrıları — cache yerine sunucudan) ────────
+    def fetch_user(args):
+        return f"await __bot__.fetch_user({args[0] if args else '0'})"
+    h["fetch_user"] = fetch_user
+
+    def fetch_channel(args):
+        return f"await __bot__.fetch_channel({args[0] if args else '0'})"
+    h["fetch_channel"] = fetch_channel
+
+    def fetch_guild(args):
+        return f"await __bot__.fetch_guild({args[0] if args else '0'})"
+    h["fetch_guild"] = fetch_guild
+
+    def fetch_member(args):
+        g = args[0] if args else "guild"
+        i = args[1] if len(args) > 1 else "0"
+        return f"await {g}.fetch_member({i})"
+    h["fetch_member"] = fetch_member
+
+    def fetch_message(args):
+        ch = args[0] if args else "channel"
+        i = args[1] if len(args) > 1 else "0"
+        return f"await {ch}.fetch_message({i})"
+    h["fetch_message"] = fetch_message
+
+    def history(args):
+        ch = args[0] if args else "channel"
+        limit = args[1] if len(args) > 1 else "100"
+        return f"[__m async for __m in {ch}.history(limit={limit})]"
+    h["history"] = history
+
+    # ── THREAD ────────────────────────────────────────────────
+    def create_thread(args):
+        ch = args[0] if args else "channel"
+        name = _as_str(args[1]) if len(args) > 1 else '"thread"'
+        return _call(ch, "create_thread", [f"name={name}"], args, 2)
+    h["create_thread"] = create_thread
+
+    def thread_from(args):
+        msg = args[0] if args else "message"
+        name = _as_str(args[1]) if len(args) > 1 else '"thread"'
+        return f"await {msg}.create_thread(name={name})"
+    h["thread_from"] = thread_from
+
+    def join_thread(args):
+        return f"await {args[0] if args else 'thread'}.join()"
+    h["join_thread"] = join_thread
+
+    def leave_thread(args):
+        return f"await {args[0] if args else 'thread'}.leave()"
+    h["leave_thread"] = leave_thread
+
+    def archive_thread(args):
+        return f"await {args[0] if args else 'thread'}.edit(archived=True)"
+    h["archive_thread"] = archive_thread
+
+    def add_thread_member(args):
+        t = args[0] if args else "thread"
+        m = args[1] if len(args) > 1 else "member"
+        return f"await {t}.add_user({m})"
+    h["add_thread_member"] = add_thread_member
+
+    # ── WEBHOOK ───────────────────────────────────────────────
+    def create_webhook(args):
+        ch = args[0] if args else "channel"
+        name = _as_str(args[1]) if len(args) > 1 else '"webhook"'
+        return _call(ch, "create_webhook", [f"name={name}"], args, 2)
+    h["create_webhook"] = create_webhook
+
+    def send_webhook(args):
+        wh = args[0] if args else "webhook"
+        content = args[1] if len(args) > 1 else '""'
+        return _call(wh, "send", [content], args, 2)
+    h["send_webhook"] = send_webhook
+
+    # ── INVITE ────────────────────────────────────────────────
+    def create_invite(args):
+        ch = args[0] if args else "channel"
+        return _call(ch, "create_invite", [], args, 1)
+    h["create_invite"] = create_invite
+
+    def delete_invite(args):
+        return f"await {args[0] if args else 'invite'}.delete()"
+    h["delete_invite"] = delete_invite
+
+    def fetch_invites(args):
+        return f"await {args[0] if args else 'guild'}.invites()"
+    h["fetch_invites"] = fetch_invites
+
+    # ── POLL ──────────────────────────────────────────────────
+    def create_poll(args):
+        question = _as_str(args[0]) if args else '"Soru"'
+        # @discord.create_poll["Soru?"; "A"; "B"; "C"]  → answers
+        answers = [a.strip() for a in args[1:] if "=" not in a.strip()]
+        ans_code = "; ".join(answers)
+        lines = [f"discord.Poll(question={question}, duration=__import__('datetime').timedelta(hours=24))"]
+        if answers:
+            chain = f"discord.Poll(question={question}, duration=__import__('datetime').timedelta(hours=24))"
+            return ("(lambda __p: ([__p.add_answer(text=__a) for __a in [" +
+                    ", ".join(answers) + "]], __p)[1])(" + chain + ")")
+        return lines[0]
+    h["create_poll"] = create_poll
+
+    def end_poll(args):
+        return f"await {args[0] if args else 'message'}.end_poll()"
+    h["end_poll"] = end_poll
+
+    # ── SCHEDULED EVENT ───────────────────────────────────────
+    def create_event(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"Etkinlik"'
+        return _call(g, "create_scheduled_event", [f"name={name}"], args, 2)
+    h["create_event"] = create_event
+
+    def cancel_event(args):
+        return f"await {args[0] if args else 'event'}.cancel()"
+    h["cancel_event"] = cancel_event
+
+    # ── ROLE YÖNETİMİ ─────────────────────────────────────────
+    def create_role(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"rol"'
+        return _call(g, "create_role", [f"name={name}"], args, 2)
+    h["create_role"] = create_role
+
+    def delete_role(args):
+        return f"await {args[0] if args else 'role'}.delete()"
+    h["delete_role"] = delete_role
+
+    def edit_role(args):
+        return _call(args[0] if args else "role", "edit", [], args, 1)
+    h["edit_role"] = edit_role
+
+    # ── KATEGORİ & KANAL ──────────────────────────────────────
+    def create_category(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"Kategori"'
+        return f"await {g}.create_category({name})"
+    h["create_category"] = create_category
+
+    def edit_channel(args):
+        return _call(args[0] if args else "channel", "edit", [], args, 1)
+    h["edit_channel"] = edit_channel
+
+    def move_channel(args):
+        ch = args[0] if args else "channel"
+        pos = args[1] if len(args) > 1 else "0"
+        return f"await {ch}.move(beginning=True) if {pos} == 0 else await {ch}.edit(position={pos})"
+    h["move_channel"] = move_channel
+
+    def set_permissions(args):
+        ch = args[0] if args else "channel"
+        target = args[1] if len(args) > 1 else "target"
+        return _call(ch, "set_permissions", [target], args, 2)
+    h["set_permissions"] = set_permissions
+
+    def set_slowmode(args):
+        ch = args[0] if args else "channel"
+        secs = args[1] if len(args) > 1 else "0"
+        return f"await {ch}.edit(slowmode_delay={secs})"
+    h["set_slowmode"] = set_slowmode
+
+    # ── EMOJI & STICKER ───────────────────────────────────────
+    def create_emoji(args):
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"emoji"'
+        img = args[2] if len(args) > 2 else "b''"
+        return f"await {g}.create_custom_emoji(name={name}, image={img})"
+    h["create_emoji"] = create_emoji
+
+    def delete_emoji(args):
+        return f"await {args[0] if args else 'emoji'}.delete()"
+    h["delete_emoji"] = delete_emoji
+
+    # ── DOSYA GÖNDERME ────────────────────────────────────────
+    def send_file(args):
+        ch = args[0] if args else "channel"
+        path = _as_str(args[1]) if len(args) > 1 else '"file.txt"'
+        content = [args[2]] if len(args) > 2 and "=" not in args[2] else []
+        parts = content + [f"file=discord.File({path})"]
+        return f"await {ch}.send({', '.join(parts)})"
+    h["send_file"] = send_file
+
+    def send_files(args):
+        ch = args[0] if args else "channel"
+        paths = args[1] if len(args) > 1 else "[]"
+        return f"await {ch}.send(files=[discord.File(__p) for __p in {paths}])"
+    h["send_files"] = send_files
+
+    # ── AUDIT LOG ─────────────────────────────────────────────
+    def audit_logs(args):
+        g = args[0] if args else "guild"
+        limit = args[1] if len(args) > 1 else "100"
+        return f"[__e async for __e in {g}.audit_logs(limit={limit})]"
+    h["audit_logs"] = audit_logs
+
+    # ── MEMBER İLERİ ──────────────────────────────────────────
+    def move_to(args):
+        m = args[0] if args else "member"
+        ch = args[1] if len(args) > 1 else "channel"
+        return f"await {m}.move_to({ch})"
+    h["move_to"] = move_to
+
+    def mute(args):
+        return f"await {args[0] if args else 'member'}.edit(mute=True)"
+    h["mute"] = mute
+
+    def unmute(args):
+        return f"await {args[0] if args else 'member'}.edit(mute=False)"
+    h["unmute"] = unmute
+
+    def deafen(args):
+        return f"await {args[0] if args else 'member'}.edit(deafen=True)"
+    h["deafen"] = deafen
+
+    def undeafen(args):
+        return f"await {args[0] if args else 'member'}.edit(deafen=False)"
+    h["undeafen"] = undeafen
+
+    def disconnect(args):
+        return f"await {args[0] if args else 'member'}.move_to(None)"
+    h["disconnect"] = disconnect
+
+    # ── TYPING & GENEL ────────────────────────────────────────
+    def typing(args):
+        return f"{args[0] if args else 'channel'}.typing()"
+    h["typing"] = typing
+
+    def send_typing(args):
+        return f"await {args[0] if args else 'channel'}.typing()"
+    h["send_typing"] = send_typing
+
+    def crosspost(args):
+        return f"await {args[0] if args else 'message'}.publish()"
+    h["crosspost"] = crosspost
+
+    def fetch_guilds(args):
+        return "[__g async for __g in __bot__.fetch_guilds()]"
+    h["fetch_guilds"] = fetch_guilds
+
+    def latency(args):
+        return "__bot__.latency"
+    h["latency"] = latency
+
+    def sync_tree(args):
+        g = args[0] if args else None
+        if g:
+            return f"await __bot__.tree.sync(guild={g})"
+        return "await __bot__.tree.sync()"
+    h["sync_tree"] = sync_tree
+
     return h
 
 
