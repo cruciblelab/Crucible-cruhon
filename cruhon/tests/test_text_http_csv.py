@@ -268,11 +268,19 @@ class TestHttpTranspile:
     def test_async_text(self):assert ".text" in self._t_async('@http.async_text["https://x.com"]')
 
 
-class TestHttpNoRestrictions:
-    def test_any_url_passes(self):
+class TestHttpSsrf:
+    def test_localhost_blocked(self):
         from cruhon.core.libs.http_ import _check_url
-        assert _check_url("http://localhost/secret") == "http://localhost/secret"
-        assert _check_url("http://192.168.1.1/admin") == "http://192.168.1.1/admin"
+        with pytest.raises(PermissionError):
+            _check_url("http://localhost/secret")
+
+    def test_private_blocked(self):
+        from cruhon.core.libs.http_ import _check_url
+        with pytest.raises(PermissionError):
+            _check_url("http://192.168.1.1/admin")
+
+    def test_public_allowed(self):
+        from cruhon.core.libs.http_ import _check_url
         assert _check_url("https://api.example.com/data") == "https://api.example.com/data"
 
     def test_custom_timeout_no_conflict(self):

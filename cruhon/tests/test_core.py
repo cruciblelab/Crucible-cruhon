@@ -624,23 +624,32 @@ class TestFileLib:
         finally:
             os.chdir(old)
 
-    def test_file_vp_passthrough(self, tmp_path):
-        """_vp no longer restricts — any path is returned as-is."""
+    def test_file_vp_adjacent_prefix_blocked(self, tmp_path):
+        """Path whose prefix matches cwd but isn't under it (e.g. /tmp/x vs /tmp/x-evil)."""
         from cruhon.core.libs.file_ import _vp
-        adjacent = str(tmp_path.parent / (tmp_path.name + "-adjacent"))
-        assert _vp(adjacent) == adjacent
-        assert _vp("/etc/passwd") == "/etc/passwd"
+        import os
+        old = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            adjacent = str(tmp_path.parent / (tmp_path.name + "-adjacent"))
+            with pytest.raises(PermissionError, match="outside the working directory"):
+                _vp(adjacent)
+        finally:
+            os.chdir(old)
 
-    def test_http_ssrf_passthrough(self):
-        """_check_url no longer blocks any URL — full Python freedom."""
+    def test_http_ssrf_loopback_blocked(self):
+        """_check_url blocks localhost and loopback addresses."""
         from cruhon.core.libs.http_ import _check_url
         for url in [
             "http://127.0.0.1/",
             "http://localhost/secret",
+            "http://0.0.0.0/",
+            "http://169.254.169.254/latest/meta-data/",
             "http://192.168.1.1/admin",
-            "https://example.com/api",
+            "http://10.0.0.1/internal",
         ]:
-            assert _check_url(url) == url
+            with pytest.raises(PermissionError, match="blocked"):
+                _check_url(url)
 
     def test_http_ssrf_public_url_allowed(self):
         """_check_url passes public URLs through."""
