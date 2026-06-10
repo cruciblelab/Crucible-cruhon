@@ -178,14 +178,17 @@ def list_mods() -> list[str]:
 
 # ─── Stdlib registration ──────────────────────────────────────
 def _register_stdlib():
-    from .libs.file_  import register as _r_file
-    from .libs.time_  import register as _r_time
-    from .libs.date_  import register as _r_date
-    from .libs.math_  import register as _r_math
-    from .libs.json_  import register as _r_json
-    from .libs.color_ import register as _r_color
-    from .libs.text_  import register as _r_text
-    from .libs.csv_   import register as _r_csv
+    from .libs.file_   import register as _r_file
+    from .libs.time_   import register as _r_time
+    from .libs.date_   import register as _r_date
+    from .libs.math_   import register as _r_math
+    from .libs.json_   import register as _r_json
+    from .libs.color_  import register as _r_color
+    from .libs.text_   import register as _r_text
+    from .libs.csv_    import register as _r_csv
+    from .libs.crypto_ import register as _r_crypto
+    from .libs.log_    import register as _r_log
+    from .libs.config_ import register as _r_config
     _r_file()
     _r_time()
     _r_date()
@@ -194,5 +197,8 @@ def _register_stdlib():
     _r_color()
     _r_text()
     _r_csv()
+    _r_crypto()
+    _r_log()
+    _r_config()
 
 _register_stdlib()
