@@ -57,15 +57,7 @@ _MOD = "cruhon.core.libs.file_"
 
 
 def _vp(path: str) -> str:
-    """Validate path — block traversal outside cwd."""
-    import os
-    cwd = os.getcwd()
-    p = os.path.abspath(str(path))
-    if p != cwd and not p.startswith(cwd + os.sep):
-        raise PermissionError(
-            f"[Cruhon] @file: '{path}' is outside the working directory. Access blocked."
-        )
-    return path
+    return str(path)
 
 
 def _vp_call(expr: str) -> str:

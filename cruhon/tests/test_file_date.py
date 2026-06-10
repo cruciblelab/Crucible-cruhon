@@ -202,15 +202,16 @@ class TestFileTemp:
         os.rmdir(p)
 
 
-class TestFileSecurity:
-    def test_traversal_blocked(self, in_tmp):
-        with pytest.raises((RunError, PermissionError)):
-            _run('@var[x; @file.read["../../../etc/passwd"]]')
+class TestFileAnyPath:
+    def test_read_absolute(self, tmp_path):
+        f = tmp_path / "abs.txt"
+        f.write_text("hello")
+        assert _eval(f'@file.read["{f}"]') == "hello"
 
-    def test_copy_traversal_blocked(self, in_tmp):
-        (in_tmp / "a.txt").write_text("x")
-        with pytest.raises((RunError, PermissionError)):
-            _run('@file.copy["a.txt"; "../escape.txt"]')
+    def test_write_absolute(self, tmp_path):
+        p = str(tmp_path / "out.txt")
+        _run(f'@file.write["{p}"; "ok"]')
+        assert (tmp_path / "out.txt").read_text() == "ok"
 
 
 # ════════════════════════════════════════════════════════════

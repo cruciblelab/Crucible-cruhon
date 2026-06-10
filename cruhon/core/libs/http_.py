@@ -54,20 +54,6 @@ _DEFAULT_TIMEOUT = 30
 
 
 def _check_url(url: str) -> str:
-    """Block SSRF: reject requests to localhost, link-local, and private ranges."""
-    import re
-    blocked = re.compile(
-        r"^https?://(localhost|127\.|0\.0\.0\.0|::1"
-        r"|169\.254\."
-        r"|10\."
-        r"|172\.(1[6-9]|2[0-9]|3[01])\."
-        r"|192\.168\.)",
-        re.IGNORECASE,
-    )
-    if blocked.match(str(url)):
-        raise PermissionError(
-            f"[Cruhon] @http: URL '{url}' is blocked (private/loopback address)."
-        )
     return str(url)
 
 
