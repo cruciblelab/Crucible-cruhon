@@ -92,8 +92,13 @@ class _CruhonData:
     def _ensure(self):
         self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {self._table} "
-            f"(scope TEXT, k TEXT, v TEXT, PRIMARY KEY(scope, k))"
+            f"(scope TEXT, k TEXT, v TEXT, exp REAL, PRIMARY KEY(scope, k))"
         )
+        # Eski tabloları (exp sütunsuz) göçür
+        try:
+            self._conn.execute(f"ALTER TABLE {self._table} ADD COLUMN exp REAL")
+        except Exception:
+            pass
         self._conn.commit()
 
     def close(self):
@@ -110,21 +115,120 @@ class _CruhonData:
         return self._c()
 
     # ── core (portable: DELETE + INSERT upsert) ──────────────
-    def put(self, scope, k, v):
+    def put(self, scope, k, v, exp=None):
         import json
         c = self._c()
         c.execute(f"DELETE FROM {self._table} WHERE scope=? AND k=?", (scope, str(k)))
-        c.execute(f"INSERT INTO {self._table}(scope, k, v) VALUES(?,?,?)",
-                  (scope, str(k), json.dumps(v)))
+        c.execute(f"INSERT INTO {self._table}(scope, k, v, exp) VALUES(?,?,?,?)",
+                  (scope, str(k), json.dumps(v), exp))
         c.commit()
         return v
 
     def get(self, scope, k, default=None):
-        import json
+        import json, time
         cur = self._c().execute(
-            f"SELECT v FROM {self._table} WHERE scope=? AND k=?", (scope, str(k)))
+            f"SELECT v, exp FROM {self._table} WHERE scope=? AND k=?", (scope, str(k)))
         row = cur.fetchone()
-        return json.loads(row[0]) if row else default
+        if not row:
+            return default
+        v, exp = row
+        if exp is not None and time.time() > exp:
+            self.delete(scope, k)
+            return default
+        return json.loads(v)
+
+    # ── TTL / EXPIRE ─────────────────────────────────────────
+    def setex(self, scope, k, v, seconds):
+        import time
+        return self.put(scope, k, v, exp=time.time() + float(seconds))
+
+    def expire(self, scope, k, seconds):
+        import time
+        v = self.get(scope, k)
+        if v is None and not self.has(scope, k):
+            return False
+        self.put(scope, k, v, exp=time.time() + float(seconds))
+        return True
+
+    def persist(self, scope, k):
+        v = self.get(scope, k)
+        self.put(scope, k, v, exp=None)
+        return True
+
+    def ttl(self, scope, k):
+        import time
+        cur = self._c().execute(
+            f"SELECT exp FROM {self._table} WHERE scope=? AND k=?", (scope, str(k)))
+        row = cur.fetchone()
+        if not row:
+            return -2          # anahtar yok
+        if row[0] is None:
+            return -1          # süresiz
+        return max(0, int(row[0] - time.time()))
+
+    # ── LIST (Redis-vari) ────────────────────────────────────
+    def _as_list(self, scope, k):
+        v = self.get(scope, k, [])
+        return v if isinstance(v, list) else []
+
+    def lpush(self, scope, k, val):
+        lst = self._as_list(scope, k); lst.insert(0, val)
+        self.put(scope, k, lst); return len(lst)
+
+    def rpush(self, scope, k, val):
+        lst = self._as_list(scope, k); lst.append(val)
+        self.put(scope, k, lst); return len(lst)
+
+    def lpop(self, scope, k):
+        lst = self._as_list(scope, k)
+        if not lst: return None
+        val = lst.pop(0); self.put(scope, k, lst); return val
+
+    def rpop(self, scope, k):
+        lst = self._as_list(scope, k)
+        if not lst: return None
+        val = lst.pop(); self.put(scope, k, lst); return val
+
+    def lrange(self, scope, k, start=0, end=-1):
+        lst = self._as_list(scope, k)
+        if end == -1:
+            return lst[start:]
+        return lst[start:end + 1]
+
+    def llen(self, scope, k):
+        return len(self._as_list(scope, k))
+
+    # ── SET (benzersiz üyeler) ───────────────────────────────
+    def sadd(self, scope, k, val):
+        s = self._as_list(scope, k)
+        if val not in s:
+            s.append(val); self.put(scope, k, s); return 1
+        return 0
+
+    def srem(self, scope, k, val):
+        s = self._as_list(scope, k)
+        if val in s:
+            s.remove(val); self.put(scope, k, s); return 1
+        return 0
+
+    def smembers(self, scope, k):
+        return self._as_list(scope, k)
+
+    def sismember(self, scope, k, val):
+        return val in self._as_list(scope, k)
+
+    def scard(self, scope, k):
+        return len(self._as_list(scope, k))
+
+    # ── DISCORD OTO-CONTEXT ──────────────────────────────────
+    @staticmethod
+    def _ctx_gid(ctx):
+        return getattr(getattr(ctx, "guild", None), "id", 0)
+
+    @staticmethod
+    def _ctx_uid(ctx):
+        u = getattr(ctx, "author", None) or getattr(ctx, "user", None)
+        return getattr(u, "id", 0)
 
     def delete(self, scope, k):
         c = self._c()
@@ -242,6 +346,38 @@ def _build() -> dict:
     h["mget"]    = lambda a: f"{_D}.get({_D}._m({a[0]}, {a[1]}), {a[2]}, {a[3] if len(a)>3 else 'None'})"
     h["mdelete"] = lambda a: f"{_D}.delete({_D}._m({a[0]}, {a[1]}), {a[2] if len(a)>2 else _Q})"
     h["mincr"]   = lambda a: f"{_D}.incr({_D}._m({a[0]}, {a[1]}), {a[2]}, {a[3] if len(a)>3 else '1'})"
+
+    # ── TTL / EXPIRE (global scope) ──────────────────────────
+    h["setex"]   = lambda a: f"{_D}.setex('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else '60'})"
+    h["expire"]  = lambda a: f"{_D}.expire('global', {a[0]}, {a[1] if len(a)>1 else '60'})"
+    h["persist"] = lambda a: f"{_D}.persist('global', {a[0] if a else _Q})"
+    h["ttl"]     = lambda a: f"{_D}.ttl('global', {a[0] if a else _Q})"
+
+    # ── LIST (Redis-vari, global scope) ──────────────────────
+    h["lpush"]   = lambda a: f"{_D}.lpush('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["rpush"]   = lambda a: f"{_D}.rpush('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["lpop"]    = lambda a: f"{_D}.lpop('global', {a[0] if a else _Q})"
+    h["rpop"]    = lambda a: f"{_D}.rpop('global', {a[0] if a else _Q})"
+    h["lrange"]  = lambda a: f"{_D}.lrange('global', {a[0]}, {a[1] if len(a)>1 else '0'}, {a[2] if len(a)>2 else '-1'})"
+    h["llen"]    = lambda a: f"{_D}.llen('global', {a[0] if a else _Q})"
+
+    # ── SET (benzersiz, global scope) ────────────────────────
+    h["sadd"]      = lambda a: f"{_D}.sadd('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["srem"]      = lambda a: f"{_D}.srem('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["smembers"]  = lambda a: f"{_D}.smembers('global', {a[0] if a else _Q})"
+    h["sismember"] = lambda a: f"{_D}.sismember('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["scard"]     = lambda a: f"{_D}.scard('global', {a[0] if a else _Q})"
+
+    # ── DISCORD OTO-CONTEXT (ctx/interaction'dan id otomatik) ─
+    # @data.cset[ctx; "key"; value]  → o sunucuya yaz
+    h["cset"]  = lambda a: f"{_D}.put({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    h["cget"]  = lambda a: f"{_D}.get({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    # @data.cuset[ctx; "key"; value] → o kullanıcıya yaz
+    h["cuset"] = lambda a: f"{_D}.put({_D}._u({_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    h["cuget"] = lambda a: f"{_D}.get({_D}._u({_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    # @data.cmset[ctx; "key"; value] → o üyeye (sunucu+kullanıcı) yaz
+    h["cmset"] = lambda a: f"{_D}.put({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    h["cmget"] = lambda a: f"{_D}.get({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
 
     return h
 

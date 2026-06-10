@@ -166,3 +166,123 @@ class TestDataTranspile:
 
     def test_connection_raw(self):
         assert "__cruhon_data__.connection()" in _compile("@var[c; @data.connection[]]")
+
+
+# ─────────────────────────────────────────────────────────────
+# GENİŞLETME — TTL / LIST / SET / OTO-CONTEXT
+# ─────────────────────────────────────────────────────────────
+
+class TestDataTTL:
+    def _s(self):
+        return CruhonData().open(":memory:")
+
+    def test_setex_and_ttl(self):
+        d = self._s()
+        d.setex("global", "tok", "abc", 100)
+        assert d.get("global", "tok") == "abc"
+        assert 0 < d.ttl("global", "tok") <= 100
+
+    def test_expired_returns_default(self):
+        d = self._s()
+        d.setex("global", "tok", "abc", -1)  # zaten süresi geçmiş
+        assert d.get("global", "tok", "yok") == "yok"
+
+    def test_persist_removes_expiry(self):
+        d = self._s()
+        d.setex("global", "k", 1, 100)
+        d.persist("global", "k")
+        assert d.ttl("global", "k") == -1
+
+    def test_ttl_missing(self):
+        assert self._s().ttl("global", "yok") == -2
+
+
+class TestDataList:
+    def _s(self):
+        return CruhonData().open(":memory:")
+
+    def test_push_pop(self):
+        d = self._s()
+        d.rpush("global", "q", "a")
+        d.rpush("global", "q", "b")
+        d.lpush("global", "q", "x")
+        assert d.lrange("global", "q", 0, -1) == ["x", "a", "b"]
+        assert d.lpop("global", "q") == "x"
+        assert d.rpop("global", "q") == "b"
+        assert d.llen("global", "q") == 1
+
+    def test_lrange_slice(self):
+        d = self._s()
+        for n in range(5):
+            d.rpush("global", "l", n)
+        assert d.lrange("global", "l", 1, 3) == [1, 2, 3]
+
+
+class TestDataSet:
+    def _s(self):
+        return CruhonData().open(":memory:")
+
+    def test_set_unique(self):
+        d = self._s()
+        assert d.sadd("global", "s", "a") == 1
+        assert d.sadd("global", "s", "a") == 0  # zaten var
+        d.sadd("global", "s", "b")
+        assert set(d.smembers("global", "s")) == {"a", "b"}
+        assert d.sismember("global", "s", "a") is True
+        assert d.scard("global", "s") == 2
+        d.srem("global", "s", "a")
+        assert d.sismember("global", "s", "a") is False
+
+
+class TestDataContext:
+    """Discord ctx/interaction'dan otomatik id çıkarımı."""
+
+    class _FakeGuild:
+        id = 999
+
+    class _FakeUser:
+        id = 42
+
+    class _FakeCtx:
+        guild = TestDataContext._FakeGuild() if False else None  # placeholder
+
+    def test_ctx_gid_uid(self):
+        class G: id = 999
+        class U: id = 42
+        class Ctx:
+            guild = G()
+            author = U()
+        d = CruhonData().open(":memory:")
+        d.put(d._g(d._ctx_gid(Ctx())), "x", 1)
+        assert d.get(d._g(999), "x") == 1
+        d.put(d._u(d._ctx_uid(Ctx())), "y", 2)
+        assert d.get(d._u(42), "y") == 2
+
+    def test_interaction_uses_user(self):
+        class U: id = 7
+        class Interaction:
+            user = U()
+            guild = None
+        d = CruhonData().open(":memory:")
+        assert d._ctx_uid(Interaction()) == 7
+
+
+class TestDataExtTranspile:
+    def test_ttl_emit(self):
+        assert "__cruhon_data__.setex('global', \"t\", \"v\", 30)" in _compile('@data.setex["t"; "v"; 30]')
+        assert "__cruhon_data__.ttl('global', \"t\")" in _compile('@var[x; @data.ttl["t"]]')
+
+    def test_list_emit(self):
+        assert "__cruhon_data__.rpush('global', \"q\", item)" in _compile('@data.rpush["q"; item]')
+        assert "__cruhon_data__.lrange('global', \"q\", 0, -1)" in _compile('@var[l; @data.lrange["q"]]')
+
+    def test_set_emit(self):
+        assert "__cruhon_data__.sadd('global', \"tags\", \"x\")" in _compile('@data.sadd["tags"; "x"]')
+
+    def test_context_emit(self):
+        code = _compile('@data.cset[ctx; "warns"; 3]')
+        assert "__cruhon_data__.put(__cruhon_data__._g(__cruhon_data__._ctx_gid(ctx)), \"warns\", 3)" in code
+
+    def test_context_member_emit(self):
+        code = _compile('@var[w; @data.cmget[ctx; "warns"; 0]]')
+        assert "_ctx_gid(ctx)" in code and "_ctx_uid(ctx)" in code
