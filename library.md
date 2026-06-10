@@ -51,16 +51,36 @@ the table below and the Contributing section.
 These are Cruhon-native command sets that wrap stdlib modules with a far
 simpler surface. You do **not** need `@import` for them.
 
+### Core namespaces
+
 | Namespace   | Wraps                                   | Commands |
 |-------------|-----------------------------------------|----------|
-| `@file.*`   | `pathlib` / `os` / `shutil` / `glob` / `tempfile` | read, write, append, copy, move, glob, mkdir, json … |
-| `@date.*`   | `datetime` / `time` / `calendar`        | now, format, parse, add, diff, weekday, make … |
-| `@http.*`   | `requests`                              | get, post, put, delete |
+| `@file.*`   | `pathlib` / `os` / `shutil` / `glob` / `tempfile` | read, write, append, copy, move, glob, mkdir, json, touch, symlink, chmod, stat… |
+| `@date.*`   | `datetime` / `time` / `calendar` / `zoneinfo` | now, format, parse, add, diff, weekday, timezone, UTC, ISO calendar… |
+| `@text.*`   | `re` / `str` / `textwrap` / `html` | upper, lower, split, replace, regex, encode, decode, slug, partition… |
+| `@http.*`   | `requests` / `httpx`                    | get, post, put, delete, upload, auth, async_get, async_post… |
 | `@json.*`   | `json`                                  | load, dump |
-| `@db.*`     | `sqlite3` / `psycopg2` / `pymysql` (+ async) | 138 commands — see `mods/cruhon-db` |
-| `@discord.*`| `discord.py`                            | ~60 commands — see `mods/cruhon-discord` |
 | `@store.*`  | in-memory key/value                     | set, get, clear |
 | `@ctx.*`    | execution context dict                  | set, get, push, pop |
+
+### Extended namespaces (stdlib wrappers)
+
+| Namespace   | Wraps                                   | Commands |
+|-------------|-----------------------------------------|----------|
+| `@crypto.*` | `hashlib` / `hmac` / `secrets` / `base64` / `uuid` | md5, sha256, hash, pbkdf2, scrypt, hmac, token, uuid, b64_encode… |
+| `@log.*`    | `logging`                               | setup, debug, info, warning, error, to_file, get, child… |
+| `@config.*` | `configparser` / `json` / `tomllib` / `os.environ` | load, save, get, set, keys, dotenv, env… |
+| `@shell.*`  | `subprocess` / `os` / `sys` / `shutil`  | run, output, lines, code, ok, bg, kill, terminate, wait, env… |
+| `@archive.*`| `zipfile` / `tarfile` / `gzip` / `bz2` / `lzma` | zip, unzip, tar, untar, gzip, gunzip, bzip2, lzma… |
+| `@mail.*`   | `smtplib` / `imaplib` / `email`         | send, send_html, imap_connect, imap_search, imap_fetch… |
+| `@csv.*`    | `csv`                                   | read, write, filter, to_json… |
+
+### Plugin namespaces
+
+| Namespace   | Type    | Commands |
+|-------------|---------|----------|
+| `@db.*`     | plugin  | 138 commands — see `mods/cruhon-db` |
+| `@discord.*`| plugin  | ~60 commands — see `mods/cruhon-discord` |
 
 ### `@file` quick reference
 

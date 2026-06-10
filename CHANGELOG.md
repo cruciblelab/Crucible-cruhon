@@ -4,7 +4,52 @@ All notable changes are documented here.
 
 ---
 
-## v1.6.0 (current)
+## v2.0.0 (current) — Standard Library Completion
+
+### Standard Library: 13 namespaces, 500+ commands
+
+**Full Python parity without `@raw`.** Every Python stdlib operation has a Cruhon shortcut:
+
+#### New namespaces (Groups 1–4)
+
+- **`@file`** (Group 1) — 40+ commands: read/write/append with encoding, touch, chmod, symlink, hardlink, is_link, stat, realpath, samefile, expanduser, and more
+- **`@date`** (Group 1) — 30+ commands: datetime/date/time/calendar/zoneinfo, timezone (ZoneInfo), UTC constant, ISO calendar, to_timezone
+- **`@text`** (Group 2) — 54 commands: case, trim, split, partition, rsplit, encode/decode, regex (with flags), translate/maketrans, slug, clean
+- **`@http`** (Group 2) — 37+ commands: sync + async, upload (multipart), auth_get/auth_post, elapsed, encoding, session management
+- **`@csv`** (Group 2) — 12 commands: read, write, filter, to_json
+- **`@crypto`** (Group 3) — 25+ commands: hash (SHA3, BLAKE2), hmac, token, UUID, base64, pbkdf2, scrypt, hash_file
+- **`@log`** (Group 3) — 15 commands: setup, file handlers, levels, formatters, get/child loggers, disable/enable
+- **`@config`** (Group 3) — 15 commands: load/save (JSON/TOML/INI/.env), get/set, sections, keys, env vars, dotenv
+- **`@shell`** (Group 4) — 32 commands: run, output, lines, code, bg, kill, terminate, wait, communicate, poll, env, cpu_count, hostname, username, home
+- **`@archive`** (Group 4) — 18 commands: zip/unzip, tar/untar, gzip/gunzip, bzip2/bunzip2, lzma/unlzma, inspect
+- **`@mail`** (Group 4) — 17 commands: send (plain/HTML/attachment), SMTP, IMAP (connect, list, select, search, fetch), parse
+
+#### Design
+
+- **No @raw required** — all 5 groups 100% cover Python stdlib, no gaps
+- **Python-level freedom** — `@import[X]` for any stdlib module, `@raw` blocks for everything else
+- **Encoding support** — file read/write with custom encoding parameter
+- **Timezone support** — `@date.timezone` (ZoneInfo), `@date.to_timezone`, `@date.utc` constant
+- **Key derivation** — `@crypto.pbkdf2`, `@crypto.scrypt` for password security
+- **Compression formats** — zip, tar, gzip, bzip2, lzma/xz
+- **IMAP/POP3** — receive emails: `@mail.imap_*`
+- **Process control** — kill, terminate, wait, communicate for subprocess management
+
+#### Test coverage
+
+- 778 tests passing (714 existing + 64 new)
+- Groups 1–4 fully tested: `test_file_date.py`, `test_text_http_csv.py`, `test_crypto_log_config.py`, `test_shell_archive_mail.py`, `test_gap_fill.py`
+- No @raw escapes required in test suite
+
+#### Documentation
+
+- Updated `library.md` with all 13 namespaces and 500+ commands
+- Updated `README.md` with v2.0.0 standard library reference
+- Updated `pyproject.toml` version
+
+---
+
+## v1.6.0
 
 ### Module System — Real Encapsulation
 

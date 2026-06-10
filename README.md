@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v1.6.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.0.0
 
 ---
 
@@ -405,9 +405,11 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries
+## Standard Libraries (13 namespaces, 500+ commands)
 
-### HTTP (`@http.*`)
+See [`library.md`](library.md) for the complete reference.
+
+### HTTP (`@http.*`) — GET, POST, upload, auth
 
 ```clpy
 @var[res; @http.get["https://api.example.com/data"]]
@@ -415,90 +417,133 @@ it to pass data into block bodies. Scripts can read and write it directly.
 @var[status; @http.status[res]]
 
 @var[res; @http.post["https://api.example.com/items"; {"name": "test"}]]
-@var[res; @http.put["https://api.example.com/items/1"; {"name": "updated"}]]
-@var[res; @http.delete["https://api.example.com/items/1"]]
-```
+@var[res; @http.auth_post["https://api.example.com"; data; "user"; "pass"]]
+@http.upload["https://example.com/upload"; "file"; "document.pdf"]
+@var[elapsed; @http.elapsed[res]]
 
-Async HTTP (requires `httpx`):
-
-```clpy
 @async[main]
     @var[res; @http.async_get["https://example.com"]]
 @end
 ```
 
-SSRF protection is built in — requests to private/loopback addresses are blocked.
-All requests have a 30-second timeout.
-
-### File (`@file.*`)
+### File (`@file.*`) — read, write, copy, touch, symlink, stat
 
 ```clpy
 @var[content; @file.read["data.txt"]]
 @file.write["output.txt"; content]
 @file.append["log.txt"; "new line\n"]
-@var[exists; @file.exists["data.txt"]]
-@file.delete["temp.txt"]
+@file.touch["newfile.txt"]
+@file.symlink["target.txt"; "link.txt"]
+@file.copy["a.txt"; "b.txt"]
+@var[stats; @file.stat["data.txt"]]
+@var[files; @file.glob["*.txt"]]
 ```
 
-Path traversal outside the working directory is blocked.
+### Date (`@date.*`) — format, parse, arithmetic, timezone, calendar
 
-### JSON (`@json.*`)
+```clpy
+@var[now; @date.now[]]
+@var[formatted; @date.format[@date.now[]; "%Y-%m-%d %H:%M"]]
+@var[parsed; @date.parse["2024-01-15"; "%Y-%m-%d"]]
+@var[future; @date.add[@date.now[]; days=7; hours=2]]
+@var[gap; @date.diff_days[future; @date.now[]]]
+@var[tz_time; @date.to_timezone[@date.utcnow[]; "US/Eastern"]]
+@var[week; @date.isoweek[@date.today[]]]
+```
+
+### Text (`@text.*`) — regex, encode, case, split, partition, slug
+
+```clpy
+@var[upper; @text.upper["hello"]]
+@var[parts; @text.split["a,b,c"; ","]]
+@var[before; @text.partition["foo-bar"; "-"]]
+@var[slug; @text.slug["Hello World!"]]
+@var[replaced; @text.sub["pattern"; "replacement"; "text"]]
+@var[encoded; @text.encode["hello"]]
+@var[is_digit; @text.is_numeric["123"]]
+```
+
+### Crypto (`@crypto.*`) — hash, hmac, pbkdf2, scrypt, token, UUID, base64
+
+```clpy
+@var[digest; @crypto.sha256["password"]]
+@var[token; @crypto.token[32]]
+@var[derived; @crypto.pbkdf2["password"; "salt"; 100000]]
+@var[hashed; @crypto.scrypt["password"; "salt"]]
+@var[id; @crypto.uuid[]]
+@var[encoded; @crypto.b64_encode["data"]]
+```
+
+### Log (`@log.*`) — structured logging with file handlers, levels, formatters
+
+```clpy
+@log.setup["INFO"]
+@log.info["Application started"]
+@log.warning["Warning message"]
+@log.error["Error occurred"]
+@log.to_file["app.log"]
+@var[logger; @log.get["myapp"]]
+logger.debug("detail")
+```
+
+### Config (`@config.*`) — JSON, TOML, INI, env
+
+```clpy
+@var[data; @config.load["config.json"]]
+@var[value; @config.get["config.json"; "database"; "host"]]
+@config.set["config.json"; "debug"; True]
+@var[env_var; @config.env["DATABASE_URL"]]
+@config.dotenv[".env"]
+```
+
+### Shell (`@shell.*`) — run commands, control processes, manage environment
+
+```clpy
+@var[result; @shell.run["ls -la"]]
+@var[output; @shell.output["echo hello"]]
+@var[lines; @shell.lines["ls"]]
+@var[proc; @shell.bg["sleep 10"]]
+@shell.kill[proc]
+@shell.wait[proc]
+@var[username; @shell.username[]]
+@var[cpu_count; @shell.cpu_count[]]
+```
+
+### Archive (`@archive.*`) — zip, tar, gzip, bzip2, lzma
+
+```clpy
+@archive.zip["data/"; "data.zip"]
+@archive.unzip["data.zip"; "extracted/"]
+@archive.tar["data/"; "data.tar.gz"]
+@archive.bzip2["file.txt"; "file.bz2"]
+@archive.lzma["file.txt"; "file.xz"]
+@var[names; @archive.zip_list["data.zip"]]
+```
+
+### Mail (`@mail.*`) — send/receive SMTP/IMAP
+
+```clpy
+@mail.send["user@example.com"; "Subject"; "Body"]
+@mail.send_html["user@example.com"; "Subject"; "<h1>HTML</h1>"]
+@var[imap; @mail.imap_connect["imap.gmail.com"; "user@gmail.com"; "password"]]
+@var[folders; @mail.imap_list[imap]]
+@var[ids; @mail.imap_search[imap; "UNSEEN"]]
+@var[msg; @mail.imap_fetch[imap; id]]
+@mail.imap_close[imap]
+```
+
+### More: JSON, Math, Time, Color, Store, CSV
 
 ```clpy
 @var[text; @json.stringify[data]]
-@var[obj; @json.parse[text]]
-@var[pretty; @json.pretty[data]]
-@json.read["config.json"]
-@json.write["output.json"; data]
-```
-
-### Math (`@math.*`)
-
-```clpy
 @var[r; @math.sqrt[16.0]]
-@var[r; @math.abs[-5]]
-@var[r; @math.pow[2; 10]]
-@var[r; @math.floor[3.7]]
-@var[r; @math.ceil[3.2]]
-@var[r; @math.log[2.718]]
-@var[r; @math.round[3.14159; 2]]
-@var[r; @math.random[1; 100]]   # random int between 1 and 100
-@var[r; @math.rand[]]           # random float 0.0–1.0
-@var[pi; @math.pi[]]
-```
-
-### Time (`@time.*`)
-
-```clpy
-@var[now; @time.now[]]            # datetime string
-@var[today; @time.date[]]         # date string
-@var[ts; @time.timestamp[]]       # unix timestamp
-@time.sleep[1]                    # sleep 1 second
-@var[fmt; @time.format["%Y-%m-%d"]]
-```
-
-### Color (`@color.*`)
-
-```clpy
-@print[@color.red["Error!"]]
-@print[@color.green["OK"]]
-@print[@color.yellow["Warning"]]
-@print[@color.blue["Info"]]
-@print[@color.cyan["Hint"]]
-@print[@color.bold["Title"]]
-```
-
-### Store (`@store.*`)
-
-Persistent key-value storage backed by `.cruhon_store.json`:
-
-```clpy
+@time.sleep[2]
+@print[@color.green["Success!"]]
 @store.set["key"; "value"]
-@var[val; @store.get["key"]]
-@var[val; @store.get["key"; "default"]]
-@store.delete["key"]
-@var[all; @store.all[]]
+@var[rows; @csv.read["data.csv"]]
 ```
+
+See [`library.md`](library.md) for full reference on all 500+ commands.
 
 ---
 
