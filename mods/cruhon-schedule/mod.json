@@ -1,0 +1,8 @@
+{
+    "name": "cruhon-schedule",
+    "version": "1.0.0",
+    "description": "Lightweight asyncio scheduler — intervals, daily/weekly times, one-shot, and cron (optional)",
+    "author": "Crucible",
+    "cruhon": ">=1.0.0",
+    "namespace": "schedule"
+}

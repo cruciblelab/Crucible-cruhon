@@ -334,28 +334,124 @@ def _visit_dc_command(transpiler, node):
     return "\n".join(lines)
 
 
+# Slash option type names → Python annotation
+_OPTION_TYPES = {
+    "string": "str", "str": "str", "text": "str",
+    "int": "int", "integer": "int", "number": "float", "float": "float",
+    "bool": "bool", "boolean": "bool",
+    "user": "discord.Member", "member": "discord.Member",
+    "channel": "discord.TextChannel", "voice": "discord.VoiceChannel",
+    "role": "discord.Role", "mentionable": "discord.abc.Mentionable",
+    "attachment": "discord.Attachment", "file": "discord.Attachment",
+}
+
+
+def _val(v: str) -> str:
+    """Choice value → keep if quoted/numeric, else make it a string literal."""
+    v = v.strip()
+    if v[:1] in ('"', "'"):
+        return v
+    if v.replace(".", "", 1).lstrip("-").isdigit():
+        return v
+    return repr(v)
+
+
 def _visit_dc_slash(transpiler, node):
     """
-    @discord.slash[hello; "Merhaba der"; ctx]
-    @discord.slash[roll; "Zar at"; ctx; sides]
-    → @__bot__.tree.command(name=..., description=...) + async def <name>(<params>):
-    """
-    args = node.args
+    Basic:
+      @discord.slash[hello; "Say hi"; interaction]
+      @discord.slash[roll; "Roll dice"; interaction; sides]
 
+    Configured (BDFD-style options):
+      @discord.slash[ban; "Ban a user"; interaction]
+          @param[member; user; "User to ban"]            # required by default
+          @param[reason; string; "Reason"; optional]     # optional
+          @choice[reason; Spam=spam; Abuse=abuse]        # restrict choices
+          @discord.respond[interaction; f"Banned {member}"]
+      @end
+
+    Emits @__bot__.tree.command + @describe + @choices + typed signature.
+    """
+    from cruhon.core.ast_nodes import PluginBlockNode
+
+    args = node.args
     kwargs = node.kwargs
     name = args[0].strip() if args else "slash_cmd"
     description = args[1].strip() if len(args) > 1 else f'"{args[0].strip() if args else "command"}"'
     ctx = args[2].strip() if len(args) > 2 else "interaction"
     extra_params = [a.strip() for a in args[3:]]
-    params_str = ", ".join([ctx] + extra_params)
 
     indent = "    " * transpiler._indent
-    body_code = transpiler._block(node.body)
 
-    lines = [
-        f"{indent}@__bot__.tree.command(name={name!r}, description={description})",
-        *_check_decorators(kwargs, indent, "slash"),
-        f"{indent}async def {name}({params_str}):",
+    # Split body into @param / @choice config vs. real command body
+    typed_params = []     # (pname, anno, required)
+    describes = {}        # pname -> description expr
+    choices = {}          # pname -> [(label, value), ...]
+    body_children = []
+    for child in node.body:
+        if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_param":
+            pa, pk = child.args, child.kwargs
+            pname = pa[0].strip()
+            tkey = (pa[1].strip().strip("\"'").lower()) if len(pa) > 1 else "string"
+            anno = _OPTION_TYPES.get(tkey, "str")
+            required = True
+            if len(pa) > 3 and pa[3].strip().strip("\"'").lower() in ("optional", "false"):
+                required = False
+            if pk.get("required", "").strip() in ("False", "false", "0"):
+                required = False
+            desc = None
+            if len(pa) > 2:
+                desc = pa[2].strip()
+            if "description" in pk:
+                desc = pk["description"].strip()
+            if desc:
+                describes[pname] = desc if desc[:1] in ('"', "'") else _as_str(desc)
+            typed_params.append((pname, anno, required))
+        elif isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_choice":
+            ca = child.args
+            cname = ca[0].strip() if ca else "opt"
+            clist = []
+            for item in ca[1:]:
+                item = item.strip()
+                if "=" in item and item.split("=")[0].strip().isidentifier():
+                    lbl, vv = item.split("=", 1)
+                    clist.append((lbl.strip(), vv.strip()))
+                else:
+                    clist.append((item.strip("\"'"), item))
+            for k, vv in child.kwargs.items():
+                clist.append((k, vv.strip()))
+            choices[cname] = clist
+        else:
+            body_children.append(child)
+
+    # Build signature: ctx, untyped positional params, then typed params
+    sig = [ctx] + extra_params
+    for pname, anno, required in typed_params:
+        sig.append(f"{pname}: {anno}" if required else f"{pname}: {anno} = None")
+
+    # Decorators
+    deco = [f"{indent}@__bot__.tree.command(name={name!r}, description={description})"]
+    deco += _check_decorators(kwargs, indent, "slash")
+    if describes:
+        parts = ", ".join(f"{n}={d}" for n, d in describes.items())
+        deco.append(f"{indent}@discord.app_commands.describe({parts})")
+    for cname, clist in choices.items():
+        items = ", ".join(
+            f"discord.app_commands.Choice(name={_as_str(l)}, value={_val(v)})"
+            for l, v in clist
+        )
+        deco.append(f"{indent}@discord.app_commands.choices({cname}=[{items}])")
+
+    # Render command body (only the non-config children)
+    saved = transpiler._indent
+    transpiler._indent += 1
+    body_code = "\n".join(
+        filter(None, (n.accept(transpiler) for n in body_children))
+    )
+    transpiler._indent = saved
+
+    lines = deco + [
+        f"{indent}async def {name}({', '.join(sig)}):",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
     return "\n".join(lines)
@@ -1897,9 +1993,13 @@ def register(api):
     api.block_command("on_submit", _noop_visit)
     api.block_command("body",      _noop_visit)
 
-    # Alt-bloklar: @field / @option (tek satır) — modal/select içinde
+    # Sub-blocks: @field / @option (one-liners) — inside modal/select
     api.command("field",  _make_oneliner_parser("_dc_field"),  _noop_visit)
     api.command("option", _make_oneliner_parser("_dc_option"), _noop_visit)
+
+    # Sub-blocks: @param / @choice (one-liners) — inside @discord.slash
+    api.command("param",  _make_oneliner_parser("_dc_param"),  _noop_visit)
+    api.command("choice", _make_oneliner_parser("_dc_choice"), _noop_visit)
 
     # Lib call handlers for all inline/statement discord commands
     for method, handler in _build_handlers().items():

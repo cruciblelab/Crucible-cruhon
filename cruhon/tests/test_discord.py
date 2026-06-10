@@ -775,3 +775,66 @@ class TestPowerFeatures:
         )
         code = _compile(src)
         assert "@discord.app_commands.checks.cooldown(1, 86400)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# SLASH OPTION CONFIG — @param / @choice (BDFD-style)
+# ─────────────────────────────────────────────────────────────
+
+class TestSlashOptions:
+    def test_basic_slash_unchanged(self):
+        src = (
+            '@discord.slash[ping; "Ping"; interaction]\n'
+            '    @discord.respond[interaction; "pong"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def ping(interaction):" in code
+        assert 'await interaction.response.send_message("pong")' in code
+
+    def test_typed_required_param(self):
+        src = (
+            '@discord.slash[ban; "Ban a user"; interaction]\n'
+            '    @param[member; user; "User to ban"]\n'
+            '    @discord.respond[interaction; "banned"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def ban(interaction, member: discord.Member):" in code
+        assert "@discord.app_commands.describe(member=" in code
+
+    def test_optional_param(self):
+        src = (
+            '@discord.slash[say; "Say"; interaction]\n'
+            '    @param[text; string; "What to say"]\n'
+            '    @param[times; int; "How many"; optional]\n'
+            '    @discord.respond[interaction; text]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "text: str" in code
+        assert "times: int = None" in code
+
+    def test_choices(self):
+        src = (
+            '@discord.slash[mode; "Set mode"; interaction]\n'
+            '    @param[level; string; "Level"]\n'
+            '    @choice[level; Easy=easy; Hard=hard]\n'
+            '    @discord.respond[interaction; level]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.app_commands.choices(level=[" in code
+        assert "discord.app_commands.Choice(name='Easy', value='easy')" in code
+        assert "discord.app_commands.Choice(name='Hard', value='hard')" in code
+
+    def test_param_with_cooldown(self):
+        src = (
+            '@discord.slash[daily; "Daily"; interaction; cooldown=86400]\n'
+            '    @param[choice; string; "Pick"]\n'
+            '    @discord.respond[interaction; "ok"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.app_commands.checks.cooldown(1, 86400)" in code
+        assert "choice: str" in code
