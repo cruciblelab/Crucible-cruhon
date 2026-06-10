@@ -713,3 +713,65 @@ class TestWideCoverage:
     def test_member_roles(self):
         assert "await member.add_roles(role1, role2)" in _compile("@discord.add_roles[member; role1; role2]")
         assert "member.roles" in _compile("@var[r; @discord.member_roles[member]]")
+
+
+# ─────────────────────────────────────────────────────────────
+# GÜÇ DALGASI — pagination / confirm / context menu / checks
+# ─────────────────────────────────────────────────────────────
+
+class TestPowerFeatures:
+    def test_paginate(self):
+        assert "await __paginate__(ctx, sayfalar)" in _compile("@discord.paginate[ctx; sayfalar]")
+        assert "await __paginate__(ctx, p, 60)" in _compile("@discord.paginate[ctx; p; timeout=60]")
+
+    def test_confirm(self):
+        assert 'await __confirm__(ctx, "Silinsin mi?")' in _compile('@var[ok; @discord.confirm[ctx; "Silinsin mi?"]]')
+
+    def test_context_menu_user(self):
+        src = (
+            "@discord.context_menu[Bilgi; user]\n"
+            '    @discord.respond[interaction; "bilgi"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@__bot__.tree.context_menu(name=" in code
+        assert "target: discord.Member" in code
+
+    def test_context_menu_message(self):
+        src = (
+            "@discord.context_menu[Raporla; message]\n"
+            '    @discord.respond[interaction; "raporlandı"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "target: discord.Message" in code
+
+    def test_command_cooldown_and_perms(self):
+        src = (
+            '@discord.command[ban; ctx; member; perms="ban_members"; cooldown=5]\n'
+            "    @discord.ban[member]\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@commands.cooldown(1, 5, commands.BucketType.user)" in code
+        assert "@commands.has_permissions(ban_members=True)" in code
+        assert "@__bot__.command(name='ban')" in code
+
+    def test_command_guild_and_owner_only(self):
+        src = (
+            "@discord.command[admin; ctx; guild_only=True; owner_only=True]\n"
+            '    @discord.reply[ctx; "ok"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@commands.guild_only()" in code
+        assert "@commands.is_owner()" in code
+
+    def test_slash_cooldown(self):
+        src = (
+            '@discord.slash[daily; "Günlük ödül"; interaction; cooldown=86400]\n'
+            '    @discord.respond[interaction; "ödül!"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.app_commands.checks.cooldown(1, 86400)" in code

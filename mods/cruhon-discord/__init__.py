@@ -139,7 +139,8 @@ import re
 # ─────────────────────────────────────────────────────────────
 
 _BLOCK_CMDS = {"on", "command", "slash", "task", "listen",
-               "view", "button", "cog", "group", "modal", "select"}
+               "view", "button", "cog", "group", "modal", "select",
+               "context_menu"}
 
 # Friendly button style names → discord.ButtonStyle member (komple geniş)
 _BUTTON_STYLES = {
@@ -268,11 +269,38 @@ def _visit_dc_on(transpiler, node):
     return "\n".join(lines)
 
 
+def _check_decorators(kwargs, indent, mode="command"):
+    """cooldown= / perms= / guild_only= / owner_only= → check dekoratör satırları."""
+    out = []
+    if "cooldown" in kwargs:
+        n = kwargs["cooldown"].strip()
+        if mode == "slash":
+            out.append(f"{indent}@discord.app_commands.checks.cooldown(1, {n})")
+        else:
+            out.append(f"{indent}@commands.cooldown(1, {n}, commands.BucketType.user)")
+    if "perms" in kwargs:
+        raw = kwargs["perms"].strip().strip("\"'")
+        perms = ", ".join(f"{p.strip()}=True" for p in raw.split(",") if p.strip())
+        if mode == "slash":
+            out.append(f"{indent}@discord.app_commands.checks.has_permissions({perms})")
+        else:
+            out.append(f"{indent}@commands.has_permissions({perms})")
+    if kwargs.get("guild_only", "").strip() in ("True", "true", "1"):
+        if mode == "slash":
+            out.append(f"{indent}@discord.app_commands.guild_only()")
+        else:
+            out.append(f"{indent}@commands.guild_only()")
+    if kwargs.get("owner_only", "").strip() in ("True", "true", "1") and mode != "slash":
+        out.append(f"{indent}@commands.is_owner()")
+    return out
+
+
 def _visit_dc_command(transpiler, node):
     """
     @discord.command[ping; ctx]
     @discord.command[greet; ctx; user; aliases="hi,hey"]
-    → @__bot__.command(name=...) + async def <name>(ctx, ...):
+    @discord.command[ban; ctx; member; perms="ban_members"; cooldown=5]
+    → @__bot__.command(name=...) + check dekoratörleri + async def <name>(ctx, ...):
     """
     args = node.args
     kwargs = node.kwargs
@@ -299,6 +327,7 @@ def _visit_dc_command(transpiler, node):
 
     lines = [
         f"{indent}@__bot__.command(name={name!r}{dec_kw})",
+        *_check_decorators(kwargs, indent, "command"),
         f"{indent}async def {name}({params_str}):",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
@@ -313,6 +342,7 @@ def _visit_dc_slash(transpiler, node):
     """
     args = node.args
 
+    kwargs = node.kwargs
     name = args[0].strip() if args else "slash_cmd"
     description = args[1].strip() if len(args) > 1 else f'"{args[0].strip() if args else "command"}"'
     ctx = args[2].strip() if len(args) > 2 else "interaction"
@@ -324,10 +354,33 @@ def _visit_dc_slash(transpiler, node):
 
     lines = [
         f"{indent}@__bot__.tree.command(name={name!r}, description={description})",
+        *_check_decorators(kwargs, indent, "slash"),
         f"{indent}async def {name}({params_str}):",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
     return "\n".join(lines)
+
+
+def _visit_dc_context_menu(transpiler, node):
+    """
+    @discord.context_menu[Bilgi; user]      (type: user | message)
+        @discord.respond[interaction; f"{target}"]
+    @end
+    → @__bot__.tree.context_menu(name=...) + async def(interaction, target: Type):
+    """
+    args = node.args
+    label = _as_str(args[0]) if args else '"Komut"'
+    fname = _slug(args[0] if args else "context")
+    ctype = (args[1].strip().strip("\"'").lower()) if len(args) > 1 else "user"
+    target_type = "discord.Message" if ctype in ("message", "msg") else "discord.Member"
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+    return "\n".join([
+        f"{indent}@__bot__.tree.context_menu(name={label})",
+        f"{indent}async def {fname}(interaction: discord.Interaction, target: {target_type}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ])
 
 
 def _visit_dc_task(transpiler, node):
@@ -833,6 +886,76 @@ def _cruhon_embed_helper(**kwargs):
         e.url = str(kwargs["url"])
 
     return e
+
+
+async def _cruhon_paginate(dest, pages, timeout=180):
+    """Çok-sayfa embed gezgini — ⬅️ ➡️ ⏹️ butonlarıyla.
+    api.inject ile __paginate__ adıyla enjekte edilir."""
+    import discord
+    pages = list(pages)
+    if not pages:
+        return
+    st = {"i": 0}
+
+    def _emb(p):
+        return p if isinstance(p, discord.Embed) else discord.Embed(description=str(p))
+
+    view = discord.ui.View(timeout=timeout)
+    prev = discord.ui.Button(emoji="⬅️", style=discord.ButtonStyle.secondary)
+    nxt = discord.ui.Button(emoji="➡️", style=discord.ButtonStyle.secondary)
+    stop_b = discord.ui.Button(emoji="⏹️", style=discord.ButtonStyle.danger)
+
+    async def _go(interaction):
+        await interaction.response.edit_message(embed=_emb(pages[st["i"]]), view=view)
+
+    async def _prev(interaction):
+        st["i"] = (st["i"] - 1) % len(pages); await _go(interaction)
+
+    async def _next(interaction):
+        st["i"] = (st["i"] + 1) % len(pages); await _go(interaction)
+
+    async def _stop(interaction):
+        await interaction.response.edit_message(view=None); view.stop()
+
+    prev.callback, nxt.callback, stop_b.callback = _prev, _next, _stop
+    view.add_item(prev); view.add_item(nxt); view.add_item(stop_b)
+
+    first = _emb(pages[0])
+    if hasattr(dest, "response") and hasattr(dest.response, "send_message"):
+        await dest.response.send_message(embed=first, view=view)
+    else:
+        await dest.send(embed=first, view=view)
+
+
+async def _cruhon_confirm(dest, text="Emin misin?", timeout=60):
+    """Evet/Hayır onay penceresi — bool döndürür.
+    api.inject ile __confirm__ adıyla enjekte edilir."""
+    import discord, asyncio
+    res = {"v": None}
+    view = discord.ui.View(timeout=timeout)
+    yes = discord.ui.Button(label="Evet", style=discord.ButtonStyle.success)
+    no = discord.ui.Button(label="Hayır", style=discord.ButtonStyle.danger)
+    done = asyncio.Event()
+
+    async def _yes(i):
+        res["v"] = True; await i.response.edit_message(content="✅", view=None); done.set()
+
+    async def _no(i):
+        res["v"] = False; await i.response.edit_message(content="❌", view=None); done.set()
+
+    yes.callback, no.callback = _yes, _no
+    view.add_item(yes); view.add_item(no)
+
+    if hasattr(dest, "response") and hasattr(dest.response, "send_message"):
+        await dest.response.send_message(text, view=view)
+    else:
+        await dest.send(text, view=view)
+
+    try:
+        await asyncio.wait_for(done.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        pass
+    return res["v"]
 
 
 def _embed_inline_handler(parser):
@@ -1726,6 +1849,22 @@ def _build_handlers() -> dict:
         return f"{args[0] if args else 'member'}.roles"
     h["member_roles"] = fetch_member_roles
 
+    # ── GÜÇ: PAGINATION & CONFIRM (runtime helper'lar) ────────
+    def paginate(args):
+        dest = args[0] if args else "ctx"
+        pages = args[1] if len(args) > 1 else "[]"
+        for a in args[2:]:
+            if a.strip().startswith("timeout="):
+                return f"await __paginate__({dest}, {pages}, {a.strip()[8:]})"
+        return f"await __paginate__({dest}, {pages})"
+    h["paginate"] = paginate
+
+    def confirm(args):
+        dest = args[0] if args else "ctx"
+        text = args[1] if len(args) > 1 else '"Emin misin?"'
+        return f"await __confirm__({dest}, {text})"
+    h["confirm"] = confirm
+
     return h
 
 
@@ -1752,6 +1891,7 @@ def register(api):
     api.block_command("_dc_group",   _visit_dc_group)
     api.block_command("_dc_modal",   _visit_dc_modal)
     api.block_command("_dc_select",  _visit_dc_select)
+    api.block_command("_dc_context_menu", _visit_dc_context_menu)
 
     # Alt-bloklar: @on_submit / @body (gövdeli) — modal/select içinde
     api.block_command("on_submit", _noop_visit)
@@ -1772,3 +1912,7 @@ def register(api):
     # Inject __embed__ runtime helper so generated code can call it
     # Lazy-imports discord so transpiling works without discord.py installed
     api.inject("__embed__", _cruhon_embed_helper)
+
+    # Güç runtime helper'ları — pagination & confirm dialog
+    api.inject("__paginate__", _cruhon_paginate)
+    api.inject("__confirm__", _cruhon_confirm)

@@ -220,6 +220,74 @@ class _CruhonData:
     def scard(self, scope, k):
         return len(self._as_list(scope, k))
 
+    # ── HASH (alan-bazlı, Redis-vari) ────────────────────────
+    def _as_dict(self, scope, k):
+        v = self.get(scope, k, {})
+        return v if isinstance(v, dict) else {}
+
+    def hset(self, scope, k, field, val):
+        d = self._as_dict(scope, k); d[str(field)] = val
+        self.put(scope, k, d); return d
+
+    def hget(self, scope, k, field, default=None):
+        return self._as_dict(scope, k).get(str(field), default)
+
+    def hgetall(self, scope, k):
+        return self._as_dict(scope, k)
+
+    def hdel(self, scope, k, field):
+        d = self._as_dict(scope, k)
+        if str(field) in d:
+            del d[str(field)]; self.put(scope, k, d); return 1
+        return 0
+
+    def hkeys(self, scope, k):
+        return list(self._as_dict(scope, k).keys())
+
+    def hincr(self, scope, k, field, amount=1):
+        d = self._as_dict(scope, k)
+        d[str(field)] = (d.get(str(field), 0) or 0) + amount
+        self.put(scope, k, d); return d[str(field)]
+
+    # ── ATOMİK ───────────────────────────────────────────────
+    def setnx(self, scope, k, v):
+        """Sadece anahtar yoksa yaz (set-if-not-exists)."""
+        if self.has(scope, k):
+            return False
+        self.put(scope, k, v); return True
+
+    def getset(self, scope, k, v):
+        """Eski değeri döndür, yenisini yaz (atomik takas)."""
+        old = self.get(scope, k); self.put(scope, k, v); return old
+
+    # ── LEADERBOARD (sayısal değere göre sıralı top N) ───────
+    def leaderboard(self, scope, n=10, desc=True):
+        items = self.items(scope)
+        nums = [(k, v) for k, v in items.items() if isinstance(v, (int, float))]
+        nums.sort(key=lambda kv: kv[1], reverse=desc)
+        return nums[: int(n)] if n else nums
+
+    def rank(self, scope, k, desc=True):
+        """Bir anahtarın leaderboard'daki sırası (1-tabanlı) veya 0."""
+        board = self.leaderboard(scope, 0, desc)
+        for i, (key, _v) in enumerate(board, 1):
+            if key == str(k):
+                return i
+        return 0
+
+    # ── BACKUP / RESTORE (JSON dosya) ────────────────────────
+    def backup(self, path):
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.export_all(), f, ensure_ascii=False, indent=2)
+        return path
+
+    def restore(self, path):
+        import json
+        with open(path, encoding="utf-8") as f:
+            self.import_all(json.load(f))
+        return True
+
     # ── DISCORD OTO-CONTEXT ──────────────────────────────────
     @staticmethod
     def _ctx_gid(ctx):
@@ -378,6 +446,29 @@ def _build() -> dict:
     # @data.cmset[ctx; "key"; value] → o üyeye (sunucu+kullanıcı) yaz
     h["cmset"] = lambda a: f"{_D}.put({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["cmget"] = lambda a: f"{_D}.get({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
+
+    # ── HASH (alan-bazlı, global scope) ──────────────────────
+    h["hset"]    = lambda a: f"{_D}.hset('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    h["hget"]    = lambda a: f"{_D}.hget('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else 'None'})"
+    h["hgetall"] = lambda a: f"{_D}.hgetall('global', {a[0] if a else _Q})"
+    h["hdel"]    = lambda a: f"{_D}.hdel('global', {a[0]}, {a[1] if len(a)>1 else _Q})"
+    h["hkeys"]   = lambda a: f"{_D}.hkeys('global', {a[0] if a else _Q})"
+    h["hincr"]   = lambda a: f"{_D}.hincr('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else '1'})"
+
+    # ── ATOMİK ───────────────────────────────────────────────
+    h["setnx"]   = lambda a: f"{_D}.setnx('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+    h["getset"]  = lambda a: f"{_D}.getset('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
+
+    # ── LEADERBOARD (XP/level botları için) ──────────────────
+    # @data.leaderboard[10]                → global top 10
+    h["leaderboard"]  = lambda a: f"{_D}.leaderboard('global', {a[0] if a else '10'})"
+    # @data.gleaderboard[guild_id; 10]     → o sunucunun top 10'u
+    h["gleaderboard"] = lambda a: f"{_D}.leaderboard({_D}._g({a[0] if a else '0'}), {a[1] if len(a)>1 else '10'})"
+    h["grank"]        = lambda a: f"{_D}.rank({_D}._g({a[0]}), {a[1] if len(a)>1 else '0'})"
+
+    # ── BACKUP / RESTORE ─────────────────────────────────────
+    h["backup"]  = lambda a: f"{_D}.backup({a[0] if a else repr('cruhon_data_backup.json')})"
+    h["restore"] = lambda a: f"{_D}.restore({a[0] if a else repr('cruhon_data_backup.json')})"
 
     return h
 

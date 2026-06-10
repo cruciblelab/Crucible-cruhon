@@ -286,3 +286,88 @@ class TestDataExtTranspile:
     def test_context_member_emit(self):
         code = _compile('@var[w; @data.cmget[ctx; "warns"; 0]]')
         assert "_ctx_gid(ctx)" in code and "_ctx_uid(ctx)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# GÜÇ DALGASI — hash / leaderboard / atomik / backup
+# ─────────────────────────────────────────────────────────────
+
+class TestDataHash:
+    def _s(self): return CruhonData().open(":memory:")
+
+    def test_hash_ops(self):
+        d = self._s()
+        d.hset("global", "user:1", "name", "Ali")
+        d.hset("global", "user:1", "age", 30)
+        assert d.hget("global", "user:1", "name") == "Ali"
+        assert d.hgetall("global", "user:1") == {"name": "Ali", "age": 30}
+        assert set(d.hkeys("global", "user:1")) == {"name", "age"}
+        d.hdel("global", "user:1", "age")
+        assert d.hget("global", "user:1", "age", "yok") == "yok"
+
+    def test_hincr(self):
+        d = self._s()
+        assert d.hincr("global", "stats", "wins") == 1
+        assert d.hincr("global", "stats", "wins", 4) == 5
+
+
+class TestDataAtomic:
+    def _s(self): return CruhonData().open(":memory:")
+
+    def test_setnx(self):
+        d = self._s()
+        assert d.setnx("global", "k", "ilk") is True
+        assert d.setnx("global", "k", "ikinci") is False
+        assert d.get("global", "k") == "ilk"
+
+    def test_getset(self):
+        d = self._s()
+        d.put("global", "k", "eski")
+        assert d.getset("global", "k", "yeni") == "eski"
+        assert d.get("global", "k") == "yeni"
+
+
+class TestDataLeaderboard:
+    def _s(self): return CruhonData().open(":memory:")
+
+    def test_leaderboard_top(self):
+        d = self._s()
+        for k, v in [("a", 10), ("b", 50), ("c", 30)]:
+            d.put(d._g(1), k, v)
+        board = d.leaderboard(d._g(1), 2)
+        assert board == [("b", 50), ("c", 30)]
+
+    def test_rank(self):
+        d = self._s()
+        for k, v in [("a", 10), ("b", 50), ("c", 30)]:
+            d.put(d._g(1), k, v)
+        assert d.rank(d._g(1), "b") == 1
+        assert d.rank(d._g(1), "a") == 3
+        assert d.rank(d._g(1), "yok") == 0
+
+
+class TestDataBackup:
+    def test_backup_restore(self, tmp_path):
+        d = CruhonData().open(":memory:")
+        d.put("global", "x", 1)
+        d.put(d._g(9), "y", [1, 2, 3])
+        path = str(tmp_path / "bak.json")
+        d.backup(path)
+        d2 = CruhonData().open(":memory:")
+        d2.restore(path)
+        assert d2.get("global", "x") == 1
+        assert d2.get(d2._g(9), "y") == [1, 2, 3]
+
+
+class TestDataPowerTranspile:
+    def test_hash_emit(self):
+        assert "__cruhon_data__.hset('global', \"u\", \"name\", \"Ali\")" in _compile('@data.hset["u"; "name"; "Ali"]')
+
+    def test_leaderboard_emit(self):
+        assert "__cruhon_data__.leaderboard(__cruhon_data__._g(gid), 5)" in _compile('@var[t; @data.gleaderboard[gid; 5]]')
+
+    def test_setnx_emit(self):
+        assert "__cruhon_data__.setnx('global', \"k\", 1)" in _compile('@data.setnx["k"; 1]')
+
+    def test_backup_emit(self):
+        assert "__cruhon_data__.backup('cruhon_data_backup.json')" in _compile("@data.backup[]")
