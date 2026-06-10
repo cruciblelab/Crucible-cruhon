@@ -193,6 +193,48 @@ class TestLayer3Advanced:
         assert 'e.add_field(name="Ad", value="Değer", inline=False)' in code
         assert 'e.set_footer(text="alt")' in code
 
+    def test_embed_shorthand_positional(self):
+        # All positional — use decimal color (hex 0x3498db splits in tokenizer)
+        code = _compile('@var[e; @embed["T"; "D"; 3461339; "footer text"; "img.png"]]')
+        assert '__embed__(' in code
+        assert 'title="T"' in code
+        assert 'description="D"' in code
+        assert 'color=3461339' in code
+        assert 'footer="footer text"' in code
+        assert 'image="img.png"' in code
+
+    def test_embed_shorthand_kwargs(self):
+        code = _compile('@var[e; @embed["T"; "D"; color=0xFF0000; footer="alt"; author="Yazar"]]')
+        assert '__embed__(' in code
+        assert 'color=0xFF0000' in code
+        assert 'footer="alt"' in code
+        assert 'author="Yazar"' in code
+
+    def test_embed_shorthand_empty_skip(self):
+        # Empty string positions should be skipped
+        code = _compile('@var[e; @embed["T"; "D"; ""; "footer text"]]')
+        assert '__embed__(' in code
+        assert 'footer="footer text"' in code
+        # color not set means not in output
+        assert 'color=""' not in code
+
+    def test_embed_shorthand_discord_quick_embed(self):
+        # @discord.quick_embed — same engine, @discord. prefix
+        code = _compile('@var[e; @discord.quick_embed["T"; "D"; footer="alt"]]')
+        assert '__embed__(' in code
+        assert 'footer="alt"' in code
+
+    def test_embed_shorthand_footer_icon(self):
+        code = _compile('@var[e; @embed["T"; "D"; footer="Alt"; footer_icon="icon.png"]]')
+        assert 'footer="Alt"' in code
+        assert 'footer_icon="icon.png"' in code
+
+    def test_embed_shorthand_inline_in_send(self):
+        # used directly inside send_embed without assigning to var
+        code = _compile('@discord.send_embed[channel; @embed["T"; "D"]]')
+        assert '__embed__(' in code
+        assert 'await channel.send(embed=' in code
+
     def test_api_fetch_then_embed(self):
         # the killer feature BDFD lacks: real API call feeding a discord embed
         src = (

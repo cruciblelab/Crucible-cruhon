@@ -53,7 +53,24 @@ Discord bot plugin for Cruhon.
   @discord.unreact[message; "👍"; user]
   @discord.clear_reactions[message]
 
-━━━ EMBED (zengin mesaj) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ EMBED — KOLAY (tek satır, tüm özellikler) ━━━━━━━━━━━━━━━━━━━━
+  Pozisyonel sıra: title ; description ; color ; footer ; image ; thumbnail ; author
+  Boş geç:  ""  o alan eklenmez
+
+  @var[e; @embed["Başlık"; "Açıklama"]]
+  @var[e; @embed["Başlık"; "Açıklama"; 0x3498db]]
+  @var[e; @embed["Başlık"; "Açıklama"; 0x3498db; "Alt yazı"]]
+  @var[e; @embed["Başlık"; "Açıklama"; ""; "Alt yazı"; "img.png"; "thumb.png"; "Yazar"]]
+
+  Kwargs ile (pozisyonla karışık çalışır):
+  @var[e; @embed["Başlık"; "Açıklama"; color=0xFF0000; footer="Alt"; author="Yazar"]]
+  @var[e; @embed["Başlık"; "Açıklama"; footer="Alt"; footer_icon="icon.png"]]
+  @var[e; @embed["Başlık"; "Açıklama"; author="Yazar"; author_icon="avatar.png"]]
+
+  @discord.quick_embed — aynı şey, @discord. önekiyle:
+  @var[e; @discord.quick_embed["Başlık"; "Açıklama"; footer="Alt"]]
+
+━━━ EMBED — DETAYLI (tek tek ayarla) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @var[e; @discord.embed["Başlık"; "Açıklama"]]
   @var[e; @discord.embed["Başlık"; "Açıklama"; color=0xFF0000]]
   @discord.add_field[e; "Alan Adı"; "Alan Değeri"]
@@ -305,6 +322,114 @@ def _visit_dc_listen(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
+# @embed / @discord.quick_embed — tek satırda tam embed
+# ─────────────────────────────────────────────────────────────
+
+# Pozisyonel arg sırası: title description color footer image thumbnail author
+_EMBED_POSITIONS = ("title", "description", "color", "footer", "image", "thumbnail", "author")
+
+
+def _embed_code(args: list) -> str:
+    """
+    Ortak kod üretici — hem @embed[...] hem @discord.quick_embed[...] kullanır.
+
+    Desteklenen biçimler:
+      Pozisyonel:   @embed["T"; "D"; 0xFF; "footer"; "img"; "thumb"; "author"]
+      Kwargs:       @embed["T"; "D"; color=0xFF; footer="f"; author="a"]
+      Karışık:      @embed["T"; "D"; footer="f"]   (kalan pozisyonlar atlanır)
+
+    Boş string ("" veya '') → o alan eklenmez.
+    Üretilen Python:  __embed__(title=..., description=..., ...)
+    __embed__ runtime'da api.inject() ile enjekte edilmiş yardımcı fonksiyondur.
+    """
+    positional = []
+    kwargs: dict[str, str] = {}
+
+    for a in args:
+        a = a.strip()
+        # kwarg tespiti: identifier = değer
+        eq = a.find("=")
+        if eq > 0 and a[:eq].strip().replace("_", "").isalpha():
+            k = a[:eq].strip()
+            v = a[eq + 1:].strip()
+            kwargs[k] = v
+        else:
+            positional.append(a)
+
+    # Pozisyonel argları sözlüğe çevir (kwargs varsa atlanır)
+    for i, val in enumerate(positional):
+        if i >= len(_EMBED_POSITIONS):
+            break
+        field = _EMBED_POSITIONS[i]
+        if field not in kwargs:
+            kwargs[field] = val
+
+    # Boş string olanları çıkar: "" veya ''
+    kwargs = {k: v for k, v in kwargs.items() if v not in ('""', "''", "")}
+
+    if not kwargs:
+        return "__embed__()"
+
+    parts = [f"{k}={v}" for k, v in kwargs.items()]
+    return f"__embed__({', '.join(parts)})"
+
+
+def _cruhon_embed_helper(**kwargs):
+    """
+    Runtime yardımcısı — api.inject() ile __embed__ adıyla enjekte edilir.
+    Discord kurulu olmadan transpile çalışır; embed oluşturma runtime'da yapılır.
+    """
+    import discord as _discord
+
+    # Renk
+    color = kwargs.get("color") or kwargs.get("colour")
+
+    e = _discord.Embed(
+        title=str(kwargs["title"]) if kwargs.get("title") else "",
+        description=str(kwargs["description"]) if kwargs.get("description") else "",
+        color=color,
+    )
+
+    # Footer
+    if kwargs.get("footer"):
+        icon = kwargs.get("footer_icon") or kwargs.get("footer_icon_url")
+        if icon:
+            e.set_footer(text=str(kwargs["footer"]), icon_url=str(icon))
+        else:
+            e.set_footer(text=str(kwargs["footer"]))
+
+    # Image / Thumbnail
+    if kwargs.get("image"):
+        e.set_image(url=str(kwargs["image"]))
+    if kwargs.get("thumbnail"):
+        e.set_thumbnail(url=str(kwargs["thumbnail"]))
+
+    # Author
+    if kwargs.get("author"):
+        icon = kwargs.get("author_icon") or kwargs.get("author_icon_url")
+        if icon:
+            e.set_author(name=str(kwargs["author"]), icon_url=str(icon))
+        else:
+            e.set_author(name=str(kwargs["author"]))
+
+    # URL
+    if kwargs.get("url"):
+        e.url = str(kwargs["url"])
+
+    return e
+
+
+def _embed_inline_handler(parser):
+    """
+    api.inline_command("embed") kaydı için handler.
+    @embed[...] → @var[e; @embed["T";"D"]] gibi inline kullanımda tetiklenir.
+    """
+    parser.advance()          # @embed token'ını tüket
+    args = parser.parse_args()
+    return _embed_code(args)
+
+
+# ─────────────────────────────────────────────────────────────
 # LIB_CALL HANDLERS — all non-block @discord.X[...] commands
 # ─────────────────────────────────────────────────────────────
 
@@ -486,6 +611,11 @@ def _build_handlers() -> dict:
     h["clear_reactions"] = clear_reactions
 
     # ── EMBED ──────────────────────────────────────────────────
+
+    def quick_embed(args):
+        """@discord.quick_embed[...] — @embed ile aynı, @discord. önekiyle."""
+        return _embed_code(args)
+    h["quick_embed"] = quick_embed
 
     def embed(args):
         title = args[0] if args else '""'
@@ -782,3 +912,11 @@ def register(api):
     # Lib call handlers for all inline/statement discord commands
     for method, handler in _build_handlers().items():
         api.lib_call("discord", method, handler)
+
+    # @embed[...] — flat inline command (no @discord. prefix needed)
+    # Usage: @var[e; @embed["Başlık"; "Açıklama"; color=0xFF; footer="alt"]]
+    api.inline_command("embed", _embed_inline_handler)
+
+    # Inject __embed__ runtime helper so generated code can call it
+    # Lazy-imports discord so transpiling works without discord.py installed
+    api.inject("__embed__", _cruhon_embed_helper)

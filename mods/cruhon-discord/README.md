@@ -47,6 +47,35 @@ Tam örnek için bkz. [`examples/ornek_bot.clpy`](examples/ornek_bot.clpy).
 
 Tüm imzalar için `__init__.py` başındaki belge bloğuna bakın.
 
+## @embed — kolay embed oluşturma
+
+Tek satırda tam embed. İki sözdizimi desteklenir:
+
+**Pozisyonel** (sıra: title → description → color → footer → image → thumbnail → author):
+```clpy
+@var[e; @embed["Başlık"; "Açıklama"]]
+@var[e; @embed["Başlık"; "Açıklama"; 3461339; "Alt yazı"]]
+@var[e; @embed["Başlık"; "Açıklama"; ""; "Alt yazı"; "img.png"; "thumb.png"; "Yazar"]]
+```
+
+**Kwargs** (sırasız, sadece istediğin alanı yaz):
+```clpy
+@var[e; @embed["Başlık"; "Açıklama"; color=3461339; footer="Alt"; author="Bot"]]
+@var[e; @embed["Başlık"; "Açıklama"; footer="Alt"; footer_icon="icon.png"]]
+@var[e; @embed["Başlık"; "Açıklama"; author="Yazar"; author_icon="avatar.png"]]
+```
+
+**Doğrudan gönder** (değişkene atamadan):
+```clpy
+@discord.send_embed[ctx.channel; @embed["Başlık"; "Açıklama"; footer="Alt"]]
+```
+
+**Not — renk:** Cruhon'un tokenizer'ı hex literalleri (`0x3498db`) boşlukla böler.
+Rengi ondalık olarak ver (`3461339`) ya da kwarg formunda: `color=0x3498db`
+bu da çalışır çünkü kwarg değeri ham string olarak alınır.
+
+Ayrıca `@discord.quick_embed[...]` de aynı şeyi yapar (`@discord.` önekiyle).
+
 ## Kaçış kapağı (escape hatch)
 
 Bir komut yetmezse `@raw` ile saf discord.py yazabilirsin — bot nesnesi
