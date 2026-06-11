@@ -1,5 +1,5 @@
 """
-cruhon-discord v1.1.0
+cruhon-discord v1.2.0
 ======================
 Discord bot plugin for Cruhon.
 "Even people who don't know coding can quickly and easily do whatever they want."
@@ -24,9 +24,10 @@ Discord bot plugin for Cruhon.
   @discord.on[message_delete; message]
   ... (any discord.py event name works)
 
-  @discord.command[ping; ctx]           — prefix command (!ping)
-  @discord.command[greet; ctx; user]    — command with parameters
-  @discord.hybrid[userinfo; ctx; member] — works as BOTH prefix and slash
+  @discord.command[ping; ctx]                       — prefix command (!ping)
+  @discord.command[greet; ctx; user]                — command with parameters
+  @discord.command[ban; ctx; member; perms="ban_members"; check=is_admin]
+  @discord.hybrid[userinfo; ctx; member]            — BOTH prefix and slash
   @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
   @discord.slash[roll; "Roll dice"; ctx; sides]
   @discord.task[cleanup; minutes=30]   — background task
@@ -141,21 +142,61 @@ Discord bot plugin for Cruhon.
 
 ━━━ UI COMPONENTS (block commands) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.view[ConfirmView; timeout=60]
-      @discord.button[Yes; style=green]         — button with a callback
+      @discord.button[Yes; style=green]         — callback button
           @discord.respond[interaction; "✅"]
       @end
       @discord.button[Docs; url="https://..."]  — link button (no callback)
-      @end                                       — every button closes with @end
+      @end
+      @discord.user_select[Pick a user; min=1; max=1]  — typed selects:
+          @body[interaction; selection] ... @end        — user / role / channel /
+      @end                                              — mentionable_select
+      @discord.select[Pick; min=1; max=1]  — string select (with @option)
+          @option[Red; value=red] @option[Blue; value=blue]
+          @body[interaction; selection] ... @end
+      @end
   @end
-  @discord.modal[Feedback; FeedbackModal] ... @end   — form/modal
-  @discord.select[Pick; min=1; max=1] ... @end       — dropdown menu
-  @discord.cog[Moderation] ... @end                  — command group class
-  @discord.group[admin; "Admin"] ... @end            — slash command group
-  @discord.context_menu[Info; user] ... @end         — right-click command
+  @discord.channel_select[Pick; channel_types=text,voice] — channel types filter
+  @discord.modal[Feedback; FeedbackModal] ... @end
+  @discord.cog[Moderation]                    — Cog (command group class)
+      @discord.listen[ban; guild; user] ... @end   — event listener inside Cog
+  @end
+  @discord.group[admin; "Admin"] ... @end
+  @discord.context_menu[Info; user] ... @end
+
+━━━ COLOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @var[c; @discord.color["#3498db"]]     — from hex string
+  @var[c; @discord.color[52; 152; 219]]  — from RGB
+  @var[c; @discord.color[red]]           — named color (discord.Color.red())
+  @var[c; @discord.color[3447003]]       — from decimal integer
 
 ━━━ VOICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @discord.join[voice_channel]        — join a voice channel
-  @discord.leave[guild]               — leave the voice channel
+  @discord.join[voice_channel]              — join a voice channel
+  @discord.leave[guild]                     — leave the voice channel
+  @discord.play[guild; "song.mp3"]          — play audio (FFmpegPCMAudio)
+  @discord.play[guild; source; volume=True] — with PCMVolumeTransformer
+  @discord.stop_audio[guild]
+  @discord.pause_audio[guild]
+  @discord.resume_audio[guild]
+  @discord.volume[guild; 0.5]              — requires PCMVolumeTransformer source
+  @var[p; @discord.is_playing[guild]]       — bool: is audio playing?
+
+━━━ EVENT COVERAGE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Short aliases (full list: _EVENT_MAP dict above):
+    join / leave / ban / unban / member_update
+    role_create / role_delete / role_update
+    channel_create / channel_delete / channel_update
+    bulk_delete / reaction_clear / typing
+    thread_create / thread_delete / thread_update / thread_join
+    invite_create / invite_delete
+    stage_create / stage_update / stage_delete
+    event_create / event_update / event_delete / event_user_add / event_user_remove
+    poll_vote_add / poll_vote_remove / raw_poll_vote_add / raw_poll_vote_remove
+    automod_action / automod_rule_create / automod_rule_update / automod_rule_delete
+    app_error (app_command_error)
+    connect / disconnect / resumed / shard_ready
+    raw_reaction_add / raw_reaction_remove / raw_reaction_clear
+    raw_message_delete / raw_message_edit / raw_typing / raw_thread_update
+    Any unknown name → passed through as-is: on_<name>
 """
 
 from __future__ import annotations
@@ -168,7 +209,8 @@ import re
 # ─────────────────────────────────────────────────────────────
 
 _BLOCK_CMDS = {"on", "command", "hybrid", "slash", "task", "listen",
-               "view", "button", "cog", "group", "modal", "select",
+               "view", "button", "cog", "group", "modal",
+               "select", "user_select", "role_select", "channel_select", "mentionable_select",
                "context_menu"}
 
 # Friendly button style names → discord.ButtonStyle member (comprehensive)
@@ -213,23 +255,120 @@ def _style_expr(raw: str) -> str:
 # Single-level (@discord.send[) has no inner dot → not matched.
 _NESTED_RE = re.compile(r"@discord\.([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)\[")
 
-# Friendly event names → discord.py event function names
+# Friendly event names → discord.py event function names.
+# Any name NOT in this map is passed through as-is:
+#   @discord.on[my_custom_event; data] → async def on_my_custom_event(data):
 _EVENT_MAP = {
-    "ready":           "ready",
-    "message":         "message",
-    "join":            "member_join",
-    "leave":           "member_remove",
-    "member_join":     "member_join",
-    "member_remove":   "member_remove",
-    "reaction_add":    "reaction_add",
-    "reaction_remove": "reaction_remove",
-    "error":           "command_error",
-    "guild_join":      "guild_join",
-    "guild_leave":     "guild_remove",
-    "message_edit":    "message_edit",
-    "message_delete":  "message_delete",
-    "typing":          "typing",
-    "voice":           "voice_state_update",
+    # ── Core ─────────────────────────────────────────────────────
+    "ready":                    "ready",
+    "message":                  "message",
+    "error":                    "command_error",
+    "app_error":                "app_command_error",
+    "slash_error":              "app_command_error",
+    # ── Member ───────────────────────────────────────────────────
+    "join":                     "member_join",
+    "leave":                    "member_remove",
+    "member_join":              "member_join",
+    "member_remove":            "member_remove",
+    "member_update":            "member_update",
+    "ban":                      "member_ban",
+    "unban":                    "member_unban",
+    "user_update":              "user_update",
+    "presence":                 "presence_update",
+    "presence_update":          "presence_update",
+    # ── Message ──────────────────────────────────────────────────
+    "message_edit":             "message_edit",
+    "message_delete":           "message_delete",
+    "bulk_delete":              "bulk_message_delete",
+    "message_bulk_delete":      "bulk_message_delete",
+    "raw_message_delete":       "raw_message_delete",
+    "raw_message_edit":         "raw_message_edit",
+    # ── Reaction ─────────────────────────────────────────────────
+    "reaction_add":             "reaction_add",
+    "reaction_remove":          "reaction_remove",
+    "reaction_clear":           "reaction_clear",
+    "reaction_clear_emoji":     "reaction_clear_emoji",
+    "raw_reaction_add":         "raw_reaction_add",
+    "raw_reaction_remove":      "raw_reaction_remove",
+    "raw_reaction_clear":       "raw_reaction_clear",
+    "raw_reaction_clear_emoji": "raw_reaction_clear_emoji",
+    # ── Typing ───────────────────────────────────────────────────
+    "typing":                   "typing",
+    "raw_typing":               "raw_typing",
+    # ── Guild ────────────────────────────────────────────────────
+    "guild_join":               "guild_join",
+    "guild_leave":              "guild_remove",
+    "guild_update":             "guild_update",
+    "guild_available":          "guild_available",
+    "guild_unavailable":        "guild_unavailable",
+    # ── Role ─────────────────────────────────────────────────────
+    "role_create":              "guild_role_create",
+    "role_delete":              "guild_role_delete",
+    "role_update":              "guild_role_update",
+    # ── Channel ──────────────────────────────────────────────────
+    "channel_create":           "guild_channel_create",
+    "channel_delete":           "guild_channel_delete",
+    "channel_update":           "guild_channel_update",
+    "channel_pins_update":      "guild_channel_pins_update",
+    # ── Thread ───────────────────────────────────────────────────
+    "thread_create":            "thread_create",
+    "thread_delete":            "thread_delete",
+    "thread_update":            "thread_update",
+    "thread_join":              "thread_join",
+    "thread_remove":            "thread_remove",
+    "thread_member_join":       "thread_member_join",
+    "thread_member_remove":     "thread_member_remove",
+    "raw_thread_update":        "raw_thread_update",
+    "raw_thread_delete":        "raw_thread_delete",
+    # ── Invite ───────────────────────────────────────────────────
+    "invite_create":            "invite_create",
+    "invite_delete":            "invite_delete",
+    # ── Voice ────────────────────────────────────────────────────
+    "voice":                    "voice_state_update",
+    "voice_state_update":       "voice_state_update",
+    "voice_channel_status_update": "voice_channel_status_update",
+    # ── Stage ────────────────────────────────────────────────────
+    "stage_create":             "stage_instance_create",
+    "stage_update":             "stage_instance_update",
+    "stage_delete":             "stage_instance_delete",
+    # ── Scheduled events ─────────────────────────────────────────
+    "event_create":             "scheduled_event_create",
+    "event_update":             "scheduled_event_update",
+    "event_delete":             "scheduled_event_delete",
+    "event_user_add":           "scheduled_event_user_add",
+    "event_user_remove":        "scheduled_event_user_remove",
+    # ── Poll ─────────────────────────────────────────────────────
+    "poll_vote_add":            "poll_vote_add",
+    "poll_vote_remove":         "poll_vote_remove",
+    "raw_poll_vote_add":        "raw_poll_vote_add",
+    "raw_poll_vote_remove":     "raw_poll_vote_remove",
+    # ── AutoMod ──────────────────────────────────────────────────
+    "automod_action":           "automod_action",
+    "automod_rule_create":      "automod_rule_create",
+    "automod_rule_update":      "automod_rule_update",
+    "automod_rule_delete":      "automod_rule_delete",
+    # ── Emoji / Sticker ──────────────────────────────────────────
+    "emojis_update":            "guild_emojis_update",
+    "stickers_update":          "guild_stickers_update",
+    # ── Webhook / Integration ────────────────────────────────────
+    "webhooks_update":          "webhooks_update",
+    "integration_create":       "integration_create",
+    "integration_update":       "integration_update",
+    "integration_delete":       "integration_delete",
+    # ── Entitlement (premium) ────────────────────────────────────
+    "entitlement_create":       "entitlement_create",
+    "entitlement_update":       "entitlement_update",
+    "entitlement_delete":       "entitlement_delete",
+    # ── Interaction ──────────────────────────────────────────────
+    "interaction":              "interaction",
+    # ── Connection / Shard ───────────────────────────────────────
+    "connect":                  "connect",
+    "disconnect":               "disconnect",
+    "resumed":                  "resumed",
+    "shard_ready":              "shard_ready",
+    "shard_connect":            "shard_connect",
+    "shard_disconnect":         "shard_disconnect",
+    "shard_resumed":            "shard_resumed",
 }
 
 
@@ -321,6 +460,12 @@ def _check_decorators(kwargs, indent, mode="command"):
             out.append(f"{indent}@commands.guild_only()")
     if kwargs.get("owner_only", "").strip() in ("True", "true", "1") and mode != "slash":
         out.append(f"{indent}@commands.is_owner()")
+    if "check" in kwargs:
+        fn = kwargs["check"].strip()
+        if mode == "slash":
+            out.append(f"{indent}@discord.app_commands.check({fn})")
+        else:
+            out.append(f"{indent}@commands.check({fn})")
     return out
 
 
@@ -727,8 +872,8 @@ def _visit_dc_view(transpiler, node):
                 if _is_link_button(child):
                     continue  # already added in __init__
                 lines.append(_render_button(transpiler, child))
-            elif isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_select":
-                lines.append(_render_select(transpiler, child))
+            elif isinstance(child, PluginBlockNode) and child.plugin_name in _ALL_SELECT_NAMES:
+                lines.append(_render_any_select(transpiler, child))
             else:
                 rendered = child.accept(transpiler)
                 if rendered:
@@ -744,8 +889,12 @@ def _visit_dc_view(transpiler, node):
 # ─────────────────────────────────────────────────────────────
 
 def _render_cog_method(transpiler, child):
-    """Inside a Cog: @discord.command / @discord.slash → method with self parameter."""
+    """
+    Inside a Cog body: render @discord.command / @discord.slash /
+    @discord.hybrid / @discord.listen as class methods.
+    """
     args = child.args
+    kw = child.kwargs
     base = "    " * transpiler._indent
 
     if child.plugin_name == "_dc_command":
@@ -756,6 +905,21 @@ def _render_cog_method(transpiler, child):
         body_code = transpiler._block(child.body)
         return "\n".join([
             f"{base}@commands.command(name={name!r})",
+            *_check_decorators(kw, base, "command"),
+            f"{base}async def {name}({params}):",
+            body_code if body_code.strip() else f"{base}    pass",
+        ])
+
+    if child.plugin_name == "_dc_hybrid":
+        name = args[0].strip() if args else "cmd"
+        ctx = args[1].strip() if len(args) > 1 else "ctx"
+        extra = [a.strip() for a in args[2:]]
+        params = ", ".join(["self", ctx] + extra)
+        desc_kw = (f", description={kw['description']}") if "description" in kw else ""
+        body_code = transpiler._block(child.body)
+        return "\n".join([
+            f"{base}@commands.hybrid_command(name={name!r}{desc_kw})",
+            *_check_decorators(kw, base, "command"),
             f"{base}async def {name}({params}):",
             body_code if body_code.strip() else f"{base}    pass",
         ])
@@ -769,7 +933,20 @@ def _render_cog_method(transpiler, child):
         body_code = transpiler._block(child.body)
         return "\n".join([
             f"{base}@discord.app_commands.command(name={name!r}, description={desc})",
+            *_check_decorators(kw, base, "slash"),
             f"{base}async def {name}({params}):",
+            body_code if body_code.strip() else f"{base}    pass",
+        ])
+
+    if child.plugin_name == "_dc_listen":
+        event = args[0].strip() if args else "message"
+        params = [a.strip() for a in args[1:]]
+        event_name = _EVENT_MAP.get(event, event)
+        params_str = ", ".join(["self"] + params)
+        body_code = transpiler._block(child.body)
+        return "\n".join([
+            f"{base}@commands.Cog.listener()",
+            f"{base}async def on_{event_name}({params_str}):",
             body_code if body_code.strip() else f"{base}    pass",
         ])
 
@@ -950,19 +1127,45 @@ def _visit_dc_modal(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
-# SELECT — dropdown (inside a view or standalone decorated method)
+# SELECT — all 5 discord.py select types
 # ─────────────────────────────────────────────────────────────
 
-def _render_select(transpiler, node):
+# plugin_name → discord.ui decorator name
+_SELECT_TYPES = {
+    "_dc_select":              "select",
+    "_dc_user_select":         "user_select",
+    "_dc_role_select":         "role_select",
+    "_dc_channel_select":      "channel_select",
+    "_dc_mentionable_select":  "mentionable_select",
+}
+_ALL_SELECT_NAMES = set(_SELECT_TYPES)
+
+
+def _render_any_select(transpiler, node):
     """
-    @discord.select[Choose a color; min=1; max=1]
-        @option[Red; value=red] ...
-        @body[interaction; selection] ... @end
-    @end
-    → @discord.ui.select(...) + async def <slug>(self, interaction, selection):
+    Unified renderer for all discord.py select types.
+
+    String select (@discord.select):
+      @discord.select[Choose; min=1; max=1]
+          @option[Red; value=red]
+          @body[interaction; selection]
+              @discord.respond[interaction; selection[0]]
+          @end
+      @end
+
+    Typed selects (user / role / channel / mentionable):
+      @discord.user_select[Pick a user; min=1; max=1]
+          @body[interaction; selection]
+              @discord.respond[interaction; selection[0].mention]
+          @end
+      @end
+
+    Channel select additionally accepts channel_types kwarg:
+      @discord.channel_select[Pick; channel_types=text,voice]
     """
     from cruhon.core.ast_nodes import PluginBlockNode
 
+    select_type = _SELECT_TYPES.get(node.plugin_name, "select")
     placeholder = _as_str(node.args[0]) if node.args else '"Select"'
     kw = node.kwargs
     name = _slug(node.args[0] if node.args else 'select')
@@ -972,7 +1175,12 @@ def _render_select(transpiler, node):
         deco.append(f"min_values={kw['min'].strip()}")
     if "max" in kw:
         deco.append(f"max_values={kw['max'].strip()}")
+    if "channel_types" in kw:
+        raw = kw["channel_types"].strip().strip("[]")
+        types = ", ".join(f"discord.ChannelType.{t.strip()}" for t in raw.split(",") if t.strip())
+        deco.append(f"channel_types=[{types}]")
 
+    # Options are only relevant for string select
     options = []
     body_node = None
     for child in node.body:
@@ -991,25 +1199,37 @@ def _render_select(transpiler, node):
         ctx, sel, body_src = "interaction", "select", []
 
     base = "    " * transpiler._indent
-
-    # render callback body at correct indent level
     saved = transpiler._indent
     transpiler._indent += 1
-    inner_body = "\n".join(
-        filter(None, ((n.accept(transpiler)) for n in body_src))
-    )
+    inner_body = "\n".join(filter(None, (n.accept(transpiler) for n in body_src)))
     transpiler._indent = saved
 
     return "\n".join([
-        f"{base}@discord.ui.select({', '.join(deco)})",
+        f"{base}@discord.ui.{select_type}({', '.join(deco)})",
         f"{base}async def {name}(self, {ctx}, {sel}):",
         inner_body if inner_body.strip() else f"{base}    pass",
     ])
 
 
+def _render_select(transpiler, node):
+    """Legacy alias → _render_any_select."""
+    return _render_any_select(transpiler, node)
+
+
 def _visit_dc_select(transpiler, node):
-    """Standalone @discord.select — emits a method in a class body context."""
-    return _render_select(transpiler, node)
+    return _render_any_select(transpiler, node)
+
+def _visit_dc_user_select(transpiler, node):
+    return _render_any_select(transpiler, node)
+
+def _visit_dc_role_select(transpiler, node):
+    return _render_any_select(transpiler, node)
+
+def _visit_dc_channel_select(transpiler, node):
+    return _render_any_select(transpiler, node)
+
+def _visit_dc_mentionable_select(transpiler, node):
+    return _render_any_select(transpiler, node)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -2117,6 +2337,106 @@ def _build_handlers() -> dict:
         return f"await __confirm__({dest}, {text})"
     h["confirm"] = confirm
 
+    # ── LOOKUP (cache-based, no await) ────────────────────────
+    def get_guild(args):
+        return f"__bot__.get_guild({args[0] if args else '0'})"
+    h["get_guild"] = get_guild
+
+    def get_user(args):
+        return f"__bot__.get_user({args[0] if args else '0'})"
+    h["get_user"] = get_user
+
+    # ── MESSAGING EXTRAS ──────────────────────────────────────
+    def send_tts(args):
+        channel = args[0] if args else "channel"
+        text = args[1] if len(args) > 1 else '""'
+        return f"await {channel}.send({text}, tts=True)"
+    h["send_tts"] = send_tts
+
+    def respond_ephemeral(args):
+        interaction = args[0] if args else "interaction"
+        text = args[1] if len(args) > 1 else '""'
+        extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
+        if extra_kw:
+            return f"await {interaction}.response.send_message({text}, ephemeral=True, {', '.join(extra_kw)})"
+        return f"await {interaction}.response.send_message({text}, ephemeral=True)"
+    h["respond_ephemeral"] = respond_ephemeral
+
+    def bulk_purge(args):
+        channel = args[0] if args else "channel"
+        messages = args[1] if len(args) > 1 else "[]"
+        return f"await {channel}.delete_messages({messages})"
+    h["bulk_purge"] = bulk_purge
+
+    def fetch_webhook(args):
+        url = args[0] if args else '""'
+        return f"await discord.Webhook.from_url({url}, client=__bot__).fetch()"
+    h["fetch_webhook"] = fetch_webhook
+
+    # ── COLOR ─────────────────────────────────────────────────
+    def color(args):
+        # @discord.color["#3498db"]  →  discord.Color(3461339)
+        # @discord.color[52; 152; 219]  →  discord.Color.from_rgb(52, 152, 219)
+        # @discord.color[0x3498db]  →  discord.Color(0x3498db)
+        # @discord.color[red]       →  discord.Color.red()   (named color)
+        if not args:
+            return "discord.Color.default()"
+        if len(args) >= 3:
+            return f"discord.Color.from_rgb({args[0].strip()}, {args[1].strip()}, {args[2].strip()})"
+        val = args[0].strip()
+        stripped = val.strip('"\'')
+        if stripped.startswith('#'):
+            try:
+                num = int(stripped[1:], 16)
+                return f"discord.Color({num})"
+            except ValueError:
+                pass
+        # Named color (e.g. red, blue, green)  → discord.Color.red()
+        if stripped.isidentifier() and not stripped[:1].isdigit():
+            return f"discord.Color.{stripped}()"
+        return f"discord.Color({val})"
+    h["color"] = color
+
+    # ── VOICE AUDIO ───────────────────────────────────────────
+    def play(args):
+        # @discord.play[guild; "song.mp3"]
+        # @discord.play[guild; source; volume=True]   → PCMVolumeTransformer
+        guild = args[0] if args else "guild"
+        source = args[1] if len(args) > 1 else '"audio.mp3"'
+        for a in args[2:]:
+            if a.strip() in ("volume=True", "transformer=True"):
+                return (f"{guild}.voice_client.play("
+                        f"discord.PCMVolumeTransformer(discord.FFmpegPCMAudio({source})))")
+        return f"{guild}.voice_client.play(discord.FFmpegPCMAudio({source}))"
+    h["play"] = play
+
+    def stop_audio(args):
+        guild = args[0] if args else "guild"
+        return f"{guild}.voice_client.stop() if {guild}.voice_client else None"
+    h["stop_audio"] = stop_audio
+
+    def pause_audio(args):
+        guild = args[0] if args else "guild"
+        return f"{guild}.voice_client.pause() if {guild}.voice_client else None"
+    h["pause_audio"] = pause_audio
+
+    def resume_audio(args):
+        guild = args[0] if args else "guild"
+        return f"{guild}.voice_client.resume() if {guild}.voice_client else None"
+    h["resume_audio"] = resume_audio
+
+    def volume(args):
+        # @discord.volume[guild; 0.5]  — requires PCMVolumeTransformer source
+        guild = args[0] if args else "guild"
+        vol = args[1] if len(args) > 1 else "0.5"
+        return f"{guild}.voice_client.source.volume = {vol}"
+    h["volume"] = volume
+
+    def is_playing(args):
+        guild = args[0] if args else "guild"
+        return f"({guild}.voice_client is not None and {guild}.voice_client.is_playing())"
+    h["is_playing"] = is_playing
+
     return h
 
 
@@ -2142,9 +2462,13 @@ def register(api):
     api.block_command("_dc_button",  _visit_dc_button)
     api.block_command("_dc_cog",     _visit_dc_cog)
     api.block_command("_dc_group",   _visit_dc_group)
-    api.block_command("_dc_modal",   _visit_dc_modal)
-    api.block_command("_dc_select",  _visit_dc_select)
-    api.block_command("_dc_context_menu", _visit_dc_context_menu)
+    api.block_command("_dc_modal",              _visit_dc_modal)
+    api.block_command("_dc_select",             _visit_dc_select)
+    api.block_command("_dc_user_select",        _visit_dc_user_select)
+    api.block_command("_dc_role_select",        _visit_dc_role_select)
+    api.block_command("_dc_channel_select",     _visit_dc_channel_select)
+    api.block_command("_dc_mentionable_select", _visit_dc_mentionable_select)
+    api.block_command("_dc_context_menu",       _visit_dc_context_menu)
 
     # Sub-blocks: @on_submit / @body / @autocomplete (with body)
     #   on_submit/body → inside modal/select; autocomplete → inside slash

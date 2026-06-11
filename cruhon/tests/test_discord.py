@@ -981,3 +981,272 @@ class TestMessagingExtras:
     def test_dm_embed(self):
         code = _compile("@discord.dm_embed[user; my_embed]")
         assert "await user.send(embed=my_embed)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# EVENT MAP — comprehensive event coverage
+# ─────────────────────────────────────────────────────────────
+
+class TestEventMap:
+    def test_ready(self):
+        src = "@discord.on[ready]\n    @discord.log[\"ready\"]\n@end"
+        assert "async def on_ready():" in _compile(src)
+
+    def test_join_alias(self):
+        src = "@discord.on[join; member]\n    pass\n@end"
+        assert "async def on_member_join(member):" in _compile(src)
+
+    def test_ban_alias(self):
+        src = "@discord.on[ban; guild; user]\n    pass\n@end"
+        assert "async def on_member_ban(guild, user):" in _compile(src)
+
+    def test_unban_alias(self):
+        src = "@discord.on[unban; guild; user]\n    pass\n@end"
+        assert "async def on_member_unban(guild, user):" in _compile(src)
+
+    def test_member_update(self):
+        src = "@discord.on[member_update; before; after]\n    pass\n@end"
+        assert "async def on_member_update(before, after):" in _compile(src)
+
+    def test_role_create(self):
+        src = "@discord.on[role_create; role]\n    pass\n@end"
+        assert "async def on_guild_role_create(role):" in _compile(src)
+
+    def test_channel_delete(self):
+        src = "@discord.on[channel_delete; channel]\n    pass\n@end"
+        assert "async def on_guild_channel_delete(channel):" in _compile(src)
+
+    def test_invite_create(self):
+        src = "@discord.on[invite_create; invite]\n    pass\n@end"
+        assert "async def on_invite_create(invite):" in _compile(src)
+
+    def test_thread_create(self):
+        src = "@discord.on[thread_create; thread]\n    pass\n@end"
+        assert "async def on_thread_create(thread):" in _compile(src)
+
+    def test_bulk_delete(self):
+        src = "@discord.on[bulk_delete; messages]\n    pass\n@end"
+        assert "async def on_bulk_message_delete(messages):" in _compile(src)
+
+    def test_automod_action(self):
+        src = "@discord.on[automod_action; execution]\n    pass\n@end"
+        assert "async def on_automod_action(execution):" in _compile(src)
+
+    def test_poll_vote(self):
+        src = "@discord.on[poll_vote_add; payload]\n    pass\n@end"
+        assert "async def on_poll_vote_add(payload):" in _compile(src)
+
+    def test_stage_create(self):
+        src = "@discord.on[stage_create; stage]\n    pass\n@end"
+        assert "async def on_stage_instance_create(stage):" in _compile(src)
+
+    def test_event_create_alias(self):
+        src = "@discord.on[event_create; event]\n    pass\n@end"
+        assert "async def on_scheduled_event_create(event):" in _compile(src)
+
+    def test_app_error_alias(self):
+        src = "@discord.on[app_error; interaction; error]\n    pass\n@end"
+        assert "async def on_app_command_error(interaction, error):" in _compile(src)
+
+    def test_unknown_event_passthrough(self):
+        # Any event not in the map should pass through as-is
+        src = "@discord.on[my_custom_event; data]\n    pass\n@end"
+        assert "async def on_my_custom_event(data):" in _compile(src)
+
+    def test_raw_reaction_add(self):
+        src = "@discord.on[raw_reaction_add; payload]\n    pass\n@end"
+        assert "async def on_raw_reaction_add(payload):" in _compile(src)
+
+
+# ─────────────────────────────────────────────────────────────
+# TYPED SELECTS — user / role / channel / mentionable
+# ─────────────────────────────────────────────────────────────
+
+class TestTypedSelects:
+    def test_user_select_in_view(self):
+        src = (
+            "@discord.view[V]\n"
+            "    @discord.user_select[Pick a user]\n"
+            "        @body[interaction; selection]\n"
+            '            @discord.respond[interaction; selection[0].mention]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class V(discord.ui.View):" in code
+        assert "@discord.ui.user_select(placeholder=" in code
+        assert "async def" in code and "self, interaction, selection" in code
+
+    def test_role_select(self):
+        src = (
+            "@discord.view[V]\n"
+            "    @discord.role_select[Pick a role; min=1; max=1]\n"
+            "        @body[interaction; sel]\n"
+            '            @discord.respond[interaction; "ok"]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.ui.role_select(placeholder=" in code
+        assert "min_values=1" in code
+        assert "max_values=1" in code
+
+    def test_channel_select_with_types(self):
+        src = (
+            "@discord.view[V]\n"
+            "    @discord.channel_select[Pick a channel; channel_types=text,voice]\n"
+            "        @body[interaction; sel]\n"
+            '            @discord.respond[interaction; "ok"]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.ui.channel_select(placeholder=" in code
+        assert "channel_types=[discord.ChannelType.text, discord.ChannelType.voice]" in code
+
+    def test_mentionable_select(self):
+        src = (
+            "@discord.view[V]\n"
+            "    @discord.mentionable_select[Pick]\n"
+            "        @body[interaction; sel]\n"
+            '            @discord.respond[interaction; "ok"]\n'
+            "        @end\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.ui.mentionable_select(placeholder=" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# COG LISTENER + CHECK
+# ─────────────────────────────────────────────────────────────
+
+class TestCogListenerAndCheck:
+    def test_listener_inside_cog(self):
+        src = (
+            "@discord.cog[Logging]\n"
+            "    @discord.listen[member_join; member]\n"
+            '        @discord.log[f"{member} joined"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class Logging(commands.Cog):" in code
+        assert "@commands.Cog.listener()" in code
+        assert "async def on_member_join(self, member):" in code
+
+    def test_listener_ban_alias_in_cog(self):
+        src = (
+            "@discord.cog[Audit]\n"
+            "    @discord.listen[ban; guild; user]\n"
+            "        pass\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def on_member_ban(self, guild, user):" in code
+
+    def test_command_with_check_kwarg(self):
+        src = (
+            "@discord.command[admin; ctx; check=is_admin]\n"
+            '    @discord.reply[ctx; "ok"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@commands.check(is_admin)" in code
+
+    def test_slash_with_check_kwarg(self):
+        src = (
+            '@discord.slash[admin; "Admin only"; interaction; check=is_admin]\n'
+            '    @discord.respond[interaction; "ok"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.app_commands.check(is_admin)" in code
+
+    def test_cog_command_with_perms(self):
+        src = (
+            "@discord.cog[Mod]\n"
+            '    @discord.command[ban; ctx; member; perms="ban_members"]\n'
+            "        @discord.ban[member]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@commands.has_permissions(ban_members=True)" in code
+
+    def test_hybrid_inside_cog(self):
+        src = (
+            "@discord.cog[Utils]\n"
+            '    @discord.hybrid[ping; ctx; description="Pong"]\n'
+            '        @discord.reply[ctx; "pong"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert '@commands.hybrid_command(name=\'ping\', description="Pong")' in code
+        assert "async def ping(self, ctx):" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# NEW SHORTCUTS — voice / color / misc
+# ─────────────────────────────────────────────────────────────
+
+class TestNewShortcuts:
+    def test_get_guild(self):
+        assert "__bot__.get_guild(123)" in _compile("@var[g; @discord.get_guild[123]]")
+
+    def test_get_user(self):
+        assert "__bot__.get_user(456)" in _compile("@var[u; @discord.get_user[456]]")
+
+    def test_send_tts(self):
+        assert 'await channel.send("hello", tts=True)' in _compile('@discord.send_tts[channel; "hello"]')
+
+    def test_respond_ephemeral(self):
+        code = _compile('@discord.respond_ephemeral[interaction; "secret"]')
+        assert 'await interaction.response.send_message("secret", ephemeral=True)' in code
+
+    def test_bulk_purge(self):
+        assert "await channel.delete_messages(msgs)" in _compile("@discord.bulk_purge[channel; msgs]")
+
+    def test_color_hex_string(self):
+        code = _compile('@var[c; @discord.color["#3498db"]]')
+        assert "discord.Color(3447003)" in code
+
+    def test_color_rgb(self):
+        code = _compile("@var[c; @discord.color[52; 152; 219]]")
+        assert "discord.Color.from_rgb(52, 152, 219)" in code
+
+    def test_color_named(self):
+        code = _compile("@var[c; @discord.color[red]]")
+        assert "discord.Color.red()" in code
+
+    def test_color_decimal(self):
+        code = _compile("@var[c; @discord.color[3447003]]")
+        assert "discord.Color(3447003)" in code
+
+    def test_voice_play(self):
+        code = _compile('@discord.play[guild; "song.mp3"]')
+        assert "voice_client.play(discord.FFmpegPCMAudio(" in code
+        assert '"song.mp3"' in code
+
+    def test_voice_play_transformer(self):
+        code = _compile('@discord.play[guild; src; volume=True]')
+        assert "PCMVolumeTransformer" in code
+
+    def test_voice_stop(self):
+        assert "voice_client.stop()" in _compile("@discord.stop_audio[guild]")
+
+    def test_voice_pause_resume(self):
+        assert "voice_client.pause()" in _compile("@discord.pause_audio[guild]")
+        assert "voice_client.resume()" in _compile("@discord.resume_audio[guild]")
+
+    def test_voice_volume(self):
+        assert "source.volume = 0.5" in _compile("@discord.volume[guild; 0.5]")
+
+    def test_is_playing(self):
+        assert "is_playing()" in _compile("@var[p; @discord.is_playing[guild]]")

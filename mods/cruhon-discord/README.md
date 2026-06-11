@@ -31,17 +31,18 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 ## Command Groups
 
 - **Setup:** `setup`, `run`, `sync_commands`, `start_task`, `stop_task`
-- **Events (block):** `on`, `command`, `hybrid`, `slash`, `task`, `listen`
-- **UI (block):** `view`, `button` (callback or `url=` link), `select`, `modal`, `cog`, `group`, `context_menu`
-- **Messaging:** `send`, `reply`, `dm`, `respond`, `send_modal`, `defer`, `followup`, `edit`, `edit_embed`, `dm_embed`, `delete`, `pin`
+- **Events (block):** `on` (90+ friendly aliases), `command`, `hybrid`, `slash`, `task`, `listen`
+- **UI (block):** `view`, `button`, `select` (string), `user_select`, `role_select`, `channel_select`, `mentionable_select`, `modal`, `cog`, `group`, `context_menu`
+- **Messaging:** `send`, `reply`, `dm`, `respond`, `respond_ephemeral`, `send_modal`, `defer`, `followup`, `edit`, `edit_embed`, `dm_embed`, `delete`, `pin`
 - **Reactions:** `react`, `add_reactions`, `unreact`, `clear_reactions`
 - **Embed:** `embed`, `add_field`, `set_footer`, `set_image`, `set_thumbnail`, `set_author`
 - **Moderation:** `ban`, `unban`, `kick`, `timeout`, `untimeout`, `add_role`, `remove_role`, `nickname`
-- **Channel:** `purge`, `create_text`, `create_voice`, `delete_channel`
-- **Lookup:** `get_member`, `get_channel`, `get_role`, `find_member`, `me`, `mention`
+- **Channel:** `purge`, `bulk_purge`, `create_text`, `create_voice`, `delete_channel`
+- **Lookup:** `get_member`, `get_channel`, `get_role`, `find_member`, `me`, `mention`, `get_guild`, `get_user`
 - **Protection:** `ignore_self`, `ignore_bots`, `require_role`, `require_guild`
 - **Status:** `status`, `log`, `wait_for`
-- **Voice:** `join`, `leave`
+- **Color:** `color` (`"#hex"` / RGB / named / decimal)
+- **Voice:** `join`, `leave`, `play`, `stop_audio`, `pause_audio`, `resume_audio`, `volume`, `is_playing`
 
 For all signatures see the docstring block at the top of `__init__.py`.
 
