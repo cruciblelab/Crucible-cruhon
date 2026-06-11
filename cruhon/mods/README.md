@@ -1,17 +1,18 @@
 # Cruhon Mod System
 
-Cruhon'un mod sistemi Minecraft'tan ilham alır.
-Bir mod core'u bile değiştirebilir.
+The mod system lets you extend Cruhon without touching core files.
+A mod can register new commands, new library namespaces, inject runtime
+objects, and hook into every stage of the pipeline.
 
 ---
 
-## Mod Yapısı
+## Mod Structure
 
 ```
 mods/
 └── my-mod/
-    ├── mod.json       ← zorunlu
-    └── __init__.py    ← zorunlu, register(api) içermeli
+    ├── mod.json       ← required
+    └── __init__.py    ← required, must contain register(api)
 ```
 
 ---
@@ -37,7 +38,7 @@ mods/
 from cruhon.core.ast_nodes import Node, register_node
 from dataclasses import dataclass, field
 
-# 1. Yeni bir AST Node tanımla
+# 1. Define a new AST Node
 @dataclass
 class SayNode(Node):
     message: str = ""
@@ -45,38 +46,38 @@ class SayNode(Node):
 register_node("SayNode", SayNode)
 
 
-# 2. Parser fonksiyonu — @say[mesaj] → SayNode
+# 2. Parser function — @say[message] → SayNode
 def parse_say(parser):
     line = parser.current.line
-    parser.advance()  # @say token'ını tüket
+    parser.advance()  # consume @say token
     args = parser.parse_args()
     return SayNode(message=args[0] if args else "", line=line)
 
 
-# 3. Visitor — SayNode → Python kodu
+# 3. Visitor — SayNode → Python code
 def visit_say(transpiler, node):
     return transpiler._line(f'print(">> " + str({repr(node.message)}))')
 
 
-# 4. register(api) — modun giriş noktası
+# 4. register(api) — mod entry point
 def register(api):
-    # Yeni komut ekle
+    # Register new command
     api.command("say", parse_say, visit_say)
 
-    # Yeni kütüphane ekle
+    # Register new library namespace
     # api.lib("redis", "redis")
     # api.lib_call("redis", "get", lambda args: f"redis_client.get({args[0]})")
 
-    # Core komutu override et
+    # Override a core command
     # api.override("print", my_print_visitor)
 
-    # Hook'lara bağlan
+    # Hook into lifecycle events
     # api.hook("before_run", setup_function)
     # api.hook("after_run", cleanup_function)
     # api.hook("on_error", error_handler)
 ```
 
-Kullanım (bir .clpy dosyasında):
+Usage (in a .clpy file):
 ```
 @say[Hello from my mod!]
 ```
@@ -85,45 +86,45 @@ Kullanım (bir .clpy dosyasında):
 
 ## Hook Events
 
-| Event              | Ne zaman tetiklenir        | Parametre         |
-|--------------------|---------------------------|-------------------|
-| `before_run`       | Program başlamadan önce   | `source`          |
-| `after_run`        | Program bittikten sonra   | —                 |
-| `before_parse`     | Lexer'dan önce            | kaynak string     |
-| `after_parse`      | Parse bittikten sonra     | AST ProgramNode   |
-| `before_transpile` | Transpile öncesi          | AST ProgramNode   |
-| `after_transpile`  | Python kodu üretilince    | Python string     |
-| `on_error`         | Hata oluşunca             | `error`           |
+| Event              | When fired                   | Parameter         |
+|--------------------|------------------------------|-------------------|
+| `before_run`       | Before program starts        | `source`          |
+| `after_run`        | After program finishes       | —                 |
+| `before_parse`     | Before lexer                 | source string     |
+| `after_parse`      | After parsing                | AST ProgramNode   |
+| `before_transpile` | Before transpilation         | AST ProgramNode   |
+| `after_transpile`  | After Python code is emitted | Python string     |
+| `on_error`         | When an error occurs         | `error`           |
 
 ---
 
-## pip Modu Olarak Yayınlama
+## Publishing as a pip Package
 
 ```
 pip install cruhon-db
 ```
 
-Paket adın `cruhon-` ile başlamalı.
-`__init__.py` içinde `register(api)` fonksiyonu olmalı.
-Cruhon otomatik bulur ve yükler.
+Package name must start with `cruhon-`.
+`__init__.py` must contain a `register(api)` function.
+Cruhon auto-discovers and loads it.
 
 ---
 
-## Namespace Çakışması
+## Namespace Conflicts
 
-İki mod aynı `@komut` adını kullanırsa son yüklenen kazanır.
-Çakışmadan kaçınmak için namespace kullan:
+If two mods register the same `@command` name, the last one loaded wins.
+Use a namespace to avoid conflicts:
 
 ```
-@mymod.komut[...]
+@mymod.command[...]
 ```
 
 ---
 
-## Örnek Modlar
+## Example Mods
 
-- `cruhon-db` — SQLite/PostgreSQL desteği
-- `cruhon-discord` — discord.py sarımı  
-- `cruhon-web` — Flask/FastAPI sarımı
-- `cruhon-redis` — Redis desteği
-- `cruhon-dotenv` — .env dosyası desteği
+- `cruhon-db` — SQLite/PostgreSQL support
+- `cruhon-discord` — discord.py wrapper
+- `cruhon-web` — Flask/FastAPI wrapper
+- `cruhon-redis` — Redis support
+- `cruhon-dotenv` — .env file support

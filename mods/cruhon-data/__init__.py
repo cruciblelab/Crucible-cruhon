@@ -14,51 +14,51 @@ Scopes
   USER     — one value per user (user_id)
   MEMBER   — one value per (guild_id, user_id) pair
 
-━━━ AÇ / KAPAT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @data.open[]                      — varsayılan dosya: cruhon_data.db
-  @data.open["bot.db"]              — özel dosya  (":memory:" = geçici)
+━━━ OPEN / CLOSE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @data.open[]                      — default file: cruhon_data.db
+  @data.open["bot.db"]              — custom file  (":memory:" = in-memory)
   @data.close[]
 
 ━━━ GLOBAL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @data.set["key"; value]
-  @data.get["key"]                  → değer veya None
+  @data.get["key"]                  → value or None
   @data.get["key"; default]
   @data.delete["key"]
   @data.has["key"]                  → bool
-  @data.incr["key"]                 — +1 (atomik sayaç)
+  @data.incr["key"]                 — +1 (atomic counter)
   @data.incr["key"; n]              — +n
-  @data.keys[]                      → liste
+  @data.keys[]                      → list
   @data.all[]                       → dict
 
-━━━ SUNUCU BAZLI (GUILD) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ GUILD-SCOPED ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @data.gset[guild_id; "key"; value]
   @data.gget[guild_id; "key"]  /  @data.gget[guild_id; "key"; default]
   @data.gdelete[guild_id; "key"]
   @data.ghas[guild_id; "key"]       → bool
   @data.gincr[guild_id; "key"; n]
-  @data.gall[guild_id]              → o sunucunun tüm verisi (dict)
-  @data.gkeys[guild_id]             → liste
+  @data.gall[guild_id]              → all data for that guild (dict)
+  @data.gkeys[guild_id]             → list
 
-━━━ KULLANICI BAZLI (USER) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ USER-SCOPED ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @data.uset[user_id; "key"; value]
   @data.uget[user_id; "key"]  /  @data.uget[user_id; "key"; default]
   @data.udelete[user_id; "key"]
   @data.uincr[user_id; "key"; n]
   @data.uall[user_id]               → dict
 
-━━━ ÜYE BAZLI (GUILD + USER) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ MEMBER-SCOPED (GUILD + USER) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @data.mset[guild_id; user_id; "key"; value]
   @data.mget[guild_id; user_id; "key"]  /  ...; default]
   @data.mdelete[guild_id; user_id; "key"]
   @data.mincr[guild_id; user_id; "key"; n]
 
-━━━ SENKRON & HAM ERİŞİM (diğer DB kütüphaneleriyle) ━━━━━━━━━━━━━━━━━━━━━━
-  @data.export[]                    → tüm veriyi dict olarak ver
-  @data.import[dict]                — dict'ten yükle (toplu)
-  @data.attach[connection]          — mevcut bir DBAPI bağlantısını kullan
-  @data.connection[]                → ham SQLite bağlantısı (tam özgürlük)
-  @data.clear[]                     — her şeyi sil
-  @data.clear_guild[guild_id]       — sadece o sunucuyu sil
+━━━ SYNC & RAW ACCESS (for other DB libraries) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @data.export[]                    → return all data as dict
+  @data.import[dict]                — load from dict (bulk)
+  @data.attach[connection]          — use an existing DBAPI connection
+  @data.connection[]                → raw SQLite connection (full freedom)
+  @data.clear[]                     — delete everything
+  @data.clear_guild[guild_id]       — delete only that guild's data
 """
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ class _CruhonData:
             f"CREATE TABLE IF NOT EXISTS {self._table} "
             f"(scope TEXT, k TEXT, v TEXT, exp REAL, PRIMARY KEY(scope, k))"
         )
-        # Eski tabloları (exp sütunsuz) göçür
+        # Migrate old tables that lack the exp column
         try:
             self._conn.execute(f"ALTER TABLE {self._table} ADD COLUMN exp REAL")
         except Exception:
@@ -163,7 +163,7 @@ class _CruhonData:
         if not row:
             return -2          # anahtar yok
         if row[0] is None:
-            return -1          # süresiz
+            return -1          # no expiry
         return max(0, int(row[0] - time.time()))
 
     # ── LIST (Redis-vari) ────────────────────────────────────
@@ -198,7 +198,7 @@ class _CruhonData:
     def llen(self, scope, k):
         return len(self._as_list(scope, k))
 
-    # ── SET (benzersiz üyeler) ───────────────────────────────
+    # ── SET (unique members) ────────────────────────────────
     def sadd(self, scope, k, val):
         s = self._as_list(scope, k)
         if val not in s:
@@ -220,7 +220,7 @@ class _CruhonData:
     def scard(self, scope, k):
         return len(self._as_list(scope, k))
 
-    # ── HASH (alan-bazlı, Redis-vari) ────────────────────────
+    # ── HASH (field-based, Redis-style) ──────────────────────
     def _as_dict(self, scope, k):
         v = self.get(scope, k, {})
         return v if isinstance(v, dict) else {}
@@ -249,7 +249,7 @@ class _CruhonData:
         d[str(field)] = (d.get(str(field), 0) or 0) + amount
         self.put(scope, k, d); return d[str(field)]
 
-    # ── ATOMİK ───────────────────────────────────────────────
+    # ── ATOMIC ───────────────────────────────────────────────
     def setnx(self, scope, k, v):
         """Sadece anahtar yoksa yaz (set-if-not-exists)."""
         if self.has(scope, k):
@@ -257,10 +257,10 @@ class _CruhonData:
         self.put(scope, k, v); return True
 
     def getset(self, scope, k, v):
-        """Eski değeri döndür, yenisini yaz (atomik takas)."""
+        """Return the old value and write the new one (atomic swap)."""
         old = self.get(scope, k); self.put(scope, k, v); return old
 
-    # ── LEADERBOARD (sayısal değere göre sıralı top N) ───────
+    # ── LEADERBOARD (top N sorted by numeric value) ──────────
     def leaderboard(self, scope, n=10, desc=True):
         items = self.items(scope)
         nums = [(k, v) for k, v in items.items() if isinstance(v, (int, float))]
@@ -268,7 +268,7 @@ class _CruhonData:
         return nums[: int(n)] if n else nums
 
     def rank(self, scope, k, desc=True):
-        """Bir anahtarın leaderboard'daki sırası (1-tabanlı) veya 0."""
+        """Rank of a key on the leaderboard (1-based) or 0 if not found."""
         board = self.leaderboard(scope, 0, desc)
         for i, (key, _v) in enumerate(board, 1):
             if key == str(k):
@@ -440,14 +440,14 @@ def _build() -> dict:
     # @data.cset[ctx; "key"; value]  → o sunucuya yaz
     h["cset"]  = lambda a: f"{_D}.put({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["cget"]  = lambda a: f"{_D}.get({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
-    # @data.cuset[ctx; "key"; value] → o kullanıcıya yaz
+    # @data.cuset[ctx; "key"; value] → write to that user's scope
     h["cuset"] = lambda a: f"{_D}.put({_D}._u({_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["cuget"] = lambda a: f"{_D}.get({_D}._u({_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
-    # @data.cmset[ctx; "key"; value] → o üyeye (sunucu+kullanıcı) yaz
+    # @data.cmset[ctx; "key"; value] → write to that member's scope (guild+user)
     h["cmset"] = lambda a: f"{_D}.put({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["cmget"] = lambda a: f"{_D}.get({_D}._m({_D}._ctx_gid({a[0]}), {_D}._ctx_uid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
 
-    # ── HASH (alan-bazlı, global scope) ──────────────────────
+    # ── HASH (field-based, global scope) ─────────────────────
     h["hset"]    = lambda a: f"{_D}.hset('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["hget"]    = lambda a: f"{_D}.hget('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["hgetall"] = lambda a: f"{_D}.hgetall('global', {a[0] if a else _Q})"
@@ -455,11 +455,11 @@ def _build() -> dict:
     h["hkeys"]   = lambda a: f"{_D}.hkeys('global', {a[0] if a else _Q})"
     h["hincr"]   = lambda a: f"{_D}.hincr('global', {a[0]}, {a[1]}, {a[2] if len(a)>2 else '1'})"
 
-    # ── ATOMİK ───────────────────────────────────────────────
+    # ── ATOMIC ───────────────────────────────────────────────
     h["setnx"]   = lambda a: f"{_D}.setnx('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
     h["getset"]  = lambda a: f"{_D}.getset('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
 
-    # ── LEADERBOARD (XP/level botları için) ──────────────────
+    # ── LEADERBOARD (for XP/level bots) ──────────────────────
     # @data.leaderboard[10]                → global top 10
     h["leaderboard"]  = lambda a: f"{_D}.leaderboard('global', {a[0] if a else '10'})"
     # @data.gleaderboard[guild_id; 10]     → o sunucunun top 10'u

@@ -43,7 +43,7 @@ def _compile(source: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
-# RUNTIME — gerçek davranış
+# RUNTIME
 # ─────────────────────────────────────────────────────────────
 
 class TestDataRuntime:
@@ -57,7 +57,7 @@ class TestDataRuntime:
 
     def test_get_default(self):
         d = self._store()
-        assert d.get("global", "yok", "varsayilan") == "varsayilan"
+        assert d.get("global", "missing", "default_val") == "default_val"
 
     def test_json_values(self):
         d = self._store()
@@ -66,10 +66,10 @@ class TestDataRuntime:
 
     def test_guild_scope_isolation(self):
         d = self._store()
-        d.put(d._g(111), "welcome", "Merhaba A")
-        d.put(d._g(222), "welcome", "Merhaba B")
-        assert d.get(d._g(111), "welcome") == "Merhaba A"
-        assert d.get(d._g(222), "welcome") == "Merhaba B"
+        d.put(d._g(111), "welcome", "Hello A")
+        d.put(d._g(222), "welcome", "Hello B")
+        assert d.get(d._g(111), "welcome") == "Hello A"
+        assert d.get(d._g(222), "welcome") == "Hello B"
 
     def test_user_and_member_scope(self):
         d = self._store()
@@ -102,7 +102,6 @@ class TestDataRuntime:
         d.put("global", "x", 1)
         d.put(d._g(5), "y", 2)
         dump = d.export_all()
-        # yeni store'a aktar (başka DB'ye senkron simülasyonu)
         d2 = self._store()
         d2.import_all(dump)
         assert d2.get("global", "x") == 1
@@ -122,12 +121,11 @@ class TestDataRuntime:
         d = CruhonData().attach(conn)
         d.put("global", "k", "v")
         assert d.get("global", "k") == "v"
-        # aynı bağlantı ham erişilebilir
         assert d.connection() is conn
 
 
 # ─────────────────────────────────────────────────────────────
-# TRANSPILE — emit doğruluğu
+# TRANSPILE — emit correctness
 # ─────────────────────────────────────────────────────────────
 
 class TestDataTranspile:
@@ -139,12 +137,12 @@ class TestDataTranspile:
         assert "__cruhon_data__.get('global', \"k\", 0)" in _compile('@var[v; @data.get["k"; 0]]')
 
     def test_guild_scoped(self):
-        code = _compile('@data.gset[guild.id; "welcome"; "Selam"]')
-        assert "__cruhon_data__.put(__cruhon_data__._g(guild.id), \"welcome\", \"Selam\")" in code
+        code = _compile('@data.gset[guild.id; "welcome"; "Hello"]')
+        assert "__cruhon_data__.put(__cruhon_data__._g(guild.id), \"welcome\", \"Hello\")" in code
 
     def test_guild_get(self):
-        code = _compile('@var[w; @data.gget[gid; "welcome"; "yok"]]')
-        assert "__cruhon_data__.get(__cruhon_data__._g(gid), \"welcome\", \"yok\")" in code
+        code = _compile('@var[w; @data.gget[gid; "welcome"; "none"]]')
+        assert "__cruhon_data__.get(__cruhon_data__._g(gid), \"welcome\", \"none\")" in code
 
     def test_user_scoped(self):
         code = _compile('@data.uset[user.id; "xp"; 100]')
@@ -169,7 +167,7 @@ class TestDataTranspile:
 
 
 # ─────────────────────────────────────────────────────────────
-# GENİŞLETME — TTL / LIST / SET / OTO-CONTEXT
+# EXTENSIONS — TTL / LIST / SET / AUTO-CONTEXT
 # ─────────────────────────────────────────────────────────────
 
 class TestDataTTL:
@@ -184,8 +182,8 @@ class TestDataTTL:
 
     def test_expired_returns_default(self):
         d = self._s()
-        d.setex("global", "tok", "abc", -1)  # zaten süresi geçmiş
-        assert d.get("global", "tok", "yok") == "yok"
+        d.setex("global", "tok", "abc", -1)  # already expired
+        assert d.get("global", "tok", "none") == "none"
 
     def test_persist_removes_expiry(self):
         d = self._s()
@@ -194,7 +192,7 @@ class TestDataTTL:
         assert d.ttl("global", "k") == -1
 
     def test_ttl_missing(self):
-        assert self._s().ttl("global", "yok") == -2
+        assert self._s().ttl("global", "nonexistent") == -2
 
 
 class TestDataList:
@@ -225,7 +223,7 @@ class TestDataSet:
     def test_set_unique(self):
         d = self._s()
         assert d.sadd("global", "s", "a") == 1
-        assert d.sadd("global", "s", "a") == 0  # zaten var
+        assert d.sadd("global", "s", "a") == 0  # already exists
         d.sadd("global", "s", "b")
         assert set(d.smembers("global", "s")) == {"a", "b"}
         assert d.sismember("global", "s", "a") is True
@@ -235,7 +233,7 @@ class TestDataSet:
 
 
 class TestDataContext:
-    """Discord ctx/interaction'dan otomatik id çıkarımı."""
+    """Automatic id extraction from Discord ctx/interaction."""
 
     class _FakeGuild:
         id = 999
@@ -289,7 +287,7 @@ class TestDataExtTranspile:
 
 
 # ─────────────────────────────────────────────────────────────
-# GÜÇ DALGASI — hash / leaderboard / atomik / backup
+# POWER — hash / leaderboard / atomic / backup
 # ─────────────────────────────────────────────────────────────
 
 class TestDataHash:
@@ -303,7 +301,7 @@ class TestDataHash:
         assert d.hgetall("global", "user:1") == {"name": "Ali", "age": 30}
         assert set(d.hkeys("global", "user:1")) == {"name", "age"}
         d.hdel("global", "user:1", "age")
-        assert d.hget("global", "user:1", "age", "yok") == "yok"
+        assert d.hget("global", "user:1", "age", "none") == "none"
 
     def test_hincr(self):
         d = self._s()
@@ -316,15 +314,15 @@ class TestDataAtomic:
 
     def test_setnx(self):
         d = self._s()
-        assert d.setnx("global", "k", "ilk") is True
-        assert d.setnx("global", "k", "ikinci") is False
-        assert d.get("global", "k") == "ilk"
+        assert d.setnx("global", "k", "first") is True
+        assert d.setnx("global", "k", "second") is False
+        assert d.get("global", "k") == "first"
 
     def test_getset(self):
         d = self._s()
-        d.put("global", "k", "eski")
-        assert d.getset("global", "k", "yeni") == "eski"
-        assert d.get("global", "k") == "yeni"
+        d.put("global", "k", "old")
+        assert d.getset("global", "k", "new") == "old"
+        assert d.get("global", "k") == "new"
 
 
 class TestDataLeaderboard:
@@ -343,7 +341,7 @@ class TestDataLeaderboard:
             d.put(d._g(1), k, v)
         assert d.rank(d._g(1), "b") == 1
         assert d.rank(d._g(1), "a") == 3
-        assert d.rank(d._g(1), "yok") == 0
+        assert d.rank(d._g(1), "missing") == 0
 
 
 class TestDataBackup:

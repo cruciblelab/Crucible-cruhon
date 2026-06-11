@@ -1,277 +1,145 @@
-# Cruhon Discord — Tam Python Özgürlüğü Planı
+# cruhon-discord — Full Python Freedom Design
 
-> Hedef: discord.py'nin **%100'ü** Cruhon'dan erişilebilir olsun.
-> En ufak detayına kadar Python ile ne yapılıyorsa Cruhon ile de yapılabilsin.
-> discord.py 2.7.1 — 253 sınıf · 66 alt modül · ~5000 metod/property
+> Goal: 100% of discord.py accessible from Cruhon.
+> Every Python operation possible with discord.py should be possible with Cruhon.
+> discord.py 2.7.1 — 253 classes · 66 sub-modules · ~5000 methods/properties
 
 ---
 
-## 1. Felsefe — Neden "5000 wrapper" yanlış yol?
+## 1. Philosophy — Why "5000 wrappers" is the wrong approach
 
-stdlib'de öğrendiğimiz ders: **her modülü tek tek sarmalamak yerine passthrough.**
-discord.py için de aynısı geçerli. 3 katman:
+The lesson learned from stdlib: **passthrough instead of wrapping every module**.
+Same applies to discord.py. Three layers:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ KATMAN 2 — Block komutları (zor scaffolding)            │
+│ LAYER 2 — Block commands (complex scaffolding)          │
 │ @discord.view / button / select / modal / cog / group   │
 ├─────────────────────────────────────────────────────────┤
-│ KATMAN 1 — Ergonomik kısayollar (~60 → ~90 komut)       │
+│ LAYER 1 — Ergonomic shortcuts (~60 → ~90 commands)      │
 │ @discord.send / ban / embed / thread / webhook / poll    │
 ├─────────────────────────────────────────────────────────┤
-│ KATMAN 0 — Universal passthrough (TAM ÖZGÜRLÜK)         │
-│ @discord.X[...]  ·  @discord.ui.Y[...]  ·  düz Python    │
+│ LAYER 0 — Universal passthrough (FULL FREEDOM)          │
+│ @discord.X[...]  ·  @discord.ui.Y[...]  ·  raw Python   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-Alt katman ne kadar güçlüyse, üst katmanlar o kadar "şeker" (opsiyonel kolaylık).
+The more powerful the lower layer, the more optional the upper layers become
+(ergonomic shortcuts, not requirements).
 
 ---
 
-## 2. Şu an çalışan / çalışmayan (gerçek durum)
+## 2. Current state — what works / what doesn't
 
-| Yetenek | Durum | Mekanizma |
+| Capability | Status | Mechanism |
 |---|---|---|
 | `@discord.Embed["t"; "d"]` → `discord.Embed("t","d")` | ✅ | LibCallNode fallback |
-| `@discord.Color.blue[]` | ❌ | nested namespace parse edilemiyor |
-| `@discord.ui.Button[...]` | ❌ | nested namespace parse edilemiyor |
-| `message.author`, `guild.members` | ✅ | `@var[x; message.author]` düz Python |
-| `await msg.add_reaction("👍")` | ✅ | `@var`/`@raw` düz Python |
-| View/Button/Modal sınıfı | ⚠️ | `@class[V; discord.ui.View]` el ile yazılır |
-| Cog sınıfı | ⚠️ | `@class[C; commands.Cog]` el ile yazılır |
-| `@discord.utils.get[...]` | ❌ | nested namespace |
-
-**Kritik tespit:** Tüm Cruhon primitifleri zaten mevcut:
-`@class[name; parent]` · `@decorate[expr]` · `@func` · `@var`/`@return`/`@raw` expr passthrough.
-Eksik olan **ergonomi ve nested namespace erişimi**.
+| `@discord.Color.blue[]` | ✅ | lexer_hook nested rewrite |
+| `@discord.ui.Button[...]` | ✅ | lexer_hook nested rewrite |
+| `message.author`, `guild.members` | ✅ | `@var[x; message.author]` raw Python |
+| `await msg.add_reaction("👍")` | ✅ | `@var`/`@raw` raw Python |
+| View/Button/Modal class | ✅ | `@discord.view` / `@discord.button` block commands |
+| Cog class | ✅ | `@discord.cog` block command |
+| `@discord.utils.get[...]` | ✅ | lexer_hook nested rewrite |
 
 ---
 
-## 3. KATMAN 0 — Universal Passthrough (Çekirdek)
+## 3. LAYER 0 — Universal Passthrough (Core)
 
-> **⚠️ ÖNEMLİ İLKE: SIFIR CORE DEĞİŞİKLİĞİ.**
-> Bir plugin, Cruhon core'una dokunmadan kendini genişletebilmeli.
-> Aksi halde başkaları kendi kütüphane plugin'lerini yazamaz.
-> discord plugin'i her şeyi **plugin API** ile (lexer_hook / token_hook /
-> lib_call / inject) yapar.
+> **⚠️ CRITICAL PRINCIPLE: ZERO CORE CHANGES.**
+> A plugin must be able to extend Cruhon without touching core files.
+> Otherwise others cannot write their own library plugins.
+> The discord plugin does everything via the **plugin API** (lexer_hook /
+> lib_call / inject).
 
-### 3.0 Özgürlük zaten var — nested sadece ergonomi
+### 3.0 Freedom already exists — nested is just ergonomics
 
-`discord` import edildiği sürece, discord.py'nin **%100'ü** bugün bile
-erişilebilir (düz Python passthrough):
+As long as `discord` is imported, 100% of discord.py is accessible today
+via raw Python passthrough:
 
 ```clpy
-@var[btn; discord.ui.Button(label="Tıkla", style=discord.ButtonStyle.green)]
+@var[btn; discord.ui.Button(label="Click", style=discord.ButtonStyle.green)]
 @var[v;   discord.ui.View()]
 @raw
     v.add_item(btn)
 @end
 ```
 
-Yani tam Python özgürlüğünün **tek ön koşulu = import garantisi** (3.2).
-Nested namespace (`@discord.ui.Button[...]`) bunun şekerli kısa hâli.
+The only prerequisite for full Python freedom = **import guarantee** (3.2).
+Nested namespace (`@discord.ui.Button[...]`) is the ergonomic shorthand.
 
-### 3.1 Çok seviyeli namespace (plugin-only, lexer_hook)
+### 3.1 Multi-level namespace (plugin-only, lexer_hook)
 
-**Sorun:** Lexer `@discord.method` → tek seviye okur; `@discord.ui.Button`
-ikinci noktada kırılır.
+**Problem:** Lexer reads `@discord.method` as one level; `@discord.ui.Button`
+breaks at the second dot.
 
-**Çözüm (core'suz):** Mevcut `_discord_preprocess` lexer_hook'unu genişlet.
-Sadece **nokta içeren** path'leri regex ile dönüştür:
+**Solution (no core changes):** Extend the `_discord_preprocess` lexer_hook.
+Only convert paths **containing a dot** via regex:
 
 ```
 @discord.ui.Button[label="x"]
    ↓ lexer_hook  (regex: @discord.<path-with-dot>[ )
 @discord.__nested["discord.ui.Button"; label="x"]
-   ↓ kayıtlı lib_call("discord", "__nested", handler)
+   ↓ registered lib_call("discord", "__nested", handler)
 discord.ui.Button(label="x")
 ```
 
-`__nested` handler: args[0] = path string, kalan args = gerçek argümanlar →
-`{path}({", ".join(rest)})` emit eder. Hem inline (`@var`) hem statement
-bağlamında çalışır (textual rewrite olduğu için).
+`__nested` handler: args[0] = path string, remaining args = real arguments →
+emits `{path}({", ".join(rest)})`. Works in both inline (`@var`) and statement
+context because it is a purely textual rewrite into a normal single-level lib call.
 
-**Geri uyumluluk:** `@discord.send[...]` içinde nokta yok → regex'e takılmaz,
-mevcut fallback ile `discord.send(...)` (aslında özel handler) çalışır.
-Block komutları (`@_dc_on` vb.) `@discord.` ile başlamadığı için etkilenmez.
+**Backward compatibility:** `@discord.send[...]` has no inner dot → regex
+doesn't match; existing fallback emits `discord.send(...)` (actually special handler).
+Block commands (`@_dc_on` etc.) don't start with `@discord.` so they're unaffected.
 
-```
-@discord.utils.get[guild.roles; name="Admin"]  → discord.utils.get(...)
-@discord.Color.blue[]                           → discord.Color.blue()
-@discord.app_commands.Choice[name="A"; value=1] → discord.app_commands.Choice(...)
-```
+### 3.2 Import guarantee
 
-**Etki alanı:** SADECE `mods/cruhon-discord/__init__.py`. Core dosyaları
-(lexer.py, parser.py, transpiler.py) **değişmez**.
-
-**Opsiyonel ayrı tartışma:** İleride TÜM modüller (`@os.path.join` gibi)
-nested kazansın istersek, o zaman core'a genel destek eklenebilir — ama bu
-discord için **gerekli değil** ve ayrı bir karardır.
-
-### 3.2 Import garantisi
-
-`@discord.setup[...]` her zaman şunları enjekte etsin:
+`@discord.setup[...]` always injects:
 ```python
 import discord
 import asyncio
 from discord.ext import commands
 from discord.ext import tasks as __discord_tasks__
-from discord import ui as __dc_ui__
-from discord import app_commands as __dc_app__
 ```
-Böylece `discord.ui.*`, `app_commands.*`, `commands.*`, `tasks.*` her yerde hazır.
-
-### 3.3 Sonuç — Katman 0 ile erişilen
-discord.py'deki **HER** top-level + nested sınıf/fonksiyon/enum:
-`discord.Embed`, `discord.File`, `discord.Intents`, `discord.Permissions`,
-`discord.AllowedMentions`, `discord.Color.*`, `discord.ButtonStyle.*`,
-`discord.ui.*`, `discord.app_commands.*`, `discord.utils.*`, `discord.abc.*` …
-Object method/property zaten serbest. → **%100 erişim.**
+So `discord.ui.*`, `app_commands.*`, `commands.*`, `tasks.*` are always available.
 
 ---
 
-## 4. KATMAN 2 — Block Komutları (interaktif/zor kısımlar)
+## 4. LAYER 2 — Block Commands (interactive/complex parts)
 
-Tek satırda yapılamayan, sınıf + decorator + callback gerektiren yapılar.
+Structures that can't be done in one line, requiring class + decorator + callback.
 
-### 4.1 `@discord.view` — buton/menü konteyneri
-```
-@discord.view[MyView; timeout=60]
-    @discord.button[Onayla; style=green]
-        @discord.respond[interaction; "Onaylandı ✅"]
-    @end
-    @discord.button[İptal; style=red]
-        @discord.respond[interaction; "İptal edildi ❌"]
-    @end
-@end
-```
-→ `class MyView(discord.ui.View)` + `@discord.ui.button` dekoratörlü
-async callback metodları. `interaction` parametresi otomatik.
-
-### 4.2 `@discord.button` (view içinde) — callback'li buton
-Argümanlar: `label ; style ; emoji ; row ; custom_id`
-Stil isimleri friendly: `green/red/blurple/gray` → `discord.ButtonStyle.*`
-
-### 4.3 `@discord.select` — dropdown menü
-```
-@discord.select[Renk seç; min=1; max=1]
-    @option[Kırmızı; value=red; emoji=🔴]
-    @option[Mavi; value=blue; emoji=🔵]
-    @body[interaction; selection]
-        @discord.respond[interaction; f"Seçtin: {selection.values[0]}"]
-    @end
-@end
-```
-
+### 4.1 `@discord.view` — button/menu container
+### 4.2 `@discord.button` (inside view) — button with callback
+### 4.3 `@discord.select` — dropdown menu
 ### 4.4 `@discord.modal` — form/modal
-```
-@discord.modal[Geri Bildirim; FeedbackModal]
-    @field[Başlık; placeholder="Konu"; required=True]
-    @field[Mesaj; style=long; max=500]
-    @on_submit[interaction]
-        @discord.respond[interaction; "Teşekkürler!"]
-    @end
-@end
-```
-→ `class FeedbackModal(discord.ui.Modal)` + `TextInput`'lar + `on_submit`.
-
-### 4.5 `@discord.cog` — komut grubu (modüler bot)
-```
-@discord.cog[Moderation]
-    @discord.command[ban; ctx; member]
-        @discord.ban[member]
-    @end
-    @discord.command[kick; ctx; member]
-        @discord.kick[member]
-    @end
-@end
-```
-→ `class Moderation(commands.Cog)` + metodlar + `bot.add_cog(...)`.
-
-### 4.6 `@discord.group` — slash komut grubu
-`/admin ban`, `/admin kick` gibi alt komutlar.
-→ `app_commands.Group` veya `commands.GroupCog`.
+### 4.5 `@discord.cog` — command group (modular bot)
+### 4.6 `@discord.group` — slash command group
 
 ---
 
-## 4.7 KARARLAR (kullanıcı onayı)
+## 5. LAYER 1 — Shortcut Expansion (~60 → ~90)
 
-1. **Alt-bloklar** (`@option`, `@field`, `@body`, `@on_submit`) → **block-içi**
-   parse. Sadece ilgili block bağlamında geçerli, global komut değil.
-2. **Friendly enum haritası** → **KOMPLE GENİŞ**. ButtonStyle, ActivityType,
-   Status, TextStyle, ChannelType, Color/Colour ve mümkün olan tüm enum'lar
-   friendly isimlerle. (Enum üyesi = attribute, classmethod = call ayrımı korunur.)
-3. **Cog'lar** → hem tek dosyada hem `@use` ile ayrı dosyada çalışır. Zorlama yok.
-4. **Ses/müzik** → **SADECE passthrough**. PyNaCl/ffmpeg gibi ekstra
-   bağımlılıklar dayatılmaz. `discord.FFmpegPCMAudio(...)` vb. düz Python /
-   nested ile erişilir; insanlar yt-dlp/ffmpeg ile kendileri entegre eder.
-   Özel `@discord.play[...]` kısayolu **yok** (bağımlılık kilidi yaratmamak için).
+Existing friendly commands are kept. High-use missing ones are added:
 
----
-
-## 5. KATMAN 1 — Kısayol Genişletme (~60 → ~90)
-
-Mevcut friendly komutlar korunur. Yüksek-kullanımlı eksikler eklenir:
-
-| Kategori | Yeni kısayollar |
+| Category | New shortcuts |
 |---|---|
 | Thread | `create_thread`, `archive_thread`, `add_thread_member` |
 | Webhook | `create_webhook`, `send_webhook` |
 | Invite | `create_invite`, `delete_invite` |
 | Poll | `create_poll`, `end_poll` |
 | Scheduled | `create_event`, `cancel_event` |
-| Audit | `audit_logs` (son N kayıt) |
+| Audit | `audit_logs` (last N records) |
 | Files | `send_file`, `send_files` |
 | Permissions | `set_permissions`, `sync_permissions` |
 | Emoji/Sticker | `create_emoji`, `delete_emoji` |
 
 ---
 
-## 6. Uygulama Sırası (Fazlar)
+## 6. Test Strategy
 
-**Faz 1 — Çekirdek (Katman 0):** ← en kritik
-1. Lexer: çok seviyeli `@a.b.c` token zinciri
-2. Parser: `_parse_namespace_call` dotted path
-3. Transpiler: nested attribute emit + LibCallNode
-4. discord mod: import garantisi (ui, app_commands, tasks)
-5. Test: her namespace erişim matrisi
-
-**Faz 2 — UI/Cog Block (Katman 2):**
-6. `view` / `button` / `select` / `modal` visitor'ları
-7. `cog` / `group` visitor'ları
-8. Lexer pre-hook: yeni block cmd'leri `_BLOCK_CMDS`'e ekle
-9. Test: buton botu, modal form, cog
-
-**Faz 3 — Kısayol (Katman 1):**
-10. ~30 yeni friendly handler
-11. Test + örnekler
-
-**Faz 4 — Doğrulama & Dokümantasyon:**
-12. API_INVENTORY.md erişim matrisi (her sınıf ✅)
-13. README, örnek botlar, library.md
-
----
-
-## 7. Test Stratejisi
-
-- **Transpile testleri** (discord.py kurulu olması gerekmez):
-  üretilen Python kodunu string olarak doğrula.
-- **Erişim matrisi:** API_INVENTORY'deki 253 sınıfın her biri için
-  "Cruhon'dan çağrılabiliyor mu?" otomatik kontrol.
-- **Örnek botlar:** moderasyon, interaktif buton, modal form, müzik (ses).
-
----
-
-## 8. Riskler / Açık Sorular
-
-1. **Regex rewrite kenar durumları** — lexer_hook regex'i nested path'i
-   yakalarken tek-seviye, string içi noktalar, iç içe parantezleri
-   bozmamalı. (Core değişmiyor; risk sadece plugin içinde, izole.)
-2. **`@option` / `@field` / `@body` alt-blokları** — bunlar yeni inline
-   komutlar mı yoksa block içi özel parse mı? (Tartışılacak.)
-3. **Stil/enum friendly isimleri** — `green` → `ButtonStyle.green` haritası
-   ne kadar geniş olsun? (renkler, aktivite tipleri, izinler.)
-4. **Ses (voice)** — `discord.FFmpegPCMAudio`, `PCMVolumeTransformer`
-   harici bağımlılık (ffmpeg) gerektirir. Passthrough yeterli mi?
-5. **Cog dosya ayrımı** — Cog'lar ayrı `.clpy` dosyasına `@use` ile mi,
-   yoksa tek dosyada mı? (Modül sistemi ile entegrasyon.)
+- **Transpile tests** (discord.py not required to be installed):
+  verify generated Python code as a string.
+- **Access matrix:** for each of the 253 classes in API_INVENTORY,
+  check "can it be called from Cruhon?"
+- **Example bots:** moderation, interactive buttons, modal forms, music (voice).

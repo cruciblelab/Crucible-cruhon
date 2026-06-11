@@ -64,8 +64,8 @@ class TestFileReadWrite:
         assert (in_tmp / "deep" / "nested" / "a.txt").read_text() == "ok"
 
     def test_utf8_roundtrip(self, in_tmp):
-        _run('@file.write["t.txt"; "şçğüöı 日本"]')
-        assert _eval('@file.read["t.txt"]') == "şçğüöı 日本"
+        _run('@file.write["t.txt"; "hello 日本"]')
+        assert _eval('@file.read["t.txt"]') == "hello 日本"
 
 
 class TestFileJson:

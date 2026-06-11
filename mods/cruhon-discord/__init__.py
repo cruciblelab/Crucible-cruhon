@@ -4,17 +4,17 @@ cruhon-discord v1.0.0
 Discord bot plugin for Cruhon.
 "Even people who don't know coding can quickly and easily do whatever they want."
 
-━━━ BOT KURULUM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ BOT SETUP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.setup["TOKEN"]
   @discord.setup["TOKEN"; prefix="!"; intents="all"]
-  @discord.run[]                       — botu başlat (blocking)
-  @discord.sync_commands[]             — slash komutlarını senkronize et
+  @discord.run[]                       — start the bot (blocking)
+  @discord.sync_commands[]             — sync slash commands with Discord
 
-━━━ OLAY YÖNETİCİLERİ (blok komutlar) ━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ EVENT HANDLERS (block commands) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.on[ready]
   @discord.on[message; msg]
-  @discord.on[join; member]            — sunucuya katılma
-  @discord.on[leave; member]           — sunucudan ayrılma
+  @discord.on[join; member]            — member joined the server
+  @discord.on[leave; member]           — member left the server
   @discord.on[reaction_add; reaction; user]
   @discord.on[reaction_remove; reaction; user]
   @discord.on[error; ctx; error]
@@ -22,111 +22,111 @@ Discord bot plugin for Cruhon.
   @discord.on[guild_leave; guild]
   @discord.on[message_edit; before; after]
   @discord.on[message_delete; message]
-  ... (tüm discord.py olay isimleri çalışır)
+  ... (any discord.py event name works)
 
-  @discord.command[ping; ctx]           — metin komutu (!ping)
-  @discord.command[greet; ctx; user]    — parametreli komut
-  @discord.slash[hello; "Merhaba der"; ctx]  — slash komutu (/hello)
-  @discord.slash[roll; "Zar at"; ctx; sides]
-  @discord.task[cleanup; minutes=30]   — arka plan görevi
-  @discord.listen[message; msg]        — ek olay dinleyici
+  @discord.command[ping; ctx]           — prefix command (!ping)
+  @discord.command[greet; ctx; user]    — command with parameters
+  @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
+  @discord.slash[roll; "Roll dice"; ctx; sides]
+  @discord.task[cleanup; minutes=30]   — background task
+  @discord.listen[message; msg]        — additional event listener
 
-━━━ MESAJLAŞMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @discord.send[channel; "mesaj"]
-  @discord.send[channel; "mesaj"; embed=my_embed]
+━━━ MESSAGING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.send[channel; "message"]
+  @discord.send[channel; "message"; embed=my_embed]
   @discord.send_embed[channel; embed]
-  @discord.reply[ctx; "mesaj"]
-  @discord.dm[user; "mesaj"]
-  @discord.respond[interaction; "mesaj"]   — slash yanıt
-  @discord.respond[interaction; "mesaj"; ephemeral=True]
-  @discord.defer[interaction]              — yavaş işlem için beklet
-  @discord.followup[interaction; "mesaj"] — defer sonrası gönder
-  @discord.edit[message; "yeni içerik"]
+  @discord.reply[ctx; "message"]
+  @discord.dm[user; "message"]
+  @discord.respond[interaction; "message"]   — slash reply
+  @discord.respond[interaction; "message"; ephemeral=True]
+  @discord.defer[interaction]              — defer for slow operations
+  @discord.followup[interaction; "message"] — send after defer
+  @discord.edit[message; "new content"]
   @discord.delete[message]
   @discord.delete[message; delay=5]
   @discord.pin[message]
   @discord.unpin[message]
-  @discord.process_commands[msg]          — on_message içinde komutları işle
+  @discord.process_commands[msg]          — process commands in on_message
 
-━━━ TEPKİLER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ REACTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.react[message; "👍"]
   @discord.unreact[message; "👍"; user]
   @discord.clear_reactions[message]
 
-━━━ EMBED — KOLAY (tek satır, tüm özellikler) ━━━━━━━━━━━━━━━━━━━━
-  Pozisyonel sıra: title ; description ; color ; footer ; image ; thumbnail ; author
-  Boş geç:  ""  o alan eklenmez
+━━━ EMBED — QUICK (one-liner, all features) ━━━━━━━━━━━━━━━━━━━━━━
+  Positional order: title ; description ; color ; footer ; image ; thumbnail ; author
+  Empty string ""  skips that field
 
-  @var[e; @embed["Başlık"; "Açıklama"]]
-  @var[e; @embed["Başlık"; "Açıklama"; 0x3498db]]
-  @var[e; @embed["Başlık"; "Açıklama"; 0x3498db; "Alt yazı"]]
-  @var[e; @embed["Başlık"; "Açıklama"; ""; "Alt yazı"; "img.png"; "thumb.png"; "Yazar"]]
+  @var[e; @embed["Title"; "Description"]]
+  @var[e; @embed["Title"; "Description"; 0x3498db]]
+  @var[e; @embed["Title"; "Description"; 0x3498db; "Footer"]]
+  @var[e; @embed["Title"; "Description"; ""; "Footer"; "img.png"; "thumb.png"; "Author"]]
 
-  Kwargs ile (pozisyonla karışık çalışır):
-  @var[e; @embed["Başlık"; "Açıklama"; color=0xFF0000; footer="Alt"; author="Yazar"]]
-  @var[e; @embed["Başlık"; "Açıklama"; footer="Alt"; footer_icon="icon.png"]]
-  @var[e; @embed["Başlık"; "Açıklama"; author="Yazar"; author_icon="avatar.png"]]
+  With kwargs (can mix with positional):
+  @var[e; @embed["Title"; "Description"; color=0xFF0000; footer="Footer"; author="Author"]]
+  @var[e; @embed["Title"; "Description"; footer="Footer"; footer_icon="icon.png"]]
+  @var[e; @embed["Title"; "Description"; author="Author"; author_icon="avatar.png"]]
 
-  @discord.quick_embed — aynı şey, @discord. önekiyle:
-  @var[e; @discord.quick_embed["Başlık"; "Açıklama"; footer="Alt"]]
+  @discord.quick_embed — same as @embed, with @discord. prefix:
+  @var[e; @discord.quick_embed["Title"; "Description"; footer="Footer"]]
 
-━━━ EMBED — DETAYLI (tek tek ayarla) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @var[e; @discord.embed["Başlık"; "Açıklama"]]
-  @var[e; @discord.embed["Başlık"; "Açıklama"; color=0xFF0000]]
-  @discord.add_field[e; "Alan Adı"; "Alan Değeri"]
-  @discord.add_field[e; "Alan Adı"; "Alan Değeri"; inline=False]
-  @discord.set_footer[e; "Alt yazı"]
-  @discord.set_footer[e; "Alt yazı"; icon="icon_url"]
-  @discord.set_image[e; "resim_url"]
-  @discord.set_thumbnail[e; "küçük_resim_url"]
-  @discord.set_author[e; "Yazar Adı"]
-  @discord.set_author[e; "Yazar Adı"; icon="avatar_url"]
+━━━ EMBED — DETAILED (set fields individually) ━━━━━━━━━━━━━━━━━━━━
+  @var[e; @discord.embed["Title"; "Description"]]
+  @var[e; @discord.embed["Title"; "Description"; color=0xFF0000]]
+  @discord.add_field[e; "Field Name"; "Field Value"]
+  @discord.add_field[e; "Field Name"; "Field Value"; inline=False]
+  @discord.set_footer[e; "Footer text"]
+  @discord.set_footer[e; "Footer text"; icon="icon_url"]
+  @discord.set_image[e; "image_url"]
+  @discord.set_thumbnail[e; "thumbnail_url"]
+  @discord.set_author[e; "Author Name"]
+  @discord.set_author[e; "Author Name"; icon="avatar_url"]
 
-━━━ MODERASİON ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ MODERATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.ban[member]
   @discord.ban[member; reason="Spam"; delete_days=1]
   @discord.unban[guild; user]
   @discord.kick[member]
-  @discord.kick[member; reason="Kural ihlali"]
+  @discord.kick[member; reason="Rule violation"]
   @discord.timeout[member; minutes=10]
   @discord.timeout[member; hours=1]
   @discord.untimeout[member]
   @discord.add_role[member; role]
   @discord.remove_role[member; role]
-  @discord.nickname[member; "Yeni İsim"]
+  @discord.nickname[member; "New Name"]
 
-━━━ KANAL İŞLEMLERİ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ CHANNEL OPERATIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.purge[channel; 10]
-  @discord.create_text[guild; "kanal-adi"]
-  @discord.create_voice[guild; "ses-kanalı"]
+  @discord.create_text[guild; "channel-name"]
+  @discord.create_voice[guild; "voice-channel"]
   @discord.delete_channel[channel]
 
-━━━ ARAMA (inline ifade) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ LOOKUP (inline expression) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @var[m; @discord.get_member[guild; 123456789]]
   @var[ch; @discord.get_channel[guild; 987654321]]
   @var[r; @discord.get_role[guild; "Admin"]]
-  @var[u; @discord.find_member[guild; "kullanici_adi"]]
+  @var[u; @discord.find_member[guild; "username"]]
   @var[me; @discord.me[]]
 
-━━━ KORUMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @discord.ignore_self[msg]            — bot kendi mesajını yoksay
-  @discord.ignore_bots[msg]            — tüm bot mesajlarını yoksay
-  @discord.require_role[ctx; "Admin"] — rol yoksa durdur
-  @discord.require_guild[]             — DM'de çalışmasın
+━━━ PROTECTION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.ignore_self[msg]            — ignore the bot's own messages
+  @discord.ignore_bots[msg]            — ignore all bot messages
+  @discord.require_role[ctx; "Admin"] — stop if role is missing
+  @discord.require_guild[]             — prevent DM usage
 
-━━━ DURUM & ÇEŞİTLİ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @discord.status["Oyun oynuyor"]
-  @discord.status["Yayın izliyor"; type="watching"]
-  @discord.status["Müzik dinliyor"; type="listening"]
-  @discord.log["mesaj"]               — [bot] önekiyle yazdır
+━━━ STATUS & MISC ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.status["Playing a game"]
+  @discord.status["Watching streams"; type="watching"]
+  @discord.status["Listening to music"; type="listening"]
+  @discord.log["message"]               — print with [bot] prefix
   @discord.wait_for["message"; timeout=30]
   @discord.wait_for["message"; timeout=30; check=my_check_fn]
-  @discord.start_task[task_adi]       — arka plan görevini başlat
-  @discord.stop_task[task_adi]        — arka plan görevini durdur
+  @discord.start_task[task_name]       — start a background task
+  @discord.stop_task[task_name]        — stop a background task
 
-━━━ SES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @discord.join[voice_channel]        — ses kanalına katıl
-  @discord.leave[guild]               — ses kanalından ayrıl
+━━━ VOICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.join[voice_channel]        — join a voice channel
+  @discord.leave[guild]               — leave the voice channel
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ _BLOCK_CMDS = {"on", "command", "slash", "task", "listen",
                "view", "button", "cog", "group", "modal", "select",
                "context_menu"}
 
-# Friendly button style names → discord.ButtonStyle member (komple geniş)
+# Friendly button style names → discord.ButtonStyle member (comprehensive)
 _BUTTON_STYLES = {
     "primary": "primary", "blurple": "primary", "blue": "primary",
     "secondary": "secondary", "grey": "secondary", "gray": "secondary",
@@ -153,7 +153,7 @@ _BUTTON_STYLES = {
 
 
 def _slug(s: str) -> str:
-    """Bir etiketten geçerli Python tanımlayıcısı üret (buton metod adı)."""
+    """Produce a valid Python identifier from a label string (button method name)."""
     s = (s or "").strip().strip("\"'")
     s = re.sub(r"\W+", "_", s, flags=re.UNICODE).strip("_").lower()
     if not s or not (s[0].isalpha() or s[0] == "_"):
@@ -162,8 +162,8 @@ def _slug(s: str) -> str:
 
 
 def _as_str(a: str) -> str:
-    """Görünen metin argümanı → string literal. Tırnaklı/f-string ise olduğu gibi.
-    Bare metin (boşluklu olabilir) → repr ile string'e çevrilir."""
+    """Display text argument → string literal. Quoted/f-string: pass through.
+    Bare text (may contain spaces) → converted to string with repr."""
     a = (a or "").strip()
     if a[:1] in ('"', "'") or a[:2] in ('f"', "f'"):
         return a
@@ -171,12 +171,12 @@ def _as_str(a: str) -> str:
 
 
 def _style_expr(raw: str) -> str:
-    """style=green → discord.ButtonStyle.success (bilinmeyen → olduğu gibi)."""
+    """style=green → discord.ButtonStyle.success (unknown → pass through)."""
     key = raw.strip().strip("\"'").lower()
     member = _BUTTON_STYLES.get(key)
     if member:
         return f"discord.ButtonStyle.{member}"
-    # Kullanıcı zaten discord.ButtonStyle.X yazdıysa veya bilinmeyen ad
+    # User already wrote discord.ButtonStyle.X or unknown name
     return raw.strip() if "." in raw else f"discord.ButtonStyle.{key}"
 
 # Nested namespace: @discord.ui.Button[  /  @discord.utils.get[  /  @discord.Color.blue[
@@ -270,7 +270,7 @@ def _visit_dc_on(transpiler, node):
 
 
 def _check_decorators(kwargs, indent, mode="command"):
-    """cooldown= / perms= / guild_only= / owner_only= → check dekoratör satırları."""
+    """cooldown= / perms= / guild_only= / owner_only= → emit check decorator lines."""
     out = []
     if "cooldown" in kwargs:
         n = kwargs["cooldown"].strip()
@@ -300,7 +300,7 @@ def _visit_dc_command(transpiler, node):
     @discord.command[ping; ctx]
     @discord.command[greet; ctx; user; aliases="hi,hey"]
     @discord.command[ban; ctx; member; perms="ban_members"; cooldown=5]
-    → @__bot__.command(name=...) + check dekoratörleri + async def <name>(ctx, ...):
+    → @__bot__.command(name=...) + check decorators + async def <name>(ctx, ...):
     """
     args = node.args
     kwargs = node.kwargs
@@ -362,7 +362,7 @@ def _visit_dc_slash(transpiler, node):
       @discord.slash[hello; "Say hi"; interaction]
       @discord.slash[roll; "Roll dice"; interaction; sides]
 
-    Configured (BDFD-style options):
+    With typed options and choices:
       @discord.slash[ban; "Ban a user"; interaction]
           @param[member; user; "User to ban"]            # required by default
           @param[reason; string; "Reason"; optional]     # optional
@@ -536,16 +536,16 @@ def _visit_dc_listen(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
-# UI BLOCK VISITORS — View / Button (interaktif bileşenler)
+# UI BLOCK VISITORS — View / Button (interactive components)
 # ─────────────────────────────────────────────────────────────
 
 def _render_button(transpiler, btn):
     """
-    @discord.button[Onayla; style=green; emoji="✅"; row=0]
-        <callback gövdesi>
+    @discord.button[Confirm; style=green; emoji="✅"; row=0]
+        <callback body>
     @end
     → @discord.ui.button(...) + async def <slug>(self, interaction, button):
-    callback gövdesinde `interaction` kullanılır.
+    `interaction` is available inside the callback body.
     """
     args = btn.args
     kw = btn.kwargs
@@ -563,7 +563,7 @@ def _render_button(transpiler, btn):
         deco.append(f"custom_id={kw['custom_id'].strip()}")
 
     base = "    " * transpiler._indent
-    body_code = transpiler._block(btn.body)  # _indent+1 seviyesinde render
+    body_code = transpiler._block(btn.body)  # render at _indent+1 level
     return "\n".join([
         f"{base}@discord.ui.button({', '.join(deco)})",
         f"{base}async def {name}(self, interaction, button):",
@@ -572,7 +572,7 @@ def _render_button(transpiler, btn):
 
 
 def _visit_dc_button(transpiler, node):
-    """Tek başına @discord.button — sınıf gövdesi bağlamında metod üretir."""
+    """Standalone @discord.button — emits a method in a class body context."""
     return _render_button(transpiler, node)
 
 
@@ -581,7 +581,7 @@ def _visit_dc_view(transpiler, node):
     @discord.view[ConfirmView; timeout=60]
         @discord.button[...] ... @end
     @end
-    → class ConfirmView(discord.ui.View): __init__ + buton metodları
+    → class ConfirmView(discord.ui.View): __init__ + button methods
     """
     from cruhon.core.ast_nodes import PluginBlockNode
 
@@ -595,7 +595,7 @@ def _visit_dc_view(transpiler, node):
         f"{base}        super().__init__(timeout={timeout})",
     ]
 
-    transpiler._indent += 1  # sınıf gövdesi seviyesi
+    transpiler._indent += 1  # class body indentation level
     try:
         for child in node.body:
             if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_button":
@@ -613,11 +613,11 @@ def _visit_dc_view(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
-# COG BLOCK VISITOR — modüler bot (komut grubu sınıfı)
+# COG BLOCK VISITOR — modular bot (command group class)
 # ─────────────────────────────────────────────────────────────
 
 def _render_cog_method(transpiler, child):
-    """Cog içindeki @discord.command / @discord.slash → self'li metod."""
+    """Inside a Cog: @discord.command / @discord.slash → method with self parameter."""
     args = child.args
     base = "    " * transpiler._indent
 
@@ -646,7 +646,7 @@ def _render_cog_method(transpiler, child):
             body_code if body_code.strip() else f"{base}    pass",
         ])
 
-    # Diğer düğümleri olduğu gibi render et
+    # Render other nodes as-is
     return child.accept(transpiler)
 
 
@@ -655,8 +655,8 @@ def _visit_dc_cog(transpiler, node):
     @discord.cog[Moderation]
         @discord.command[ban; ctx; member] ... @end
     @end
-    → class Moderation(commands.Cog): __init__(self, bot) + metodlar
-    Kayıt: @discord.add_cog[Moderation] (on_ready/setup içinde).
+    → class Moderation(commands.Cog): __init__(self, bot) + methods
+    Register with: @discord.add_cog[Moderation] (call from on_ready/setup).
     """
     name = (node.args[0].strip().strip("\"'")) if node.args else "MyCog"
     base = "    " * transpiler._indent
@@ -678,10 +678,10 @@ def _visit_dc_cog(transpiler, node):
 
 def _visit_dc_group(transpiler, node):
     """
-    @discord.group[admin; "Yönetici komutları"]
-        @discord.slash[ban; "Yasakla"; interaction; member] ... @end
+    @discord.group[admin; "Admin commands"]
+        @discord.slash[ban; "Ban a user"; interaction; member] ... @end
     @end
-    → app_commands.Group alt sınıfı + alt komut metodları.
+    → app_commands.Group subclass + sub-command methods.
     """
     name = (node.args[0].strip().strip("\"'")) if node.args else "MyGroup"
     desc = node.args[1].strip() if len(node.args) > 1 else repr(name)
@@ -692,7 +692,7 @@ def _visit_dc_group(transpiler, node):
         f"{base}    pass",
         f"{base}{name} = {cls}(name={name!r}, description={desc})",
     ]
-    # Alt komutları @<group>.command dekoratörüyle bağla
+    # Bind sub-commands with @<group>.command decorator
     for child in node.body:
         if isinstance(child, type(node)) and child.plugin_name == "_dc_slash":
             cargs = child.args
@@ -709,11 +709,11 @@ def _visit_dc_group(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
-# ALT-BLOK PARSER'LARI — @field / @option (tek satır), @body / @on_submit (block)
+# SUB-BLOCK PARSERS — @field / @option (one-liner), @body / @on_submit (block)
 # ─────────────────────────────────────────────────────────────
 
 def _make_oneliner_parser(plugin_name: str):
-    """@field[...] / @option[...] gibi gövdesiz tek-satır alt komutları parse eder."""
+    """Parse bodyless one-liner sub-commands like @field[...] / @option[...]."""
     def _p(parser):
         from cruhon.core.ast_nodes import PluginBlockNode
         line = parser.current.line
@@ -725,16 +725,15 @@ def _make_oneliner_parser(plugin_name: str):
 
 
 def _noop_visit(transpiler, node):
-    """field/option tek başına render edilirse (normalde ebeveyn işler)."""
+    """field/option rendered standalone (normally handled by parent)."""
     return f"{'    ' * transpiler._indent}pass"
 
 
-_TEXT_STYLES = {"short": "short", "long": "long", "paragraph": "paragraph",
-                "kısa": "short", "uzun": "long"}
+_TEXT_STYLES = {"short": "short", "long": "long", "paragraph": "paragraph"}
 
 
 def _render_field(field_node) -> str:
-    """@field[Başlık; placeholder=..; max=..; style=long] → TextInput attribute."""
+    """@field[Title; placeholder=..; max=..; style=long] → TextInput attribute."""
     args = field_node.args
     kw = field_node.kwargs
     label = _as_str(args[0]) if args else '"Field"'
@@ -757,14 +756,14 @@ def _render_field(field_node) -> str:
 
 
 def _render_option(opt_node) -> str:
-    """@option[Kırmızı; value=red; emoji=🔴] → discord.SelectOption(...)."""
+    """@option[Red; value=red; emoji=🔴] → discord.SelectOption(...)."""
     args = opt_node.args
     kw = opt_node.kwargs
     label = _as_str(args[0]) if args else '"Option"'
     parts = [f"label={label}"]
     if "value" in kw:
         v = kw["value"].strip()
-        # value=red gibi tırnaksız → string yap
+        # unquoted value like value=red → make it a string
         if not (v.startswith('"') or v.startswith("'")):
             v = repr(v.strip("\"'"))
         parts.append(f"value={v}")
@@ -778,16 +777,16 @@ def _render_option(opt_node) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
-# MODAL BLOCK VISITOR — form penceresi
+# MODAL BLOCK VISITOR — form/modal window
 # ─────────────────────────────────────────────────────────────
 
 def _visit_dc_modal(transpiler, node):
     """
-    @discord.modal[Geri Bildirim; FeedbackModal]
-        @field[Başlık; placeholder="Konu"]
+    @discord.modal[Feedback; FeedbackModal]
+        @field[Subject; placeholder="Topic"]
         @on_submit[interaction] ... @end
     @end
-    → class FeedbackModal(discord.ui.Modal, title="Geri Bildirim"): ...
+    → class FeedbackModal(discord.ui.Modal, title="Feedback"): ...
     """
     from cruhon.core.ast_nodes import PluginBlockNode
 
@@ -824,20 +823,20 @@ def _visit_dc_modal(transpiler, node):
 
 
 # ─────────────────────────────────────────────────────────────
-# SELECT — dropdown (view içinde veya tek başına dekoratörlü metod)
+# SELECT — dropdown (inside a view or standalone decorated method)
 # ─────────────────────────────────────────────────────────────
 
 def _render_select(transpiler, node):
     """
-    @discord.select[Renk seç; min=1; max=1]
-        @option[Kırmızı; value=red] ...
+    @discord.select[Choose a color; min=1; max=1]
+        @option[Red; value=red] ...
         @body[interaction; selection] ... @end
     @end
     → @discord.ui.select(...) + async def <slug>(self, interaction, selection):
     """
     from cruhon.core.ast_nodes import PluginBlockNode
 
-    placeholder = _as_str(node.args[0]) if node.args else '"Seç"'
+    placeholder = _as_str(node.args[0]) if node.args else '"Select"'
     kw = node.kwargs
     name = _slug(node.args[0] if node.args else 'select')
 
@@ -866,7 +865,7 @@ def _render_select(transpiler, node):
 
     base = "    " * transpiler._indent
 
-    # callback gövdesini doğru indent ile render et
+    # render callback body at correct indent level
     saved = transpiler._indent
     transpiler._indent += 1
     inner_body = "\n".join(
@@ -882,37 +881,37 @@ def _render_select(transpiler, node):
 
 
 def _visit_dc_select(transpiler, node):
-    """Tek başına @discord.select — sınıf gövdesi bağlamında metod üretir."""
+    """Standalone @discord.select — emits a method in a class body context."""
     return _render_select(transpiler, node)
 
 
 # ─────────────────────────────────────────────────────────────
-# @embed / @discord.quick_embed — tek satırda tam embed
+# @embed / @discord.quick_embed — one-liner full embed
 # ─────────────────────────────────────────────────────────────
 
-# Pozisyonel arg sırası: title description color footer image thumbnail author
+# Positional arg order: title description color footer image thumbnail author
 _EMBED_POSITIONS = ("title", "description", "color", "footer", "image", "thumbnail", "author")
 
 
 def _embed_code(args: list) -> str:
     """
-    Ortak kod üretici — hem @embed[...] hem @discord.quick_embed[...] kullanır.
+    Shared code generator — used by both @embed[...] and @discord.quick_embed[...].
 
-    Desteklenen biçimler:
-      Pozisyonel:   @embed["T"; "D"; 0xFF; "footer"; "img"; "thumb"; "author"]
+    Supported forms:
+      Positional:   @embed["T"; "D"; 0xFF; "footer"; "img"; "thumb"; "author"]
       Kwargs:       @embed["T"; "D"; color=0xFF; footer="f"; author="a"]
-      Karışık:      @embed["T"; "D"; footer="f"]   (kalan pozisyonlar atlanır)
+      Mixed:        @embed["T"; "D"; footer="f"]   (remaining positions skipped)
 
-    Boş string ("" veya '') → o alan eklenmez.
-    Üretilen Python:  __embed__(title=..., description=..., ...)
-    __embed__ runtime'da api.inject() ile enjekte edilmiş yardımcı fonksiyondur.
+    Empty string ("" or '') → that field is omitted.
+    Generated Python:  __embed__(title=..., description=..., ...)
+    __embed__ is a runtime helper injected via api.inject().
     """
     positional = []
     kwargs: dict[str, str] = {}
 
     for a in args:
         a = a.strip()
-        # kwarg tespiti: identifier = değer
+        # detect kwargs: identifier = value
         eq = a.find("=")
         if eq > 0 and a[:eq].strip().replace("_", "").isalpha():
             k = a[:eq].strip()
@@ -921,7 +920,7 @@ def _embed_code(args: list) -> str:
         else:
             positional.append(a)
 
-    # Pozisyonel argları sözlüğe çevir (kwargs varsa atlanır)
+    # Map positional args to dict (skipped when kwargs are present)
     for i, val in enumerate(positional):
         if i >= len(_EMBED_POSITIONS):
             break
@@ -929,7 +928,7 @@ def _embed_code(args: list) -> str:
         if field not in kwargs:
             kwargs[field] = val
 
-    # Boş string olanları çıkar: "" veya ''
+    # Drop empty string values: "" or ''
     kwargs = {k: v for k, v in kwargs.items() if v not in ('""', "''", "")}
 
     if not kwargs:
@@ -941,8 +940,8 @@ def _embed_code(args: list) -> str:
 
 def _cruhon_embed_helper(**kwargs):
     """
-    Runtime yardımcısı — api.inject() ile __embed__ adıyla enjekte edilir.
-    Discord kurulu olmadan transpile çalışır; embed oluşturma runtime'da yapılır.
+    Runtime helper — injected as __embed__ via api.inject().
+    Transpilation works without discord installed; embed creation happens at runtime.
     """
     import discord as _discord
 
@@ -985,8 +984,8 @@ def _cruhon_embed_helper(**kwargs):
 
 
 async def _cruhon_paginate(dest, pages, timeout=180):
-    """Çok-sayfa embed gezgini — ⬅️ ➡️ ⏹️ butonlarıyla.
-    api.inject ile __paginate__ adıyla enjekte edilir."""
+    """Multi-page embed navigator with ⬅️ ➡️ ⏹️ buttons.
+    Injected as __paginate__ via api.inject."""
     import discord
     pages = list(pages)
     if not pages:
@@ -1023,14 +1022,14 @@ async def _cruhon_paginate(dest, pages, timeout=180):
         await dest.send(embed=first, view=view)
 
 
-async def _cruhon_confirm(dest, text="Emin misin?", timeout=60):
-    """Evet/Hayır onay penceresi — bool döndürür.
-    api.inject ile __confirm__ adıyla enjekte edilir."""
+async def _cruhon_confirm(dest, text="Are you sure?", timeout=60):
+    """Yes/No confirmation dialog — returns bool.
+    Injected as __confirm__ via api.inject."""
     import discord, asyncio
     res = {"v": None}
     view = discord.ui.View(timeout=timeout)
-    yes = discord.ui.Button(label="Evet", style=discord.ButtonStyle.success)
-    no = discord.ui.Button(label="Hayır", style=discord.ButtonStyle.danger)
+    yes = discord.ui.Button(label="Yes", style=discord.ButtonStyle.success)
+    no = discord.ui.Button(label="No", style=discord.ButtonStyle.danger)
     done = asyncio.Event()
 
     async def _yes(i):
@@ -1056,10 +1055,10 @@ async def _cruhon_confirm(dest, text="Emin misin?", timeout=60):
 
 def _embed_inline_handler(parser):
     """
-    api.inline_command("embed") kaydı için handler.
-    @embed[...] → @var[e; @embed["T";"D"]] gibi inline kullanımda tetiklenir.
+    Handler for api.inline_command("embed").
+    Triggered when @embed[...] is used inline (e.g. @var[e; @embed["T";"D"]]).
     """
-    parser.advance()          # @embed token'ını tüket
+    parser.advance()  # consume @embed token
     args = parser.parse_args()
     return _embed_code(args)
 
@@ -1088,7 +1087,7 @@ def _build_handlers() -> dict:
         return f"{path}({', '.join(rest)})"
     h["__nested"] = __nested
 
-    # ── BOT KURULUM ───────────────────────────────────────────
+    # ── BOT SETUP ─────────────────────────────────────────────
 
     def setup(args):
         token = args[0] if args else '""'
@@ -1125,13 +1124,13 @@ def _build_handlers() -> dict:
     h["sync_commands"] = sync_commands
 
     def add_cog(args):
-        # @discord.add_cog[Moderation] — async bağlamda (on_ready/setup) kullan
+        # @discord.add_cog[Moderation] — use in async context (on_ready/setup)
         name = args[0].strip() if args else "MyCog"
         return f"await __bot__.add_cog({name}(__bot__))"
     h["add_cog"] = add_cog
 
     def add_view(args):
-        # @discord.add_view[ConfirmView] — kalıcı view kaydı
+        # @discord.add_view[ConfirmView] — register a persistent view
         name = args[0].strip() if args else "MyView"
         return f"__bot__.add_view({name}())"
     h["add_view"] = add_view
@@ -1146,7 +1145,7 @@ def _build_handlers() -> dict:
         return f"{name}.stop()"
     h["stop_task"] = stop_task
 
-    # ── MESAJLAŞMA ────────────────────────────────────────────
+    # ── MESSAGING ─────────────────────────────────────────────
 
     def send(args):
         if not args:
@@ -1250,7 +1249,7 @@ def _build_handlers() -> dict:
         return f"await __bot__.process_commands({msg})"
     h["process_commands"] = process_commands
 
-    # ── TEPKİLER ──────────────────────────────────────────────
+    # ── REACTIONS ─────────────────────────────────────────────
 
     def react(args):
         message = args[0] if args else "message"
@@ -1272,7 +1271,7 @@ def _build_handlers() -> dict:
     # ── EMBED ──────────────────────────────────────────────────
 
     def quick_embed(args):
-        """@discord.quick_embed[...] — @embed ile aynı, @discord. önekiyle."""
+        """@discord.quick_embed[...] — same as @embed, with @discord. prefix."""
         return _embed_code(args)
     h["quick_embed"] = quick_embed
 
@@ -1330,7 +1329,7 @@ def _build_handlers() -> dict:
         return f"{emb}.set_author(name={name})"
     h["set_author"] = set_author
 
-    # ── MODERASİON ────────────────────────────────────────────
+    # ── MODERATION ────────────────────────────────────────────
 
     def ban(args):
         member = args[0] if args else "member"
@@ -1427,7 +1426,7 @@ def _build_handlers() -> dict:
         return f"await {args[0] if args else 'channel'}.delete()"
     h["delete_channel"] = delete_channel
 
-    # ── ARAMA (expression olarak döner) ───────────────────────
+    # ── LOOKUP (returns as expression) ────────────────────────
 
     def get_member(args):
         guild = args[0] if args else "guild"
@@ -1476,7 +1475,7 @@ def _build_handlers() -> dict:
     def require_role(args):
         ctx = args[0] if args else "ctx"
         role = args[1] if len(args) > 1 else '"member"'
-        err = args[2] if len(args) > 2 else '"Bu komutu kullanmak için yetkiniz yok."'
+        err = args[2] if len(args) > 2 else '"You do not have permission to use this command."'
         return (
             f"if not discord.utils.get({ctx}.author.roles, name={role}): "
             f"await {ctx}.send({err}); return"
@@ -1487,11 +1486,11 @@ def _build_handlers() -> dict:
         ctx = args[0] if args else "ctx"
         return (
             f'if {ctx}.guild is None: '
-            f'await {ctx}.send("Bu komut sadece sunucularda kullanılabilir."); return'
+            f'await {ctx}.send("This command can only be used in servers."); return'
         )
     h["require_guild"] = require_guild
 
-    # ── DURUM & ÇEŞİTLİ ──────────────────────────────────────
+    # ── STATUS & MISC ──────────────────────────────────────────
 
     def status(args):
         text = args[0] if args else '""'
@@ -1548,7 +1547,7 @@ def _build_handlers() -> dict:
     h["leave"] = leave
 
     # ── FAZ 3 KISAYOLLARI ─────────────────────────────────────
-    # Yardımcı: pozisyonel + kwargs'ı tek tek geçir
+    # Helper: forward positional + kwargs individually
     def _kw(args, start=0):
         return [a.strip() for a in args[start:] if "=" in a.strip()
                 and a.strip().split("=")[0].strip().isidentifier()]
@@ -1557,7 +1556,7 @@ def _build_handlers() -> dict:
         parts = list(pos) + _kw(args, kw_start)
         return f"await {target}.{method}({', '.join(parts)})"
 
-    # ── FETCH (API çağrıları — cache yerine sunucudan) ────────
+    # ── FETCH (API calls — from server instead of cache) ──────
     def fetch_user(args):
         return f"await __bot__.fetch_user({args[0] if args else '0'})"
     h["fetch_user"] = fetch_user
@@ -1675,7 +1674,7 @@ def _build_handlers() -> dict:
         return f"await {args[0] if args else 'event'}.cancel()"
     h["cancel_event"] = cancel_event
 
-    # ── ROLE YÖNETİMİ ─────────────────────────────────────────
+    # ── ROLE MANAGEMENT ───────────────────────────────────────
     def create_role(args):
         g = args[0] if args else "guild"
         name = _as_str(args[1]) if len(args) > 1 else '"rol"'
@@ -1690,7 +1689,7 @@ def _build_handlers() -> dict:
         return _call(args[0] if args else "role", "edit", [], args, 1)
     h["edit_role"] = edit_role
 
-    # ── KATEGORİ & KANAL ──────────────────────────────────────
+    # ── CATEGORY & CHANNEL ────────────────────────────────────
     def create_category(args):
         g = args[0] if args else "guild"
         name = _as_str(args[1]) if len(args) > 1 else '"Kategori"'
@@ -1731,7 +1730,7 @@ def _build_handlers() -> dict:
         return f"await {args[0] if args else 'emoji'}.delete()"
     h["delete_emoji"] = delete_emoji
 
-    # ── DOSYA GÖNDERME ────────────────────────────────────────
+    # ── FILE SENDING ──────────────────────────────────────────
     def send_file(args):
         ch = args[0] if args else "channel"
         path = _as_str(args[1]) if len(args) > 1 else '"file.txt"'
@@ -1753,7 +1752,7 @@ def _build_handlers() -> dict:
         return f"[__e async for __e in {g}.audit_logs(limit={limit})]"
     h["audit_logs"] = audit_logs
 
-    # ── MEMBER İLERİ ──────────────────────────────────────────
+    # ── MEMBER ADVANCED ───────────────────────────────────────
     def move_to(args):
         m = args[0] if args else "member"
         ch = args[1] if len(args) > 1 else "channel"
@@ -1808,7 +1807,7 @@ def _build_handlers() -> dict:
         return "await __bot__.tree.sync()"
     h["sync_tree"] = sync_tree
 
-    # ── İTEM 2: GENİŞ KAPSAM ──────────────────────────────────
+    # ── WIDE COVERAGE ─────────────────────────────────────────
 
     # ── STAGE KANAL ───────────────────────────────────────────
     def create_stage(args):
@@ -1819,7 +1818,7 @@ def _build_handlers() -> dict:
 
     def start_stage(args):
         ch = args[0] if args else "channel"
-        topic = _as_str(args[1]) if len(args) > 1 else '"Canlı"'
+        topic = _as_str(args[1]) if len(args) > 1 else '"Live"'
         return f"await {ch}.create_instance(topic={topic})"
     h["start_stage"] = start_stage
 
@@ -1842,7 +1841,7 @@ def _build_handlers() -> dict:
         return f"await {forum}.create_thread(name={name}, content={content})"
     h["create_post"] = create_post
 
-    # ── BAN YÖNETİMİ ──────────────────────────────────────────
+    # ── BAN MANAGEMENT ────────────────────────────────────────
     def bulk_ban(args):
         g = args[0] if args else "guild"
         users = args[1] if len(args) > 1 else "[]"
@@ -1860,7 +1859,7 @@ def _build_handlers() -> dict:
         return f"[__b async for __b in {g}.bans()]"
     h["fetch_bans"] = fetch_bans
 
-    # ── GUILD İŞLEMLERİ ───────────────────────────────────────
+    # ── GUILD OPERATIONS ──────────────────────────────────────
     def edit_guild(args):
         return _call(args[0] if args else "guild", "edit", [], args, 1)
     h["edit_guild"] = edit_guild
@@ -1913,7 +1912,7 @@ def _build_handlers() -> dict:
         return f"await {msg}.clear_reaction({emoji})"
     h["clear_reaction"] = clear_reaction
 
-    # ── AUTOMOD (basit kelime filtresi kısayolu) ──────────────
+    # ── AUTOMOD (simple keyword filter shortcut) ──────────────
     def automod_keyword(args):
         g = args[0] if args else "guild"
         name = _as_str(args[1]) if len(args) > 1 else '"Filtre"'
@@ -1945,7 +1944,7 @@ def _build_handlers() -> dict:
         return f"{args[0] if args else 'member'}.roles"
     h["member_roles"] = fetch_member_roles
 
-    # ── GÜÇ: PAGINATION & CONFIRM (runtime helper'lar) ────────
+    # ── POWER: PAGINATION & CONFIRM (runtime helpers) ─────────
     def paginate(args):
         dest = args[0] if args else "ctx"
         pages = args[1] if len(args) > 1 else "[]"
@@ -1989,7 +1988,7 @@ def register(api):
     api.block_command("_dc_select",  _visit_dc_select)
     api.block_command("_dc_context_menu", _visit_dc_context_menu)
 
-    # Alt-bloklar: @on_submit / @body (gövdeli) — modal/select içinde
+    # Sub-blocks: @on_submit / @body (with body) — inside modal/select
     api.block_command("on_submit", _noop_visit)
     api.block_command("body",      _noop_visit)
 
@@ -2006,13 +2005,13 @@ def register(api):
         api.lib_call("discord", method, handler)
 
     # @embed[...] — flat inline command (no @discord. prefix needed)
-    # Usage: @var[e; @embed["Başlık"; "Açıklama"; color=0xFF; footer="alt"]]
+    # Usage: @var[e; @embed["Title"; "Description"; color=0xFF; footer="footer"]]
     api.inline_command("embed", _embed_inline_handler)
 
     # Inject __embed__ runtime helper so generated code can call it
     # Lazy-imports discord so transpiling works without discord.py installed
     api.inject("__embed__", _cruhon_embed_helper)
 
-    # Güç runtime helper'ları — pagination & confirm dialog
+    # Power runtime helpers — pagination & confirm dialog
     api.inject("__paginate__", _cruhon_paginate)
     api.inject("__confirm__", _cruhon_confirm)

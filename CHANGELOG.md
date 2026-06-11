@@ -94,13 +94,13 @@ All notable changes are documented here.
 
 ## v1.3.0
 
-### Dil Tamamlama — Language Completion
+### Language Completion
 
-- **`@with[expr as var] ... @end`** — context manager bloğu; `with open(...) as f:` artık Cruhon syntax'ı
+- **`@with[expr as var] ... @end`** — context manager block; `with open(...) as f:` is now Cruhon syntax
 - **`@match[value] / @case[pattern] / @default`** — Python 3.10+ pattern matching
-- **`@del[var1; var2]`** — değişken silme
-- **`@raise[ExceptionType; msg]`** / **`@raise`** (bare re-raise) — explicit exception fırlatma
-- **Multi-line fix** — `parse_args` artık INDENT/DEDENT/COMMENT token'larını atlıyor; parantez içi multi-line expression çalışıyor
+- **`@del[var1; var2]`** — delete variables
+- **`@raise[ExceptionType; msg]`** / **`@raise`** (bare re-raise) — explicit exception raising
+- **Multi-line fix** — `parse_args` now skips INDENT/DEDENT/COMMENT tokens; multi-line expressions inside parentheses work
 - Test suite: 156 → 172 tests (`TestWith`, `TestMatch`, `TestDel`, `TestRaise`, `TestMultiLine`)
 
 ---
@@ -109,11 +109,11 @@ All notable changes are documented here.
 
 ### Plugin System — Scope, Transforms, Block Hooks
 
-- **`api.block_command(..., scoped=True)`** — `__ctx__` otomatik save/restore, block içindeki değişiklikler dışarı sızmaz
-- **`@ctx.push[]` / `@ctx.pop[]`** — manuel stack-based ctx scope (iç içe bloklar için)
-- **`api.transform(target, fn)`** — başka plugin'in block çıktısını fn(transpiler, node, code) ile sarıp dönüştür
-- **`api.block_hook("enter" | "exit", fn)`** — runtime block lifecycle: fn(plugin_name, args) her block girişinde/çıkışında çalışır
-- `__ctx_stack__` ve `__ph__` exec namespace'e inject edildi
+- **`api.block_command(..., scoped=True)`** — `__ctx__` auto save/restore; changes inside the block don't leak out
+- **`@ctx.push[]` / `@ctx.pop[]`** — manual stack-based ctx scope (for nested blocks)
+- **`api.transform(target, fn)`** — wrap another plugin's block output with fn(transpiler, node, code)
+- **`api.block_hook("enter" | "exit", fn)`** — runtime block lifecycle: fn(plugin_name, args) fires on every block enter/exit
+- `__ctx_stack__` and `__ph__` injected into exec namespace
 - Test suite: 149 → 156 tests
 
 ---
@@ -122,13 +122,13 @@ All notable changes are documented here.
 
 ### Plugin Foundation System
 
-- **`api.expose(key, value)`** — Plugin başka pluginler için API/utility yayınlar
-- **`api.consume(plugin, key)`** — Başka plugin'in yayınladığını alır; default destekler
-- **`api.is_loaded(name)`** — Plugin yüklü mü kontrol eder (bool)
-- **`api.config(key, default)`** — Plugin'in kendi `mod.json` manifest'inden veri okur
-- **Versiyon-aware bağımlılık** — `require("cruhon-utils >= 1.2.0")` gerçekten versiyon kısıtlamasını kontrol eder
-- **Hata attribution** — Plugin visitor'larından gelen hatalar plugin adını gösterir
-- **`list_exposed_apis()`** — Tüm yayınlanmış plugin API'lerini listeler
+- **`api.expose(key, value)`** — Plugin publishes an API/utility for other plugins
+- **`api.consume(plugin, key)`** — Consume what another plugin published; supports defaults
+- **`api.is_loaded(name)`** — Check if a plugin is loaded (bool)
+- **`api.config(key, default)`** — Read data from the plugin's own `mod.json` manifest
+- **Version-aware dependency** — `require("cruhon-utils >= 1.2.0")` actually checks version constraints
+- **Error attribution** — Errors from plugin visitors show the plugin name
+- **`list_exposed_apis()`** — List all published plugin APIs
 
 ### Testing
 

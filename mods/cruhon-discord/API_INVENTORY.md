@@ -1,12 +1,12 @@
-# discord.py 2.7.1 — TAM API ENVANTERİ
+# discord.py 2.7.1 — FULL API INVENTORY
 
-Toplam top-level sınıf: 253 | Alt modül: 66 | discord.ext: commands, tasks
+Total top-level classes: 253 | Sub-modules: 66 | discord.ext: commands, tasks
 
-Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
+Legend: 🔴 async method (needs await) · 🔵 sync method · 🟢 property
 
 
 ======================================================================
-## İSTEMCİ / BOT
+## CLIENT / BOT
 ======================================================================
 
 ### discord.Client
@@ -20,7 +20,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   🟢 prop  (20): activity, allowed_mentions, application, application_flags, application_id, cached_messages, emojis, guilds, intents, latencies, latency, persistent_views, private_channels, shards, soundboard_sounds, status, stickers, user, users, voice_clients
 
 ======================================================================
-## MESAJLAŞMA
+## MESSAGING
 ======================================================================
 
 ### discord.Message
@@ -172,7 +172,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   🟢 prop  (17): accent_color, accent_colour, avatar, avatar_decoration, avatar_decoration_sku_id, banner, collectibles, color, colour, created_at, default_avatar, display_avatar, display_name, mention, mutual_guilds, primary_guild, public_flags
 
 ======================================================================
-## ETKİLEŞİM (slash/buton)
+## INTERACTION (slash/button)
 ======================================================================
 
 ### discord.Interaction
@@ -191,7 +191,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   🟢 prop  (6): created_at, edited_at, interaction, jump_url, pinned_at, thread
 
 ======================================================================
-## İZİNLER
+## PERMISSIONS
 ======================================================================
 
 ### discord.Permissions
@@ -243,7 +243,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   🟢 prop  (1): volume
 
 ======================================================================
-## DOSYA / GÖRSEL
+## FILE / MEDIA
 ======================================================================
 
 ### discord.File
@@ -264,7 +264,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   🟢 prop  (3): b, g, r
 
 ======================================================================
-## DENETİM / MODERASYON
+## AUDIT / MODERATION
 ======================================================================
 
 ### discord.AuditLogEntry
@@ -312,9 +312,9 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   on_command_error
 
 ======================================================================
-## SLASH KOMUTLARI (discord.app_commands)
+## SLASH COMMANDS (discord.app_commands)
 ======================================================================
-  Üyeler (69): AllChannels, AppCommand, AppCommandChannel, AppCommandContext, AppCommandError, AppCommandGroup, AppCommandPermissions, AppCommandThread, AppInstallationType, Argument, BotMissingPermissions, CheckFailure, Choice, Command, CommandAlreadyRegistered, CommandInvokeError, CommandLimitReached, CommandNotFound, CommandOnCooldown, CommandSignatureMismatch, CommandSyncFailure, CommandTree, ContextMenu, Cooldown, Group, GuildAppCommandPermissions, MissingAnyRole, MissingApplicationID, MissingPermissions, MissingRole, Namespace, NoPrivateMessage, Parameter, Range, Timestamp, Transform, Transformer, TransformerError, TranslationContext, TranslationContextLocation, TranslationContextTypes, TranslationError, Translator, allowed_contexts, allowed_installs, autocomplete, check, checks, choices, command, commands, context_menu, default_permissions, describe, dm_only, errors, guild_install, guild_only, guilds, installs, locale_str, models, namespace, private_channel_only, rename, transformers, translator, tree, user_install
+  Members (69): AllChannels, AppCommand, AppCommandChannel, AppCommandContext, AppCommandError, AppCommandGroup, AppCommandPermissions, AppCommandThread, AppInstallationType, Argument, BotMissingPermissions, CheckFailure, Choice, Command, CommandAlreadyRegistered, CommandInvokeError, CommandLimitReached, CommandNotFound, CommandOnCooldown, CommandSignatureMismatch, CommandSyncFailure, CommandTree, ContextMenu, Cooldown, Group, GuildAppCommandPermissions, MissingAnyRole, MissingApplicationID, MissingPermissions, MissingRole, Namespace, NoPrivateMessage, Parameter, Range, Timestamp, Transform, Transformer, TransformerError, TranslationContext, TranslationContextLocation, TranslationContextTypes, TranslationError, Translator, allowed_contexts, allowed_installs, autocomplete, check, checks, choices, command, commands, context_menu, default_permissions, describe, dm_only, errors, guild_install, guild_only, guilds, installs, locale_str, models, namespace, private_channel_only, rename, transformers, translator, tree, user_install
 
   app_commands.CommandTree:
     🔴 fetch_command, fetch_commands, interaction_check, on_error, set_translator, sync
@@ -333,9 +333,9 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
     🔵 add_check, error, remove_check, to_dict
 
 ======================================================================
-## UI BİLEŞENLERİ (discord.ui)
+## UI COMPONENTS (discord.ui)
 ======================================================================
-  Üyeler (44): ActionRow, Button, ChannelSelect, Checkbox, CheckboxGroup, Container, DynamicItem, File, FileUpload, Item, Label, LayoutView, MediaGallery, MentionableSelect, Modal, RadioGroup, RoleSelect, Section, Select, Separator, TextDisplay, TextInput, Thumbnail, UserSelect, View, action_row, button, checkbox, container, dynamic, file, file_upload, item, label, media_gallery, modal, radio, section, select, separator, text_display, text_input, thumbnail, view
+  Members (44): ActionRow, Button, ChannelSelect, Checkbox, CheckboxGroup, Container, DynamicItem, File, FileUpload, Item, Label, LayoutView, MediaGallery, MentionableSelect, Modal, RadioGroup, RoleSelect, Section, Select, Separator, TextDisplay, TextInput, Thumbnail, UserSelect, View, action_row, button, checkbox, container, dynamic, file, file_upload, item, label, media_gallery, modal, radio, section, select, separator, text_display, text_input, thumbnail, view
 
   ui.View:
     🔴 interaction_check, on_error, on_timeout, wait
@@ -389,7 +389,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
     🔴 (6) cog_after_invoke, cog_app_command_error, cog_before_invoke, cog_command_error, cog_load, cog_unload
     🔵 (12) bot_check, bot_check_once, cog_check, get_app_commands, get_commands, get_listeners, has_app_command_error_handler, has_error_handler, interaction_check, listener, walk_app_commands, walk_commands
 
-  commands dekoratör/check/yardımcı (29): after_invoke, before_invoke, bot_has_any_role, bot_has_guild_permissions, bot_has_permissions, bot_has_role, check, check_any, command, cooldown, dm_only, dynamic_cooldown, flag, group, guild_only, has_any_role, has_guild_permissions, has_permissions, has_role, hybrid_command, hybrid_group, is_nsfw, is_owner, max_concurrency, param, parameter, run_converters, when_mentioned, when_mentioned_or
+  commands decorators/checks/helpers (29): after_invoke, before_invoke, bot_has_any_role, bot_has_guild_permissions, bot_has_permissions, bot_has_role, check, check_any, command, cooldown, dm_only, dynamic_cooldown, flag, group, guild_only, has_any_role, has_guild_permissions, has_permissions, has_role, hybrid_command, hybrid_group, is_nsfw, is_owner, max_concurrency, param, parameter, run_converters, when_mentioned, when_mentioned_or
 
 ======================================================================
 ## ext.tasks
@@ -404,7 +404,7 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
   (0): 
 
 ======================================================================
-## HATA HİYERARŞİSİ
+## ERROR HIERARCHY
 ======================================================================
   discord (15): ClientException, ConnectionClosed, DiscordException, DiscordServerError, FFmpegProcessError, Forbidden, GatewayNotFound, HTTPException, InteractionResponded, InvalidData, LoginFailure, MissingApplicationID, NotFound, PrivilegedIntentsRequired, RateLimited
   commands (63): ArgumentParsingError, BadArgument, BadBoolArgument, BadColorArgument, BadColourArgument, BadFlagArgument, BadInviteArgument, BadLiteralArgument, BadTimestampArgument, BadUnionArgument, BotMissingAnyRole, BotMissingPermissions, BotMissingRole, ChannelNotFound, ChannelNotReadable, CheckAnyFailure, CheckFailure, CommandError, CommandInvokeError, CommandNotFound, CommandOnCooldown, CommandRegistrationError, ConversionError, DisabledCommand, EmojiNotFound, ExpectedClosingQuoteError, ExtensionAlreadyLoaded, ExtensionError, ExtensionFailed, ExtensionNotFound, ExtensionNotLoaded, FlagError, GuildNotFound, GuildStickerNotFound, HybridCommandError, InvalidEndOfQuotedStringError, MaxConcurrencyReached, MemberNotFound, MessageNotFound, MissingAnyRole, MissingFlagArgument, MissingPermissions, MissingRequiredArgument, MissingRequiredAttachment, MissingRequiredFlag, MissingRole, NSFWChannelRequired, NoEntryPointError, NoPrivateMessage, NotOwner, ObjectNotFound, PartialEmojiConversionFailure, PrivateMessageOnly, RangeError, RoleNotFound, ScheduledEventNotFound, SoundboardSoundNotFound, ThreadNotFound, TooManyArguments, TooManyFlags, UnexpectedQuoteError, UserInputError, UserNotFound
@@ -412,4 +412,4 @@ Gösterim: 🔴 async metod (await gerekir) · 🔵 sync metod · 🟢 property
 ======================================================================
 ## INTENTS & FLAGS
 ======================================================================
-  Intents alanları (32): DEFAULT_VALUE, VALID_FLAGS, auto_moderation, auto_moderation_configuration, auto_moderation_execution, bans, dm_messages, dm_polls, dm_reactions, dm_typing, emojis, emojis_and_stickers, expressions, guild_messages, guild_polls, guild_reactions, guild_scheduled_events, guild_typing, guilds, integrations, invites, members, message_content, messages, moderation, polls, presences, reactions, typing, value, voice_states, webhooks
+  Intents fields (32): DEFAULT_VALUE, VALID_FLAGS, auto_moderation, auto_moderation_configuration, auto_moderation_execution, bans, dm_messages, dm_polls, dm_reactions, dm_typing, emojis, emojis_and_stickers, expressions, guild_messages, guild_polls, guild_reactions, guild_scheduled_events, guild_typing, guilds, integrations, invites, members, message_content, messages, moderation, polls, presences, reactions, typing, value, voice_states, webhooks

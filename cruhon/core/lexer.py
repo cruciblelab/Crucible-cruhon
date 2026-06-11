@@ -1,21 +1,21 @@
 """
 cruhon/core/lexer.py
 ====================
-Kaynak kodu (.clpy) → Token listesi
+Source code (.clpy) → Token list
 
-Token türleri:
+Token types:
   AT_CMD    → @print, @var, @if ...
   LBRACKET  → [
   RBRACKET  → ]
   SEMICOLON → ;
-  STRING    → "metin" veya düz metin
+  STRING    → "text" or bare text
   NUMBER    → 42, 3.14
-  INDENT    → girintileme seviyesi
-  NEWLINE   → satır sonu
-  EOF       → dosya sonu
-  RAW       → ham Python expression (koşullar, matematiksel ifadeler)
+  INDENT    → indentation level
+  NEWLINE   → end of line
+  EOF       → end of file
+  RAW       → raw Python expression (conditions, arithmetic)
 
-Modlar yeni token türleri ekleyebilir — register_token_type() ile.
+Mods can add new token types via register_token_type().
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from typing import List, Optional
 # TOKEN
 # ─────────────────────────────────────────────────────────────
 
-# Core token türleri
+# Core token types
 TOKEN_TYPES = {
     "AT_CMD",
     "LBRACKET",
@@ -49,7 +49,7 @@ TOKEN_TYPES = {
 
 
 def register_token_type(name: str):
-    """Mod sistemi: yeni token türü ekle."""
+    """Mod system: register a new token type."""
     TOKEN_TYPES.add(name)
 
 
@@ -77,32 +77,32 @@ class LexerError(Exception):
 
 class Lexer:
     """
-    .clpy kaynak kodunu token listesine çevirir.
-    
-    Mod sistemi:
-      - register_token_type() ile yeni token türleri
-      - pre_hooks: tokenize öncesi kaynak manipülasyonu
-      - post_hooks: token listesi üretildikten sonra manipülasyon
+    Converts .clpy source code into a token list.
+
+    Mod system:
+      - register_token_type() for new token types
+      - pre_hooks: source manipulation before tokenization
+      - post_hooks: token list manipulation after tokenization
     """
 
     def __init__(self):
-        self._pre_hooks: list = []   # (fn) -> kaynak str dönüştürür
-        self._post_hooks: list = []  # (tokens) -> tokens dönüştürür
+        self._pre_hooks: list = []   # (fn) -> transforms source str
+        self._post_hooks: list = []  # (tokens) -> transforms tokens
 
-    # ── Mod hook'ları ─────────────────────────────────────────
+    # ── Mod hooks ─────────────────────────────────────────────
 
     def add_pre_hook(self, fn):
-        """Tokenize öncesi kaynak kodu manipüle et."""
+        """Manipulate source code before tokenization."""
         self._pre_hooks.append(fn)
 
     def add_post_hook(self, fn):
-        """Token listesi üretildikten sonra manipüle et."""
+        """Manipulate token list after tokenization."""
         self._post_hooks.append(fn)
 
     # ── Ana tokenize ──────────────────────────────────────────
 
     def tokenize(self, source: str) -> List[Token]:
-        # Pre-hook'ları uygula
+        # Apply pre-hooks
         for hook in self._pre_hooks:
             source = hook(source)
 
@@ -111,12 +111,12 @@ class Lexer:
         indent_stack = [0]
 
         for line_num, line in enumerate(lines, start=1):
-            # Boş satır
+            # Empty line
             if not line.strip():
                 tokens.append(Token("NEWLINE", "\n", line_num))
                 continue
 
-            # Yorum satırı
+            # Comment line
             stripped = line.lstrip()
             if stripped.startswith("#"):
                 tokens.append(Token("COMMENT", stripped[1:].strip(), line_num))
@@ -140,32 +140,32 @@ class Lexer:
                         line_num, 0
                     )
 
-            # Satır içeriğini tokenize et
+            # Tokenize line content
             line_tokens = self._tokenize_line(stripped, line_num)
             tokens.extend(line_tokens)
             tokens.append(Token("NEWLINE", "\n", line_num))
 
-        # Açık indent blokları kapat
+        # Close open indent blocks
         while len(indent_stack) > 1:
             indent_stack.pop()
             tokens.append(Token("DEDENT", "0", len(lines)))
 
         tokens.append(Token("EOF", "", len(lines)))
 
-        # Post-hook'ları uygula
+        # Apply post-hooks
         for hook in self._post_hooks:
             tokens = hook(tokens)
 
         return tokens
 
     def _tokenize_line(self, line: str, line_num: int) -> List[Token]:
-        """Tek satırı tokenize eder."""
+        """Tokenize a single line."""
         tokens = []
         i = 0
         length = len(line)
 
         while i < length:
-            # Boşluk atla
+            # Skip whitespace
             if line[i] == " ":
                 i += 1
                 continue
@@ -204,19 +204,19 @@ class Lexer:
                 i += 1
                 continue
 
-            # String — çift tırnak
+            # String — double quote
             if line[i] == '"':
                 s, i = self._read_string(line, i, line_num, '"')
                 tokens.append(Token("STRING", s, line_num))
                 continue
 
-            # String — tek tırnak
+            # String — single quote
             if line[i] == "'":
                 s, i = self._read_string(line, i, line_num, "'")
                 tokens.append(Token("STRING", s, line_num))
                 continue
 
-            # Sayı
+            # Number
             if line[i].isdigit() or (line[i] == "-" and i + 1 < length and line[i+1].isdigit()):
                 num, i = self._read_number(line, i, line_num)
                 tokens.append(Token("NUMBER", num, line_num))
@@ -229,14 +229,14 @@ class Lexer:
                 i += len(val)
                 continue
 
-            # RAW expression (koşullar, matematik, değişken referansları)
+            # RAW expression (conditions, arithmetic, variable references)
             raw, i = self._read_raw(line, i, line_num)
             if raw:
                 tokens.append(Token("RAW", raw, line_num))
 
         return tokens
 
-    # ── Yardımcı okuyucular ───────────────────────────────────
+    # ── Helper readers ────────────────────────────────────────
 
     def _read_identifier(self, line: str, i: int, line_num: int):
         start = i
@@ -247,7 +247,7 @@ class Lexer:
         return line[start:i], i
 
     def _read_string(self, line: str, i: int, line_num: int, quote: str):
-        i += 1  # açılış tırnağını atla
+        i += 1  # skip opening quote
         start = i
         while i < len(line) and line[i] != quote:
             if line[i] == "\\" and i + 1 < len(line):
@@ -257,7 +257,7 @@ class Lexer:
         if i >= len(line):
             raise LexerError("Unterminated string", line_num, start)
         result = line[start:i]
-        i += 1  # kapanış tırnağını atla
+        i += 1  # skip closing quote
         return result, i
 
     def _read_number(self, line: str, i: int, line_num: int):

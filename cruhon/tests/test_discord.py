@@ -107,7 +107,7 @@ class TestLayer1Simple:
 
     def test_log(self):
         # log must NOT produce nested-quote f-strings (breaks on py<3.12)
-        code = _compile('@discord.log["başladı"]')
+        code = _compile('@discord.log["started"]')
         assert 'print("[bot]"' in code
 
     def test_on_message_auto_process_commands(self):
@@ -124,17 +124,17 @@ class TestLayer1Simple:
 class TestLayer2Logic:
     def test_if_else_inside_command(self):
         src = (
-            "@discord.command[zar; ctx]\n"
+            "@discord.command[roll; ctx]\n"
             "    @var[n; random.randint(1, 6)]\n"
             "    @if[n == 6]\n"
-            '        @discord.reply[ctx; "altı!"]\n'
+            '        @discord.reply[ctx; "six!"]\n'
             "    @else\n"
             "        @discord.reply[ctx; n]\n"
             "    @end\n"
             "@end"
         )
         code = _compile(src)
-        assert "async def zar(ctx):" in code
+        assert "async def roll(ctx):" in code
         assert "n = random.randint(1, 6)" in code
         assert "if n == 6:" in code
         assert "else:" in code
@@ -184,14 +184,14 @@ class TestLayer3Advanced:
 
     def test_embed_build(self):
         src = (
-            '@var[e; @discord.embed["Başlık"; "Açıklama"; color=0xFF0000]]\n'
-            '@discord.add_field[e; "Ad"; "Değer"; inline=False]\n'
-            '@discord.set_footer[e; "alt"]'
+            '@var[e; @discord.embed["Title"; "Description"; color=0xFF0000]]\n'
+            '@discord.add_field[e; "Name"; "Value"; inline=False]\n'
+            '@discord.set_footer[e; "footer"]'
         )
         code = _compile(src)
-        assert 'discord.Embed(title="Başlık", description="Açıklama", color=0xFF0000)' in code
-        assert 'e.add_field(name="Ad", value="Değer", inline=False)' in code
-        assert 'e.set_footer(text="alt")' in code
+        assert 'discord.Embed(title="Title", description="Description", color=0xFF0000)' in code
+        assert 'e.add_field(name="Name", value="Value", inline=False)' in code
+        assert 'e.set_footer(text="footer")' in code
 
     def test_embed_shorthand_positional(self):
         # All positional — use decimal color (hex 0x3498db splits in tokenizer)
@@ -236,11 +236,11 @@ class TestLayer3Advanced:
         assert 'await channel.send(embed=' in code
 
     def test_api_fetch_then_embed(self):
-        # the killer feature BDFD lacks: real API call feeding a discord embed
+        # full Python freedom: real API call feeding a discord embed
         src = (
-            "@discord.slash[hava; \"Hava durumu\"; ctx; sehir]\n"
-            "    @var[veri; @http.get[\"https://api.example.com\"]]\n"
-            "    @var[e; @discord.embed[\"Hava\"; \"detay\"]]\n"
+            "@discord.slash[weather; \"Weather info\"; ctx; city]\n"
+            "    @var[data; @http.get[\"https://api.example.com\"]]\n"
+            "    @var[e; @discord.embed[\"Weather\"; \"details\"]]\n"
             "    @discord.respond_embed[ctx; e]\n"
             "@end"
         )
@@ -252,7 +252,7 @@ class TestLayer3Advanced:
     def test_class_inside_bot(self):
         # advanced users can define real classes alongside the bot
         src = (
-            "@class[Sayac]\n"
+            "@class[Counter]\n"
             "    @func[__init__; self]\n"
             "        @var[self.n; 0]\n"
             "    @end\n"
@@ -260,7 +260,7 @@ class TestLayer3Advanced:
             '@discord.command[say; ctx]\n    @discord.reply[ctx; "ok"]\n@end'
         )
         code = _compile(src)
-        assert "class Sayac:" in code
+        assert "class Counter:" in code
         assert "async def say(ctx):" in code
 
 
@@ -318,7 +318,7 @@ class TestGuardsAndLookups:
         assert 'discord.utils.get(guild.roles, name="Admin")' in code
 
     def test_status_watching(self):
-        code = _compile('@discord.status["yayın"; type="watching"]')
+        code = _compile('@discord.status["live"; type="watching"]')
         assert "discord.ActivityType.watching" in code
 
 
@@ -328,14 +328,14 @@ class TestGuardsAndLookups:
 
 class TestTasks:
     def test_task_minutes(self):
-        src = '@discord.task[temizle; minutes=30]\n    @discord.log["temizleniyor"]\n@end'
+        src = '@discord.task[cleanup; minutes=30]\n    @discord.log["cleaning"]\n@end'
         code = _compile(src)
         assert "@__discord_tasks__.loop(minutes=30)" in code
-        assert "async def temizle():" in code
+        assert "async def cleanup():" in code
 
     def test_start_task(self):
-        code = _compile("@discord.start_task[temizle]")
-        assert "temizle.start()" in code
+        code = _compile("@discord.start_task[cleanup]")
+        assert "cleanup.start()" in code
 
 
 # ─────────────────────────────────────────────────────────────
@@ -347,13 +347,13 @@ class TestFullBot:
         src = (
             '@discord.setup["TOKEN"; prefix="!"; intents="all"]\n'
             "@discord.on[ready]\n"
-            '    @discord.log["hazır"]\n'
+            '    @discord.log["ready"]\n'
             '    @discord.status["Cruhon"; type="watching"]\n'
             "@end\n"
-            "@discord.command[selam; ctx]\n"
-            '    @discord.reply[ctx; "Merhaba!"]\n'
+            "@discord.command[hello; ctx]\n"
+            '    @discord.reply[ctx; "Hello!"]\n'
             "@end\n"
-            "@discord.slash[zar; \"Zar at\"; ctx]\n"
+            "@discord.slash[roll; \"Roll dice\"; ctx]\n"
             "    @var[n; random.randint(1, 6)]\n"
             "    @discord.respond[ctx; n]\n"
             "@end\n"
@@ -362,8 +362,8 @@ class TestFullBot:
         code = _compile(src)
         # all three handlers present and flat
         assert "async def on_ready():" in code
-        assert "async def selam(ctx):" in code
-        assert "async def zar(ctx):" in code
+        assert "async def hello(ctx):" in code
+        assert "async def roll(ctx):" in code
         assert "__bot__.run(__discord_token__)" in code
 
 
@@ -373,8 +373,8 @@ class TestFullBot:
 
 class TestNestedNamespace:
     def test_ui_button_statement(self):
-        code = _compile('@discord.ui.Button[label="Tıkla"]')
-        assert 'discord.ui.Button(label="Tıkla")' in code
+        code = _compile('@discord.ui.Button[label="Click"]')
+        assert 'discord.ui.Button(label="Click")' in code
 
     def test_ui_button_inline(self):
         code = _compile('@var[b; @discord.ui.Button[label="x"]]')
@@ -467,17 +467,17 @@ class TestUIView:
     def test_two_buttons_distinct_methods(self):
         src = (
             "@discord.view[V]\n"
-            '    @discord.button[Evet; style=green]\n'
-            '        @discord.respond[interaction; "evet"]\n'
+            '    @discord.button[Yes; style=green]\n'
+            '        @discord.respond[interaction; "yes"]\n'
             "    @end\n"
-            '    @discord.button[Hayır; style=red]\n'
-            '        @discord.respond[interaction; "hayır"]\n'
+            '    @discord.button[No; style=red]\n'
+            '        @discord.respond[interaction; "no"]\n'
             "    @end\n"
             "@end"
         )
         code = _compile(src)
-        assert "async def evet(self, interaction, button):" in code
-        assert "async def hay" in code  # slug of Hayır
+        assert "async def yes(self, interaction, button):" in code
+        assert "async def no(self, interaction, button):" in code
 
 
 # ─────────────────────────────────────────────────────────────
@@ -531,8 +531,8 @@ class TestCog:
 class TestGroup:
     def test_group_class_and_instance(self):
         src = (
-            '@discord.group[admin; "Yönetici"]\n'
-            '    @discord.slash[ban; "Yasakla"; interaction; member]\n'
+            '@discord.group[admin; "Admin"]\n'
+            '    @discord.slash[ban; "Ban a user"; interaction; member]\n'
             '        @discord.respond[interaction; "ok"]\n'
             "    @end\n"
             "@end"
@@ -551,25 +551,25 @@ class TestGroup:
 class TestModal:
     def test_modal_class_with_title(self):
         src = (
-            "@discord.modal[Geri Bildirim; FeedbackModal]\n"
-            '    @field[Başlık; placeholder="Konu"]\n'
+            "@discord.modal[Feedback; FeedbackModal]\n"
+            '    @field[Subject; placeholder="Topic"]\n'
             "    @on_submit[interaction]\n"
-            '        @discord.respond[interaction; "Teşekkürler"]\n'
+            '        @discord.respond[interaction; "Thanks"]\n'
             "    @end\n"
             "@end"
         )
         code = _compile(src)
         assert "class FeedbackModal(discord.ui.Modal, title=" in code
-        assert "Geri Bildirim" in code
+        assert "Feedback" in code
         assert "discord.ui.TextInput(label=" in code
-        assert "Konu" in code
+        assert "Topic" in code
         assert "async def on_submit(self, interaction):" in code
-        assert 'await interaction.response.send_message("Teşekkürler")' in code
+        assert 'await interaction.response.send_message("Thanks")' in code
 
     def test_field_style_and_maxlength(self):
         src = (
             "@discord.modal[F; M]\n"
-            '    @field[Mesaj; style=long; max=500]\n'
+            '    @field[Message; style=long; max=500]\n'
             "    @on_submit[interaction]\n"
             '        @discord.respond[interaction; "ok"]\n'
             "    @end\n"
@@ -584,11 +584,11 @@ class TestSelect:
     def test_select_in_view(self):
         src = (
             "@discord.view[Menu]\n"
-            "    @discord.select[Renk seç; min=1; max=1]\n"
-            "        @option[Kırmızı; value=red]\n"
-            "        @option[Mavi; value=blue]\n"
+            "    @discord.select[Choose a color; min=1; max=1]\n"
+            "        @option[Red; value=red]\n"
+            "        @option[Blue; value=blue]\n"
             "        @body[interaction; selection]\n"
-            '            @discord.respond[interaction; "seçildi"]\n'
+            '            @discord.respond[interaction; "selected"]\n'
             "        @end\n"
             "    @end\n"
             "@end"
@@ -602,12 +602,12 @@ class TestSelect:
         assert "value='red'" in code
         assert "async def" in code
         assert "self, interaction, selection" in code
-        assert 'await interaction.response.send_message("seçildi")' in code
+        assert 'await interaction.response.send_message("selected")' in code
 
     def test_select_options_count(self):
         src = (
             "@discord.view[M]\n"
-            "    @discord.select[Seç]\n"
+            "    @discord.select[Select]\n"
             "        @option[A; value=a]\n"
             "        @option[B; value=b]\n"
             "        @option[C; value=c]\n"
@@ -622,7 +622,7 @@ class TestSelect:
 
 
 # ─────────────────────────────────────────────────────────────
-# FAZ 3 — kapsamlı kısayollar
+# SHORTCUTS — comprehensive shortcuts
 # ─────────────────────────────────────────────────────────────
 
 class TestFaz3Shortcuts:
@@ -632,20 +632,20 @@ class TestFaz3Shortcuts:
         assert "await guild.fetch_member(7)" in _compile("@var[m; @discord.fetch_member[guild; 7]]")
 
     def test_thread(self):
-        assert 'await channel.create_thread(name=' in _compile('@var[t; @discord.create_thread[channel; "tartışma"]]')
+        assert 'await channel.create_thread(name=' in _compile('@var[t; @discord.create_thread[channel; "discussion"]]')
         assert "await thread.join()" in _compile("@discord.join_thread[thread]")
-        assert "await msg.create_thread(name=" in _compile('@var[t; @discord.thread_from[msg; "konu"]]')
+        assert "await msg.create_thread(name=" in _compile('@var[t; @discord.thread_from[msg; "topic"]]')
 
     def test_webhook(self):
         assert "await channel.create_webhook(name=" in _compile('@var[w; @discord.create_webhook[channel; "log"]]')
-        assert "await wh.send(" in _compile('@discord.send_webhook[wh; "merhaba"]')
+        assert "await wh.send(" in _compile('@discord.send_webhook[wh; "hello"]')
 
     def test_invite(self):
         assert "await channel.create_invite(" in _compile("@var[i; @discord.create_invite[channel]]")
         assert "await invite.delete()" in _compile("@discord.delete_invite[invite]")
 
     def test_role_management(self):
-        assert "await guild.create_role(name=" in _compile('@var[r; @discord.create_role[guild; "Üye"]]')
+        assert "await guild.create_role(name=" in _compile('@var[r; @discord.create_role[guild; "Member"]]')
         assert "await role.delete()" in _compile("@discord.delete_role[role]")
 
     def test_history_and_audit(self):
@@ -653,7 +653,7 @@ class TestFaz3Shortcuts:
         assert "audit_logs(limit=10)" in _compile("@var[a; @discord.audit_logs[guild; 10]]")
 
     def test_file_send(self):
-        assert "discord.File(" in _compile('@discord.send_file[channel; "rapor.pdf"]')
+        assert "discord.File(" in _compile('@discord.send_file[channel; "report.pdf"]')
 
     def test_member_voice(self):
         assert "await member.move_to(channel)" in _compile("@discord.move_to[member; channel]")
@@ -661,31 +661,31 @@ class TestFaz3Shortcuts:
         assert "await member.move_to(None)" in _compile("@discord.disconnect[member]")
 
     def test_event(self):
-        assert "create_scheduled_event(name=" in _compile('@var[e; @discord.create_event[guild; "Toplantı"]]')
+        assert "create_scheduled_event(name=" in _compile('@var[e; @discord.create_event[guild; "Meeting"]]')
 
     def test_emoji(self):
         assert "create_custom_emoji(name=" in _compile('@var[e; @discord.create_emoji[guild; "blob"; data]]')
 
     def test_slowmode_and_category(self):
         assert "edit(slowmode_delay=5)" in _compile("@discord.set_slowmode[channel; 5]")
-        assert "await guild.create_category(" in _compile('@var[c; @discord.create_category[guild; "Sesli"]]')
+        assert "await guild.create_category(" in _compile('@var[c; @discord.create_category[guild; "Voice"]]')
 
     def test_sync_tree(self):
         assert "await __bot__.tree.sync()" in _compile("@discord.sync_tree[]")
 
 
 # ─────────────────────────────────────────────────────────────
-# İTEM 2 — geniş kapsam (stage/forum/automod/ban/guild/sticker)
+# WIDE COVERAGE — stage/forum/automod/ban/guild/sticker
 # ─────────────────────────────────────────────────────────────
 
 class TestWideCoverage:
     def test_stage(self):
-        assert "create_stage_channel(" in _compile('@var[s; @discord.create_stage[guild; "Sahne"]]')
-        assert "create_instance(topic=" in _compile('@discord.start_stage[channel; "Canlı yayın"]')
+        assert "create_stage_channel(" in _compile('@var[s; @discord.create_stage[guild; "Stage"]]')
+        assert "create_instance(topic=" in _compile('@discord.start_stage[channel; "Live stream"]')
 
     def test_forum(self):
-        assert "await guild.create_forum(" in _compile('@var[f; @discord.create_forum[guild; "destek"]]')
-        assert "create_thread(name=" in _compile('@discord.create_post[forum; "yardım"; "içerik"]')
+        assert "await guild.create_forum(" in _compile('@var[f; @discord.create_forum[guild; "support"]]')
+        assert "create_thread(name=" in _compile('@discord.create_post[forum; "help"; "content"]')
 
     def test_bans(self):
         assert "await guild.bulk_ban(users)" in _compile("@discord.bulk_ban[guild; users]")
@@ -704,7 +704,7 @@ class TestWideCoverage:
         assert "clear_reaction(" in _compile('@discord.clear_reaction[msg; "👍"]')
 
     def test_automod(self):
-        code = _compile('@discord.automod_keyword[guild; "Küfür"; bad_words]')
+        code = _compile('@discord.automod_keyword[guild; "Filter"; bad_words]')
         assert "create_automod_rule(name=" in code
         assert "AutoModTrigger" in code
         assert "keyword_filter=bad_words" in code
@@ -716,21 +716,21 @@ class TestWideCoverage:
 
 
 # ─────────────────────────────────────────────────────────────
-# GÜÇ DALGASI — pagination / confirm / context menu / checks
+# POWER FEATURES — pagination / confirm / context menu / checks
 # ─────────────────────────────────────────────────────────────
 
 class TestPowerFeatures:
     def test_paginate(self):
-        assert "await __paginate__(ctx, sayfalar)" in _compile("@discord.paginate[ctx; sayfalar]")
+        assert "await __paginate__(ctx, pages)" in _compile("@discord.paginate[ctx; pages]")
         assert "await __paginate__(ctx, p, 60)" in _compile("@discord.paginate[ctx; p; timeout=60]")
 
     def test_confirm(self):
-        assert 'await __confirm__(ctx, "Silinsin mi?")' in _compile('@var[ok; @discord.confirm[ctx; "Silinsin mi?"]]')
+        assert 'await __confirm__(ctx, "Delete this?")' in _compile('@var[ok; @discord.confirm[ctx; "Delete this?"]]')
 
     def test_context_menu_user(self):
         src = (
-            "@discord.context_menu[Bilgi; user]\n"
-            '    @discord.respond[interaction; "bilgi"]\n'
+            "@discord.context_menu[Info; user]\n"
+            '    @discord.respond[interaction; "info"]\n'
             "@end"
         )
         code = _compile(src)
@@ -739,8 +739,8 @@ class TestPowerFeatures:
 
     def test_context_menu_message(self):
         src = (
-            "@discord.context_menu[Raporla; message]\n"
-            '    @discord.respond[interaction; "raporlandı"]\n'
+            "@discord.context_menu[Report; message]\n"
+            '    @discord.respond[interaction; "reported"]\n'
             "@end"
         )
         code = _compile(src)
@@ -769,8 +769,8 @@ class TestPowerFeatures:
 
     def test_slash_cooldown(self):
         src = (
-            '@discord.slash[daily; "Günlük ödül"; interaction; cooldown=86400]\n'
-            '    @discord.respond[interaction; "ödül!"]\n'
+            '@discord.slash[daily; "Daily reward"; interaction; cooldown=86400]\n'
+            '    @discord.respond[interaction; "reward!"]\n'
             "@end"
         )
         code = _compile(src)
@@ -778,7 +778,7 @@ class TestPowerFeatures:
 
 
 # ─────────────────────────────────────────────────────────────
-# SLASH OPTION CONFIG — @param / @choice (BDFD-style)
+# SLASH OPTION CONFIG — @param / @choice
 # ─────────────────────────────────────────────────────────────
 
 class TestSlashOptions:

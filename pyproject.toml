@@ -37,7 +37,7 @@ full     = ["requests>=2.28", "discord.py>=2.0", "httpx>=0.24"]
 cruhon = "cruhon.cli:main"
 
 [project.entry-points."cruhon.mods"]
-# pip install cruhon-* modları buraya kendini kaydeder
+# pip install cruhon-* mods register themselves here
 # cruhon-db = "cruhon_db:register"
 
 [tool.setuptools.packages.find]

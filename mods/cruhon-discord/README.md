@@ -1,96 +1,93 @@
 # cruhon-discord
 
-Discord botu yazmak için Cruhon eklentisi. **BDFD (Bot Designer For Discord)
-gibi kod bilmeyenler bot yapabilir** — ama BDFD'nin aksine, Cruhon'u bilenler
-gerçek `class`, `if/else`, döngü, harici API çağrıları ve karmaşık mantık da
-kullanabilir. Aynı dil, üç katman.
+Discord bot plugin for Cruhon. Anyone can write a Discord bot quickly — and
+those who know Cruhon can also use real `class`, `if/else`, loops, external
+API calls, and complex logic. Same language, three layers.
 
-## Felsefe — 3 katman
+## Philosophy — 3 Layers
 
-| Katman | Kim | Ne yapabilir |
-|--------|-----|--------------|
-| **1** | Kod bilmeyen | `@discord.command`, `@discord.reply`, `@discord.send` — basit komutlar |
-| **2** | Biraz bilen | `@if/@else`, `@for`, `@var` — mantık ekler |
-| **3** | Cruhon'u bilen | `@class`, `@http.get` API çağrısı, embed, karmaşık akış |
+| Layer | Who | What they can do |
+|-------|-----|-----------------|
+| **1** | Non-programmer | `@discord.command`, `@discord.reply`, `@discord.send` — simple commands |
+| **2** | Intermediate | `@if/@else`, `@for`, `@var` — adds logic |
+| **3** | Cruhon user | `@class`, `@http.get` API calls, embeds, complex flows |
 
-BDFD katman 1'de kalır. Cruhon üçünü de aynı dosyada destekler.
-
-## Hızlı başlangıç
+## Quick Start
 
 ```clpy
 @discord.setup["TOKEN"; prefix="!"; intents="all"]
 
-@discord.command[selam; ctx]
-    @discord.reply[ctx; "Merhaba!"]
+@discord.command[hello; ctx]
+    @discord.reply[ctx; "Hello!"]
 @end
 
 @discord.run[]
 ```
 
-Çalıştır: `cruhon run bot.clpy`
+Run: `cruhon run bot.clpy`
 
-Tam örnek için bkz. [`examples/ornek_bot.clpy`](examples/ornek_bot.clpy).
+See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 
-## Komut grupları
+## Command Groups
 
-- **Kurulum:** `setup`, `run`, `sync_commands`, `start_task`, `stop_task`
-- **Olaylar (blok):** `on`, `command`, `slash`, `task`, `listen`
-- **Mesaj:** `send`, `reply`, `dm`, `respond`, `defer`, `followup`, `edit`, `delete`, `pin`
-- **Tepki:** `react`, `unreact`, `clear_reactions`
+- **Setup:** `setup`, `run`, `sync_commands`, `start_task`, `stop_task`
+- **Events (block):** `on`, `command`, `slash`, `task`, `listen`
+- **Messaging:** `send`, `reply`, `dm`, `respond`, `defer`, `followup`, `edit`, `delete`, `pin`
+- **Reactions:** `react`, `unreact`, `clear_reactions`
 - **Embed:** `embed`, `add_field`, `set_footer`, `set_image`, `set_thumbnail`, `set_author`
-- **Moderasyon:** `ban`, `unban`, `kick`, `timeout`, `untimeout`, `add_role`, `remove_role`, `nickname`
-- **Kanal:** `purge`, `create_text`, `create_voice`, `delete_channel`
-- **Arama:** `get_member`, `get_channel`, `get_role`, `find_member`, `me`, `mention`
-- **Koruma:** `ignore_self`, `ignore_bots`, `require_role`, `require_guild`
-- **Durum:** `status`, `log`, `wait_for`
-- **Ses:** `join`, `leave`
+- **Moderation:** `ban`, `unban`, `kick`, `timeout`, `untimeout`, `add_role`, `remove_role`, `nickname`
+- **Channel:** `purge`, `create_text`, `create_voice`, `delete_channel`
+- **Lookup:** `get_member`, `get_channel`, `get_role`, `find_member`, `me`, `mention`
+- **Protection:** `ignore_self`, `ignore_bots`, `require_role`, `require_guild`
+- **Status:** `status`, `log`, `wait_for`
+- **Voice:** `join`, `leave`
 
-Tüm imzalar için `__init__.py` başındaki belge bloğuna bakın.
+For all signatures see the docstring block at the top of `__init__.py`.
 
-## @embed — kolay embed oluşturma
+## @embed — Easy Embed Creation
 
-Tek satırda tam embed. İki sözdizimi desteklenir:
+One-liner full embed. Two syntaxes supported:
 
-**Pozisyonel** (sıra: title → description → color → footer → image → thumbnail → author):
+**Positional** (order: title → description → color → footer → image → thumbnail → author):
 ```clpy
-@var[e; @embed["Başlık"; "Açıklama"]]
-@var[e; @embed["Başlık"; "Açıklama"; 3461339; "Alt yazı"]]
-@var[e; @embed["Başlık"; "Açıklama"; ""; "Alt yazı"; "img.png"; "thumb.png"; "Yazar"]]
+@var[e; @embed["Title"; "Description"]]
+@var[e; @embed["Title"; "Description"; 3461339; "Footer"]]
+@var[e; @embed["Title"; "Description"; ""; "Footer"; "img.png"; "thumb.png"; "Author"]]
 ```
 
-**Kwargs** (sırasız, sadece istediğin alanı yaz):
+**Kwargs** (any order, only the fields you need):
 ```clpy
-@var[e; @embed["Başlık"; "Açıklama"; color=3461339; footer="Alt"; author="Bot"]]
-@var[e; @embed["Başlık"; "Açıklama"; footer="Alt"; footer_icon="icon.png"]]
-@var[e; @embed["Başlık"; "Açıklama"; author="Yazar"; author_icon="avatar.png"]]
+@var[e; @embed["Title"; "Description"; color=3461339; footer="Footer"; author="Bot"]]
+@var[e; @embed["Title"; "Description"; footer="Footer"; footer_icon="icon.png"]]
+@var[e; @embed["Title"; "Description"; author="Author"; author_icon="avatar.png"]]
 ```
 
-**Doğrudan gönder** (değişkene atamadan):
+**Send directly** (no variable needed):
 ```clpy
-@discord.send_embed[ctx.channel; @embed["Başlık"; "Açıklama"; footer="Alt"]]
+@discord.send_embed[ctx.channel; @embed["Title"; "Description"; footer="Footer"]]
 ```
 
-**Not — renk:** Cruhon'un tokenizer'ı hex literalleri (`0x3498db`) boşlukla böler.
-Rengi ondalık olarak ver (`3461339`) ya da kwarg formunda: `color=0x3498db`
-bu da çalışır çünkü kwarg değeri ham string olarak alınır.
+**Note — color:** Cruhon's tokenizer splits hex literals (`0x3498db`) at spaces.
+Pass color as a decimal (`3461339`) or use kwarg form: `color=0x3498db`
+also works because the kwarg value is taken as a raw string.
 
-Ayrıca `@discord.quick_embed[...]` de aynı şeyi yapar (`@discord.` önekiyle).
+`@discord.quick_embed[...]` does the same thing (with `@discord.` prefix).
 
-## Kaçış kapağı (escape hatch)
+## Escape Hatch
 
-Bir komut yetmezse `@raw` ile saf discord.py yazabilirsin — bot nesnesi
-`__bot__` adıyla erişilebilir:
+If a command isn't enough, use `@raw` to write plain discord.py — the bot
+object is accessible as `__bot__`:
 
 ```clpy
 @raw
     @__bot__.command()
-    async def gelismis(ctx, *args):
-        # tam discord.py gücü
+    async def advanced(ctx, *args):
+        # full discord.py power
         ...
 @end
 ```
 
-## Gereksinim
+## Requirements
 
-`pip install discord.py` — bot kodu çalıştırılırken gerekir.
-Transpile (kod üretimi) için gerekmez.
+`pip install discord.py` — required when running bot code.
+Not required for transpilation (code generation).

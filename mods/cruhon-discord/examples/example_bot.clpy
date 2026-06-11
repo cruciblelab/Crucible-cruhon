@@ -1,0 +1,68 @@
+# ════════════════════════════════════════════════════════════
+#  EXAMPLE DISCORD BOT — all 3 layers in a single file
+#  Copy, replace TOKEN, run:  cruhon run example_bot.clpy
+# ════════════════════════════════════════════════════════════
+
+@import[random]
+
+# Bot setup — replace with your own bot token
+@discord.setup["YOUR_TOKEN_HERE"; prefix="!"; intents="all"]
+
+
+# ── LAYER 1: Non-programmer — simple commands ─────────────────
+
+@discord.on[ready]
+    @discord.log["Bot is running!"]
+    @discord.status["watching you"; type="watching"]
+@end
+
+@discord.command[hello; ctx]
+    @discord.reply[ctx; "Hello! 👋"]
+@end
+
+
+# ── LAYER 2: Intermediate — if/else, variables, loops ─────────
+
+@discord.command[roll; ctx]
+    @var[result; random.randint(1, 6)]
+    @if[result == 6]
+        @discord.reply[ctx; "🎉 Rolled a six, you win!"]
+    @else
+        @discord.reply[ctx; f"🎲 Roll: {result}"]
+    @end
+@end
+
+@discord.command[clear; ctx]
+    @discord.require_role[ctx; "Moderator"]
+    @discord.purge[ctx.channel; 10]
+    @discord.reply[ctx; "Deleted 10 messages."]
+@end
+
+
+# ── LAYER 3: Full Cruhon power — slash, embed, API ───────────
+
+@discord.slash[info; "Show server info"; ctx]
+    @var[g; ctx.guild]
+    @var[e; @discord.embed[g.name; "Server statistics"; color=0x3498db]]
+    @discord.add_field[e; "Members"; g.member_count]
+    @discord.add_field[e; "Created"; g.created_at]
+    @discord.set_thumbnail[e; g.icon.url]
+    @discord.respond_embed[ctx; e]
+@end
+
+# Fetch data from an external API — full Python freedom
+@discord.slash[define; "Look up a word"; ctx; word]
+    @discord.defer[ctx]
+    @var[resp; @http.get[f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"]]
+    @var[data; resp.json()]
+    @if[isinstance(data, list)]
+        @var[meaning; data[0]["meanings"][0]["definitions"][0]["definition"]]
+        @discord.followup[ctx; f"**{word}**: {meaning}"]
+    @else
+        @discord.followup[ctx; "Word not found."]
+    @end
+@end
+
+
+# Start the bot (must be last)
+@discord.run[]

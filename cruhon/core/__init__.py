@@ -1,4 +1,4 @@
-"""cruhon.core — Cruhon dil çekirdeği"""
+"""cruhon.core — Cruhon language core"""
 from .lexer import tokenize
 from .parser import parse
 from .transpiler import transpile
