@@ -56,7 +56,7 @@ Legend: 🔴 async method (needs await) · 🔵 sync method · 🟢 property
   🟢 prop  (8): answers, created_at, expires_at, message, question, total_votes, victor_answer, victor_answer_id
 
 ======================================================================
-## KANALLAR
+## CHANNELS
 ======================================================================
 
 ### discord.TextChannel
@@ -220,7 +220,7 @@ Legend: 🔴 async method (needs await) · 🔵 sync method · 🟢 property
   🟢 prop  (7): avatar, channel, created_at, default_avatar, display_avatar, guild, url
 
 ======================================================================
-## SES
+## VOICE
 ======================================================================
 
 ### discord.VoiceClient

@@ -39,13 +39,13 @@ def in_tmp(tmp_path):
 
 class TestFileReadWrite:
     def test_write_read(self, in_tmp):
-        _run('@file.write["a.txt"; "merhaba"]')
-        assert _eval('@file.read["a.txt"]') == "merhaba"
+        _run('@file.write["a.txt"; "hello"]')
+        assert _eval('@file.read["a.txt"]') == "hello"
 
     def test_append(self, in_tmp):
-        _run('@file.write["a.txt"; "bir"]')
-        _run('@file.append["a.txt"; "iki"]')
-        assert _eval('@file.read["a.txt"]') == "biriki"
+        _run('@file.write["a.txt"; "one"]')
+        _run('@file.append["a.txt"; "two"]')
+        assert _eval('@file.read["a.txt"]') == "onetwo"
 
     def test_lines(self, in_tmp):
         (in_tmp / "a.txt").write_text("x\ny\nz")
@@ -70,8 +70,8 @@ class TestFileReadWrite:
 
 class TestFileJson:
     def test_write_read_json(self, in_tmp):
-        _run('@file.write_json["d.json"; {"ad": "Ali", "yas": 25}]')
-        assert _eval('@file.read_json["d.json"]') == {"ad": "Ali", "yas": 25}
+        _run('@file.write_json["d.json"; {"name": "Ali", "age": 25}]')
+        assert _eval('@file.read_json["d.json"]') == {"name": "Ali", "age": 25}
 
     def test_write_json_is_pretty(self, in_tmp):
         _run('@file.write_json["d.json"; {"k": 1}]')

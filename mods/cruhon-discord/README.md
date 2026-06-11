@@ -31,9 +31,10 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 ## Command Groups
 
 - **Setup:** `setup`, `run`, `sync_commands`, `start_task`, `stop_task`
-- **Events (block):** `on`, `command`, `slash`, `task`, `listen`
-- **Messaging:** `send`, `reply`, `dm`, `respond`, `defer`, `followup`, `edit`, `delete`, `pin`
-- **Reactions:** `react`, `unreact`, `clear_reactions`
+- **Events (block):** `on`, `command`, `hybrid`, `slash`, `task`, `listen`
+- **UI (block):** `view`, `button` (callback or `url=` link), `select`, `modal`, `cog`, `group`, `context_menu`
+- **Messaging:** `send`, `reply`, `dm`, `respond`, `send_modal`, `defer`, `followup`, `edit`, `edit_embed`, `dm_embed`, `delete`, `pin`
+- **Reactions:** `react`, `add_reactions`, `unreact`, `clear_reactions`
 - **Embed:** `embed`, `add_field`, `set_footer`, `set_image`, `set_thumbnail`, `set_author`
 - **Moderation:** `ban`, `unban`, `kick`, `timeout`, `untimeout`, `add_role`, `remove_role`, `nickname`
 - **Channel:** `purge`, `create_text`, `create_voice`, `delete_channel`
@@ -43,6 +44,47 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 - **Voice:** `join`, `leave`
 
 For all signatures see the docstring block at the top of `__init__.py`.
+
+## Interactive Components
+
+**Hybrid commands** — one definition that registers as both a prefix command
+and a slash command:
+
+```clpy
+@discord.hybrid[userinfo; ctx; member]
+    @discord.reply[ctx; member.display_name]
+@end
+```
+
+**Link buttons** — buttons that open a URL have no callback, so the body is
+empty (but, like every block, it still closes with `@end`):
+
+```clpy
+@discord.view[Links]
+    @discord.button[Docs; url="https://example.com"; emoji="📖"]
+    @end
+    @discord.button[Press; style=green]
+        @discord.respond[interaction; "pressed"]
+    @end
+@end
+```
+
+**Slash autocomplete** — suggest options as the user types. Inside the
+callback, `current` holds the partial text:
+
+```clpy
+@discord.slash[fruit; "Pick a fruit"; interaction]
+    @param[name; string; "Fruit name"]
+    @autocomplete[name]
+        @return[[discord.app_commands.Choice(name=x, value=x)
+                 for x in FRUITS if current.lower() in x.lower()]]
+    @end
+    @discord.respond[interaction; name]
+@end
+```
+
+**Modal forms** — `@discord.send_modal[interaction; FormClass]` opens a modal
+defined with `@discord.modal`.
 
 ## @embed — Easy Embed Creation
 

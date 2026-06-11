@@ -1,5 +1,5 @@
 """
-cruhon-discord v1.0.0
+cruhon-discord v1.1.0
 ======================
 Discord bot plugin for Cruhon.
 "Even people who don't know coding can quickly and easily do whatever they want."
@@ -26,10 +26,21 @@ Discord bot plugin for Cruhon.
 
   @discord.command[ping; ctx]           — prefix command (!ping)
   @discord.command[greet; ctx; user]    — command with parameters
+  @discord.hybrid[userinfo; ctx; member] — works as BOTH prefix and slash
   @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
   @discord.slash[roll; "Roll dice"; ctx; sides]
   @discord.task[cleanup; minutes=30]   — background task
   @discord.listen[message; msg]        — additional event listener
+
+  Slash autocomplete (inside @discord.slash):
+  @discord.slash[fruit; "Pick fruit"; interaction]
+      @param[name; string; "Fruit"]
+      @autocomplete[name]              — `current` holds the partial text
+          @return[[discord.app_commands.Choice(name=x, value=x)
+                   for x in FRUITS if current in x]]
+      @end
+      @discord.respond[interaction; name]
+  @end
 
 ━━━ MESSAGING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.send[channel; "message"]
@@ -39,9 +50,12 @@ Discord bot plugin for Cruhon.
   @discord.dm[user; "message"]
   @discord.respond[interaction; "message"]   — slash reply
   @discord.respond[interaction; "message"; ephemeral=True]
+  @discord.send_modal[interaction; FeedbackModal]  — open a modal form
   @discord.defer[interaction]              — defer for slow operations
   @discord.followup[interaction; "message"] — send after defer
   @discord.edit[message; "new content"]
+  @discord.edit_embed[message; embed]      — replace a message's embed
+  @discord.dm_embed[user; embed]           — DM an embed
   @discord.delete[message]
   @discord.delete[message; delay=5]
   @discord.pin[message]
@@ -50,6 +64,7 @@ Discord bot plugin for Cruhon.
 
 ━━━ REACTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.react[message; "👍"]
+  @discord.add_reactions[message; "👍"; "👎"; "❤️"]  — several at once
   @discord.unreact[message; "👍"; user]
   @discord.clear_reactions[message]
 
@@ -124,6 +139,20 @@ Discord bot plugin for Cruhon.
   @discord.start_task[task_name]       — start a background task
   @discord.stop_task[task_name]        — stop a background task
 
+━━━ UI COMPONENTS (block commands) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.view[ConfirmView; timeout=60]
+      @discord.button[Yes; style=green]         — button with a callback
+          @discord.respond[interaction; "✅"]
+      @end
+      @discord.button[Docs; url="https://..."]  — link button (no callback)
+      @end                                       — every button closes with @end
+  @end
+  @discord.modal[Feedback; FeedbackModal] ... @end   — form/modal
+  @discord.select[Pick; min=1; max=1] ... @end       — dropdown menu
+  @discord.cog[Moderation] ... @end                  — command group class
+  @discord.group[admin; "Admin"] ... @end            — slash command group
+  @discord.context_menu[Info; user] ... @end         — right-click command
+
 ━━━ VOICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @discord.join[voice_channel]        — join a voice channel
   @discord.leave[guild]               — leave the voice channel
@@ -138,7 +167,7 @@ import re
 # BLOCK COMMANDS — rewritten by lexer hook before tokenization
 # ─────────────────────────────────────────────────────────────
 
-_BLOCK_CMDS = {"on", "command", "slash", "task", "listen",
+_BLOCK_CMDS = {"on", "command", "hybrid", "slash", "task", "listen",
                "view", "button", "cog", "group", "modal", "select",
                "context_menu"}
 
@@ -334,6 +363,43 @@ def _visit_dc_command(transpiler, node):
     return "\n".join(lines)
 
 
+def _visit_dc_hybrid(transpiler, node):
+    """
+    @discord.hybrid[userinfo; ctx; member]
+    @discord.hybrid[ban; ctx; member; description="Ban a user"; perms="ban_members"]
+    → @__bot__.hybrid_command(...) — works as BOTH a prefix and a slash command.
+    """
+    args = node.args
+    kwargs = node.kwargs
+
+    name = args[0].strip() if args else "my_command"
+    ctx = args[1].strip() if len(args) > 1 else "ctx"
+    extra_params = [a.strip() for a in args[2:]]
+    params_str = ", ".join([ctx] + extra_params)
+
+    dec_kw_parts = []
+    if "aliases" in kwargs:
+        raw = kwargs["aliases"].strip().strip('"\'')
+        alias_list = ", ".join(f'"{a.strip()}"' for a in raw.split(","))
+        dec_kw_parts.append(f"aliases=[{alias_list}]")
+    if "description" in kwargs:
+        dec_kw_parts.append(f"description={kwargs['description']}")
+    if "with_app_command" in kwargs:
+        dec_kw_parts.append(f"with_app_command={kwargs['with_app_command'].strip()}")
+    dec_kw = (", " + ", ".join(dec_kw_parts)) if dec_kw_parts else ""
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+
+    lines = [
+        f"{indent}@__bot__.hybrid_command(name={name!r}{dec_kw})",
+        *_check_decorators(kwargs, indent, "command"),
+        f"{indent}async def {name}({params_str}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ]
+    return "\n".join(lines)
+
+
 # Slash option type names → Python annotation
 _OPTION_TYPES = {
     "string": "str", "str": "str", "text": "str",
@@ -383,13 +449,17 @@ def _visit_dc_slash(transpiler, node):
 
     indent = "    " * transpiler._indent
 
-    # Split body into @param / @choice config vs. real command body
+    # Split body into @param / @choice / @autocomplete config vs. real command body
     typed_params = []     # (pname, anno, required)
     describes = {}        # pname -> description expr
     choices = {}          # pname -> [(label, value), ...]
+    autocompletes = []    # (pname, body_nodes)
     body_children = []
     for child in node.body:
-        if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_param":
+        if isinstance(child, PluginBlockNode) and child.plugin_name == "autocomplete":
+            apname = child.args[0].strip() if child.args else "option"
+            autocompletes.append((apname, child.body))
+        elif isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_param":
             pa, pk = child.args, child.kwargs
             pname = pa[0].strip()
             tkey = (pa[1].strip().strip("\"'").lower()) if len(pa) > 1 else "string"
@@ -454,18 +524,30 @@ def _visit_dc_slash(transpiler, node):
         f"{indent}async def {name}({', '.join(sig)}):",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
+
+    # Autocomplete callbacks: @<name>.autocomplete("<param>") + async def
+    # `interaction` and `current` (the partial text) are available in the body.
+    for apname, abody in autocompletes:
+        saved = transpiler._indent
+        transpiler._indent += 1
+        acode = "\n".join(filter(None, (n.accept(transpiler) for n in abody)))
+        transpiler._indent = saved
+        lines.append(f"{indent}@{name}.autocomplete({apname!r})")
+        lines.append(f"{indent}async def {name}_{apname}_autocomplete(interaction, current: str):")
+        lines.append(acode if acode.strip() else f"{indent}    pass")
+
     return "\n".join(lines)
 
 
 def _visit_dc_context_menu(transpiler, node):
     """
-    @discord.context_menu[Bilgi; user]      (type: user | message)
+    @discord.context_menu[Info; user]      (type: user | message)
         @discord.respond[interaction; f"{target}"]
     @end
     → @__bot__.tree.context_menu(name=...) + async def(interaction, target: Type):
     """
     args = node.args
-    label = _as_str(args[0]) if args else '"Komut"'
+    label = _as_str(args[0]) if args else '"Command"'
     fname = _slug(args[0] if args else "context")
     ctype = (args[1].strip().strip("\"'").lower()) if len(args) > 1 else "user"
     target_type = "discord.Message" if ctype in ("message", "msg") else "discord.Member"
@@ -539,6 +621,30 @@ def _visit_dc_listen(transpiler, node):
 # UI BLOCK VISITORS — View / Button (interactive components)
 # ─────────────────────────────────────────────────────────────
 
+def _is_link_button(btn) -> bool:
+    """A button with a url= is a link button — it has no callback."""
+    return "url" in btn.kwargs
+
+
+def _link_button_item(btn) -> str:
+    """
+    @discord.button[Docs; url="https://..."; emoji="📖"; row=0]
+    → discord.ui.Button(label=..., url=..., style=discord.ButtonStyle.link, ...)
+    Link buttons have no callback, so a view adds them via self.add_item(...).
+    """
+    args = btn.args
+    kw = btn.kwargs
+    label = _as_str(args[0]) if args else '"Link"'
+    parts = [f"label={label}", "style=discord.ButtonStyle.link", f"url={kw['url'].strip()}"]
+    if "emoji" in kw:
+        parts.append(f"emoji={kw['emoji'].strip()}")
+    if "row" in kw:
+        parts.append(f"row={kw['row'].strip()}")
+    if "disabled" in kw:
+        parts.append(f"disabled={kw['disabled'].strip()}")
+    return f"discord.ui.Button({', '.join(parts)})"
+
+
 def _render_button(transpiler, btn):
     """
     @discord.button[Confirm; style=green; emoji="✅"; row=0]
@@ -546,7 +652,14 @@ def _render_button(transpiler, btn):
     @end
     → @discord.ui.button(...) + async def <slug>(self, interaction, button):
     `interaction` is available inside the callback body.
+
+    Link buttons (url=) have no callback in discord.py; when used standalone
+    they are emitted as a bare Button expression.
     """
+    if _is_link_button(btn):
+        base = "    " * transpiler._indent
+        return f"{base}{_link_button_item(btn)}"
+
     args = btn.args
     kw = btn.kwargs
     label = _as_str(args[0]) if args else '"Button"'
@@ -561,6 +674,8 @@ def _render_button(transpiler, btn):
         deco.append(f"row={kw['row'].strip()}")
     if "custom_id" in kw:
         deco.append(f"custom_id={kw['custom_id'].strip()}")
+    if "disabled" in kw:
+        deco.append(f"disabled={kw['disabled'].strip()}")
 
     base = "    " * transpiler._indent
     body_code = transpiler._block(btn.body)  # render at _indent+1 level
@@ -589,16 +704,28 @@ def _visit_dc_view(transpiler, node):
     timeout = node.kwargs.get("timeout", "180").strip()
 
     base = "    " * transpiler._indent
+
+    # Link buttons (url=) have no callback → added in __init__ via add_item
+    link_buttons = [
+        c for c in node.body
+        if isinstance(c, PluginBlockNode) and c.plugin_name == "_dc_button"
+        and _is_link_button(c)
+    ]
+
     lines = [
         f"{base}class {name}(discord.ui.View):",
         f"{base}    def __init__(self):",
         f"{base}        super().__init__(timeout={timeout})",
     ]
+    for lb in link_buttons:
+        lines.append(f"{base}        self.add_item({_link_button_item(lb)})")
 
     transpiler._indent += 1  # class body indentation level
     try:
         for child in node.body:
             if isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_button":
+                if _is_link_button(child):
+                    continue  # already added in __init__
                 lines.append(_render_button(transpiler, child))
             elif isinstance(child, PluginBlockNode) and child.plugin_name == "_dc_select":
                 lines.append(_render_select(transpiler, child))
@@ -808,7 +935,7 @@ def _visit_dc_modal(transpiler, node):
             elif isinstance(child, PluginBlockNode) and child.plugin_name == "on_submit":
                 submit_node = child
 
-        # on_submit metodu
+        # on_submit method
         if submit_node is not None:
             ctx = submit_node.args[0].strip() if submit_node.args else "interaction"
             body_code = transpiler._block(submit_node.body)
@@ -945,7 +1072,7 @@ def _cruhon_embed_helper(**kwargs):
     """
     import discord as _discord
 
-    # Renk
+    # Color
     color = kwargs.get("color") or kwargs.get("colour")
 
     e = _discord.Embed(
@@ -1228,6 +1355,27 @@ def _build_handlers() -> dict:
         return f"await {message}.edit(content={content})"
     h["edit"] = edit
 
+    def edit_embed(args):
+        message = args[0] if args else "message"
+        embed = args[1] if len(args) > 1 else "embed"
+        return f"await {message}.edit(embed={embed})"
+    h["edit_embed"] = edit_embed
+
+    def dm_embed(args):
+        user = args[0] if args else "user"
+        embed = args[1] if len(args) > 1 else "embed"
+        return f"await {user}.send(embed={embed})"
+    h["dm_embed"] = dm_embed
+
+    def send_modal(args):
+        # @discord.send_modal[interaction; FeedbackModal]
+        interaction = args[0] if args else "interaction"
+        modal = args[1].strip() if len(args) > 1 else "MyModal"
+        # Allow passing an instance (Modal(...)) or a class name (→ instantiate)
+        inst = modal if modal.endswith(")") else f"{modal}()"
+        return f"await {interaction}.response.send_modal({inst})"
+    h["send_modal"] = send_modal
+
     def delete(args):
         message = args[0] if args else "message"
         for a in args[1:]:
@@ -1263,6 +1411,15 @@ def _build_handlers() -> dict:
         user = args[2] if len(args) > 2 else "__bot__.user"
         return f"await {message}.remove_reaction({emoji}, {user})"
     h["unreact"] = unreact
+
+    def add_reactions(args):
+        # @discord.add_reactions[msg; "👍"; "👎"; "❤️"] → add several reactions in order
+        message = args[0] if args else "message"
+        emojis = [a.strip() for a in args[1:] if "=" not in a.strip()]
+        if not emojis:
+            return f'await {message}.add_reaction("👍")'
+        return f"[await {message}.add_reaction(__e) for __e in [{', '.join(emojis)}]]"
+    h["add_reactions"] = add_reactions
 
     def clear_reactions(args):
         return f"await {args[0] if args else 'message'}.clear_reactions()"
@@ -1399,7 +1556,7 @@ def _build_handlers() -> dict:
         return f"await {member}.edit(nick={nick})"
     h["nickname"] = nickname
 
-    # ── KANALLAR ──────────────────────────────────────────────
+    # ── CHANNELS ──────────────────────────────────────────────
 
     def purge(args):
         channel = args[0] if args else "channel"
@@ -1409,7 +1566,7 @@ def _build_handlers() -> dict:
 
     def create_text(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '"yeni-kanal"'
+        name = args[1] if len(args) > 1 else '"new-channel"'
         for a in args[2:]:
             if a.strip().startswith("category="):
                 return f"await {guild}.create_text_channel({name}, category={a.strip()[9:]})"
@@ -1418,7 +1575,7 @@ def _build_handlers() -> dict:
 
     def create_voice(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '"yeni-ses"'
+        name = args[1] if len(args) > 1 else '"new-voice"'
         return f"await {guild}.create_voice_channel({name})"
     h["create_voice"] = create_voice
 
@@ -1460,7 +1617,7 @@ def _build_handlers() -> dict:
         return f"{args[0] if args else 'member'}.mention"
     h["mention"] = mention
 
-    # ── KORUMA ────────────────────────────────────────────────
+    # ── PROTECTION ────────────────────────────────────────────
 
     def ignore_self(args):
         msg = args[0] if args else "message"
@@ -1534,7 +1691,7 @@ def _build_handlers() -> dict:
         return f"await __bot__.wait_for({event})"
     h["wait_for"] = wait_for
 
-    # ── SES ───────────────────────────────────────────────────
+    # ── VOICE ─────────────────────────────────────────────────
 
     def join(args):
         channel = args[0] if args else "voice_channel"
@@ -1546,7 +1703,7 @@ def _build_handlers() -> dict:
         return f"await {guild}.voice_client.disconnect()"
     h["leave"] = leave
 
-    # ── FAZ 3 KISAYOLLARI ─────────────────────────────────────
+    # ── SHORTCUTS ─────────────────────────────────────────────
     # Helper: forward positional + kwargs individually
     def _kw(args, start=0):
         return [a.strip() for a in args[start:] if "=" in a.strip()
@@ -1647,8 +1804,8 @@ def _build_handlers() -> dict:
 
     # ── POLL ──────────────────────────────────────────────────
     def create_poll(args):
-        question = _as_str(args[0]) if args else '"Soru"'
-        # @discord.create_poll["Soru?"; "A"; "B"; "C"]  → answers
+        question = _as_str(args[0]) if args else '"Question"'
+        # @discord.create_poll["Question?"; "A"; "B"; "C"]  → answers
         answers = [a.strip() for a in args[1:] if "=" not in a.strip()]
         ans_code = "; ".join(answers)
         lines = [f"discord.Poll(question={question}, duration=__import__('datetime').timedelta(hours=24))"]
@@ -1666,7 +1823,7 @@ def _build_handlers() -> dict:
     # ── SCHEDULED EVENT ───────────────────────────────────────
     def create_event(args):
         g = args[0] if args else "guild"
-        name = _as_str(args[1]) if len(args) > 1 else '"Etkinlik"'
+        name = _as_str(args[1]) if len(args) > 1 else '"Event"'
         return _call(g, "create_scheduled_event", [f"name={name}"], args, 2)
     h["create_event"] = create_event
 
@@ -1677,7 +1834,7 @@ def _build_handlers() -> dict:
     # ── ROLE MANAGEMENT ───────────────────────────────────────
     def create_role(args):
         g = args[0] if args else "guild"
-        name = _as_str(args[1]) if len(args) > 1 else '"rol"'
+        name = _as_str(args[1]) if len(args) > 1 else '"role"'
         return _call(g, "create_role", [f"name={name}"], args, 2)
     h["create_role"] = create_role
 
@@ -1692,7 +1849,7 @@ def _build_handlers() -> dict:
     # ── CATEGORY & CHANNEL ────────────────────────────────────
     def create_category(args):
         g = args[0] if args else "guild"
-        name = _as_str(args[1]) if len(args) > 1 else '"Kategori"'
+        name = _as_str(args[1]) if len(args) > 1 else '"Category"'
         return f"await {g}.create_category({name})"
     h["create_category"] = create_category
 
@@ -1779,7 +1936,7 @@ def _build_handlers() -> dict:
         return f"await {args[0] if args else 'member'}.move_to(None)"
     h["disconnect"] = disconnect
 
-    # ── TYPING & GENEL ────────────────────────────────────────
+    # ── TYPING & GENERAL ──────────────────────────────────────
     def typing(args):
         return f"{args[0] if args else 'channel'}.typing()"
     h["typing"] = typing
@@ -1809,10 +1966,10 @@ def _build_handlers() -> dict:
 
     # ── WIDE COVERAGE ─────────────────────────────────────────
 
-    # ── STAGE KANAL ───────────────────────────────────────────
+    # ── STAGE CHANNEL ─────────────────────────────────────────
     def create_stage(args):
         g = args[0] if args else "guild"
-        name = _as_str(args[1]) if len(args) > 1 else '"Sahne"'
+        name = _as_str(args[1]) if len(args) > 1 else '"Stage"'
         return f"await {g}.create_stage_channel({name})"
     h["create_stage"] = create_stage
 
@@ -1836,7 +1993,7 @@ def _build_handlers() -> dict:
 
     def create_post(args):
         forum = args[0] if args else "forum"
-        name = _as_str(args[1]) if len(args) > 1 else '"konu"'
+        name = _as_str(args[1]) if len(args) > 1 else '"topic"'
         content = args[2] if len(args) > 2 else '""'
         return f"await {forum}.create_thread(name={name}, content={content})"
     h["create_post"] = create_post
@@ -1897,7 +2054,7 @@ def _build_handlers() -> dict:
         return f"await {args[0] if args else 'sticker'}.delete()"
     h["delete_sticker"] = delete_sticker
 
-    # ── KANAL EK ──────────────────────────────────────────────
+    # ── CHANNEL EXTRA ─────────────────────────────────────────
     def clone_channel(args):
         return f"await {args[0] if args else 'channel'}.clone()"
     h["clone_channel"] = clone_channel
@@ -1915,7 +2072,7 @@ def _build_handlers() -> dict:
     # ── AUTOMOD (simple keyword filter shortcut) ──────────────
     def automod_keyword(args):
         g = args[0] if args else "guild"
-        name = _as_str(args[1]) if len(args) > 1 else '"Filtre"'
+        name = _as_str(args[1]) if len(args) > 1 else '"Filter"'
         keywords = args[2] if len(args) > 2 else "[]"
         return (
             f"await {g}.create_automod_rule(name={name}, "
@@ -1927,7 +2084,7 @@ def _build_handlers() -> dict:
         )
     h["automod_keyword"] = automod_keyword
 
-    # ── MEMBER EK ─────────────────────────────────────────────
+    # ── MEMBER EXTRA ──────────────────────────────────────────
     def add_roles(args):
         m = args[0] if args else "member"
         roles = ", ".join(a.strip() for a in args[1:] if "=" not in a)
@@ -1956,7 +2113,7 @@ def _build_handlers() -> dict:
 
     def confirm(args):
         dest = args[0] if args else "ctx"
-        text = args[1] if len(args) > 1 else '"Emin misin?"'
+        text = args[1] if len(args) > 1 else '"Are you sure?"'
         return f"await __confirm__({dest}, {text})"
     h["confirm"] = confirm
 
@@ -1977,6 +2134,7 @@ def register(api):
     # Block commands (event handlers, text commands, slash commands, tasks)
     api.block_command("_dc_on",      _visit_dc_on)
     api.block_command("_dc_command", _visit_dc_command)
+    api.block_command("_dc_hybrid",  _visit_dc_hybrid)
     api.block_command("_dc_slash",   _visit_dc_slash)
     api.block_command("_dc_task",    _visit_dc_task)
     api.block_command("_dc_listen",  _visit_dc_listen)
@@ -1988,9 +2146,11 @@ def register(api):
     api.block_command("_dc_select",  _visit_dc_select)
     api.block_command("_dc_context_menu", _visit_dc_context_menu)
 
-    # Sub-blocks: @on_submit / @body (with body) — inside modal/select
-    api.block_command("on_submit", _noop_visit)
-    api.block_command("body",      _noop_visit)
+    # Sub-blocks: @on_submit / @body / @autocomplete (with body)
+    #   on_submit/body → inside modal/select; autocomplete → inside slash
+    api.block_command("on_submit",    _noop_visit)
+    api.block_command("body",         _noop_visit)
+    api.block_command("autocomplete", _noop_visit)
 
     # Sub-blocks: @field / @option (one-liners) — inside modal/select
     api.command("field",  _make_oneliner_parser("_dc_field"),  _noop_visit)

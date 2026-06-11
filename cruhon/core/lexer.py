@@ -170,7 +170,7 @@ class Lexer:
                 i += 1
                 continue
 
-            # @ komutu
+            # @ command
             if line[i] == "@":
                 i += 1
                 cmd, i = self._read_identifier(line, i, line_num)

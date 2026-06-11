@@ -161,7 +161,7 @@ class _CruhonData:
             f"SELECT exp FROM {self._table} WHERE scope=? AND k=?", (scope, str(k)))
         row = cur.fetchone()
         if not row:
-            return -2          # anahtar yok
+            return -2          # key not found
         if row[0] is None:
             return -1          # no expiry
         return max(0, int(row[0] - time.time()))
@@ -251,7 +251,7 @@ class _CruhonData:
 
     # ── ATOMIC ───────────────────────────────────────────────
     def setnx(self, scope, k, v):
-        """Sadece anahtar yoksa yaz (set-if-not-exists)."""
+        """Write only if the key does not exist (set-if-not-exists)."""
         if self.has(scope, k):
             return False
         self.put(scope, k, v); return True
@@ -275,7 +275,7 @@ class _CruhonData:
                 return i
         return 0
 
-    # ── BACKUP / RESTORE (JSON dosya) ────────────────────────
+    # ── BACKUP / RESTORE (JSON file) ─────────────────────────
     def backup(self, path):
         import json
         with open(path, "w", encoding="utf-8") as f:
@@ -436,8 +436,8 @@ def _build() -> dict:
     h["sismember"] = lambda a: f"{_D}.sismember('global', {a[0]}, {a[1] if len(a)>1 else 'None'})"
     h["scard"]     = lambda a: f"{_D}.scard('global', {a[0] if a else _Q})"
 
-    # ── DISCORD OTO-CONTEXT (ctx/interaction'dan id otomatik) ─
-    # @data.cset[ctx; "key"; value]  → o sunucuya yaz
+    # ── DISCORD AUTO-CONTEXT (id auto-extracted from ctx/interaction) ─
+    # @data.cset[ctx; "key"; value]  → write to that guild's scope
     h["cset"]  = lambda a: f"{_D}.put({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     h["cget"]  = lambda a: f"{_D}.get({_D}._g({_D}._ctx_gid({a[0]})), {a[1]}, {a[2] if len(a)>2 else 'None'})"
     # @data.cuset[ctx; "key"; value] → write to that user's scope
@@ -462,7 +462,7 @@ def _build() -> dict:
     # ── LEADERBOARD (for XP/level bots) ──────────────────────
     # @data.leaderboard[10]                → global top 10
     h["leaderboard"]  = lambda a: f"{_D}.leaderboard('global', {a[0] if a else '10'})"
-    # @data.gleaderboard[guild_id; 10]     → o sunucunun top 10'u
+    # @data.gleaderboard[guild_id; 10]     → that guild's top 10
     h["gleaderboard"] = lambda a: f"{_D}.leaderboard({_D}._g({a[0] if a else '0'}), {a[1] if len(a)>1 else '10'})"
     h["grank"]        = lambda a: f"{_D}.rank({_D}._g({a[0]}), {a[1] if len(a)>1 else '0'})"
 

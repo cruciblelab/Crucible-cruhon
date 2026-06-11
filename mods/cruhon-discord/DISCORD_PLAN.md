@@ -39,7 +39,10 @@ The more powerful the lower layer, the more optional the upper layers become
 | `message.author`, `guild.members` | ✅ | `@var[x; message.author]` raw Python |
 | `await msg.add_reaction("👍")` | ✅ | `@var`/`@raw` raw Python |
 | View/Button/Modal class | ✅ | `@discord.view` / `@discord.button` block commands |
+| Link buttons (`url=`) | ✅ | added via `self.add_item(...)` in view `__init__` |
 | Cog class | ✅ | `@discord.cog` block command |
+| Hybrid commands (prefix + slash) | ✅ | `@discord.hybrid` block command |
+| Slash autocomplete | ✅ | `@autocomplete[param]` sub-block inside `@discord.slash` |
 | `@discord.utils.get[...]` | ✅ | lexer_hook nested rewrite |
 
 ---

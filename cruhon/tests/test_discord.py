@@ -171,14 +171,14 @@ class TestLayer2Logic:
 
 class TestLayer3Advanced:
     def test_slash_command(self):
-        src = '@discord.slash[hello; "Selam der"; ctx]\n    @discord.respond[ctx; "hi"]\n@end'
+        src = '@discord.slash[hello; "Says hi"; ctx]\n    @discord.respond[ctx; "hi"]\n@end'
         code = _compile(src)
-        assert "@__bot__.tree.command(name='hello', description=\"Selam der\")" in code
+        assert "@__bot__.tree.command(name='hello', description=\"Says hi\")" in code
         assert "async def hello(ctx):" in code
         assert 'await ctx.response.send_message("hi")' in code
 
     def test_slash_with_param(self):
-        src = '@discord.slash[roll; "Zar"; ctx; sides]\n    @discord.respond[ctx; sides]\n@end'
+        src = '@discord.slash[roll; "Roll dice"; ctx; sides]\n    @discord.respond[ctx; sides]\n@end'
         code = _compile(src)
         assert "async def roll(ctx, sides):" in code
 
@@ -368,7 +368,7 @@ class TestFullBot:
 
 
 # ─────────────────────────────────────────────────────────────
-# NESTED NAMESPACE — full discord.py passthrough (Faz 1)
+# NESTED NAMESPACE — full discord.py passthrough
 # ─────────────────────────────────────────────────────────────
 
 class TestNestedNamespace:
@@ -408,14 +408,14 @@ class TestNestedNamespace:
 
 
 # ─────────────────────────────────────────────────────────────
-# UI — View + Button (Faz 2)
+# UI — View + Button
 # ─────────────────────────────────────────────────────────────
 
 class TestUIView:
     def test_view_class_header(self):
         src = (
             "@discord.view[ConfirmView; timeout=60]\n"
-            '    @discord.button[Onayla; style=green]\n'
+            '    @discord.button[Confirm; style=green]\n'
             '        @discord.respond[interaction; "✅"]\n'
             "    @end\n"
             "@end"
@@ -427,7 +427,7 @@ class TestUIView:
     def test_button_decorator_and_method(self):
         src = (
             "@discord.view[V]\n"
-            '    @discord.button[Onayla; style=green]\n'
+            '    @discord.button[Confirm; style=green]\n'
             '        @discord.respond[interaction; "ok"]\n'
             "    @end\n"
             "@end"
@@ -435,7 +435,7 @@ class TestUIView:
         code = _compile(src)
         assert "@discord.ui.button(label=" in code
         assert "discord.ButtonStyle.success" in code
-        assert "async def onayla(self, interaction, button):" in code
+        assert "async def confirm(self, interaction, button):" in code
         assert 'await interaction.response.send_message("ok")' in code
 
     def test_button_style_aliases(self):
@@ -481,7 +481,7 @@ class TestUIView:
 
 
 # ─────────────────────────────────────────────────────────────
-# COG + GROUP (Faz 2)
+# COG + GROUP
 # ─────────────────────────────────────────────────────────────
 
 class TestCog:
@@ -545,7 +545,7 @@ class TestGroup:
 
 
 # ─────────────────────────────────────────────────────────────
-# MODAL + SELECT (Faz 2) — alt bloklar @field/@option/@on_submit/@body
+# MODAL + SELECT — sub-blocks @field/@option/@on_submit/@body
 # ─────────────────────────────────────────────────────────────
 
 class TestModal:
@@ -838,3 +838,146 @@ class TestSlashOptions:
         code = _compile(src)
         assert "@discord.app_commands.checks.cooldown(1, 86400)" in code
         assert "choice: str" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# LINK BUTTONS — url= buttons (no callback, added via add_item)
+# ─────────────────────────────────────────────────────────────
+
+class TestLinkButtons:
+    def test_link_button_in_view(self):
+        # Link buttons have no callback, but like every block they close with @end
+        src = (
+            "@discord.view[Links]\n"
+            '    @discord.button[Docs; url="https://example.com"; emoji="📖"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class Links(discord.ui.View):" in code
+        # Link button is added in __init__, not as a decorated method
+        assert "self.add_item(discord.ui.Button(" in code
+        assert "style=discord.ButtonStyle.link" in code
+        assert 'url="https://example.com"' in code
+        assert "@discord.ui.button" not in code  # no callback decorator
+
+    def test_link_and_callback_buttons_mix(self):
+        src = (
+            "@discord.view[Mixed]\n"
+            '    @discord.button[Visit; url="https://x.io"]\n'
+            "    @end\n"
+            '    @discord.button[Press; style=green]\n'
+            '        @discord.respond[interaction; "pressed"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "self.add_item(discord.ui.Button(" in code      # link button
+        assert "async def press(self, interaction, button):" in code  # callback button
+        assert "@discord.ui.button(label=" in code
+
+    def test_button_disabled(self):
+        src = (
+            "@discord.view[V]\n"
+            '    @discord.button[X; style=red; disabled=True]\n'
+            '        @discord.respond[interaction; "x"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "disabled=True" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# HYBRID COMMANDS — work as both prefix and slash
+# ─────────────────────────────────────────────────────────────
+
+class TestHybrid:
+    def test_hybrid_basic(self):
+        src = (
+            "@discord.hybrid[userinfo; ctx; member]\n"
+            '    @discord.reply[ctx; "info"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@__bot__.hybrid_command(name='userinfo')" in code
+        assert "async def userinfo(ctx, member):" in code
+
+    def test_hybrid_with_description_and_perms(self):
+        src = (
+            '@discord.hybrid[ban; ctx; member; description="Ban a user"; perms="ban_members"]\n'
+            "    @discord.ban[member]\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert 'description="Ban a user"' in code
+        assert "@commands.has_permissions(ban_members=True)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# AUTOCOMPLETE — slash option autocomplete callbacks
+# ─────────────────────────────────────────────────────────────
+
+class TestAutocomplete:
+    def test_autocomplete_callback(self):
+        src = (
+            '@discord.slash[fruit; "Pick a fruit"; interaction]\n'
+            '    @param[name; string; "Fruit name"]\n'
+            "    @autocomplete[name]\n"
+            "        @var[opts; [\"apple\", \"banana\"]]\n"
+            "        @return[[discord.app_commands.Choice(name=o, value=o) for o in opts if current in o]]\n"
+            "    @end\n"
+            '    @discord.respond[interaction; name]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def fruit(interaction, name: str):" in code
+        assert "@fruit.autocomplete('name')" in code
+        assert "async def fruit_name_autocomplete(interaction, current: str):" in code
+
+    def test_autocomplete_does_not_pollute_body(self):
+        src = (
+            '@discord.slash[pick; "Pick"; interaction]\n'
+            '    @param[item; string; "Item"]\n'
+            "    @autocomplete[item]\n"
+            "        @return[[]]\n"
+            "    @end\n"
+            '    @discord.respond[interaction; item]\n'
+            "@end"
+        )
+        code = _compile(src)
+        # the @return inside autocomplete must live in its own function,
+        # not in the command body
+        assert "async def pick(interaction, item: str):" in code
+        assert "async def pick_item_autocomplete(interaction, current: str):" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# MESSAGING/REACTION EXTRAS — send_modal / add_reactions / *_embed
+# ─────────────────────────────────────────────────────────────
+
+class TestMessagingExtras:
+    def test_send_modal_class(self):
+        code = _compile("@discord.send_modal[interaction; FeedbackModal]")
+        assert "await interaction.response.send_modal(FeedbackModal())" in code
+
+    def test_send_modal_instance(self):
+        code = _compile("@discord.send_modal[interaction; MyModal(arg)]")
+        assert "await interaction.response.send_modal(MyModal(arg))" in code
+
+    def test_add_reactions(self):
+        code = _compile('@discord.add_reactions[msg; "👍"; "👎"; "❤️"]')
+        assert "msg.add_reaction(__e) for __e in [" in code
+        assert '"👍"' in code and '"❤️"' in code
+
+    def test_add_reactions_single(self):
+        code = _compile('@discord.add_reactions[msg; "👍"]')
+        assert "msg.add_reaction(__e) for __e in" in code
+
+    def test_edit_embed(self):
+        code = _compile("@discord.edit_embed[message; my_embed]")
+        assert "await message.edit(embed=my_embed)" in code
+
+    def test_dm_embed(self):
+        code = _compile("@discord.dm_embed[user; my_embed]")
+        assert "await user.send(embed=my_embed)" in code
