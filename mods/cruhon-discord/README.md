@@ -31,7 +31,7 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 ## Command Groups
 
 - **Setup:** `setup`, `run`, `sync_commands`, `start_task`, `stop_task`
-- **Events (block):** `on` (90+ friendly aliases), `command`, `hybrid`, `slash`, `task`, `listen`
+- **Events (block):** `on` (90+ friendly aliases), `command`, `hybrid`, `slash`, `task` (`time=`/`count=`/`wait_ready=`), `listen`, `error_handler`
 - **UI (block):** `view`, `button`, `select` (string), `user_select`, `role_select`, `channel_select`, `mentionable_select`, `modal`, `cog`, `group`, `context_menu`
 - **Messaging:** `send`, `reply`, `dm`, `respond`, `respond_ephemeral`, `send_modal`, `defer`, `followup`, `edit`, `edit_embed`, `dm_embed`, `delete`, `pin`
 - **Reactions:** `react`, `add_reactions`, `unreact`, `clear_reactions`
@@ -43,6 +43,13 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 - **Status:** `status`, `log`, `wait_for`
 - **Color:** `color` (`"#hex"` / RGB / named / decimal)
 - **Voice:** `join`, `leave`, `play`, `stop_audio`, `pause_audio`, `resume_audio`, `volume`, `is_playing`
+- **Inline checks:** `has_role`, `has_perm`, `is_bot_owner`
+- **Formatting:** `timestamp`, `jump`, `avatar`, `created`, `escape`, `escape_mentions`, `user_mention`, `channel_mention`, `role_mention`, `spoiler`, `codeblock`, `progress`, `oauth_url`, `snowflake_time`
+
+Slash groups support full option config — `@param`, `@choice`, and
+`@autocomplete` work inside `@discord.group` subcommands exactly as they do
+in top-level `@discord.slash`. Views accept `persistent=True`
+(timeout=None — pair with `custom_id=` buttons and `@discord.add_view`).
 
 For all signatures see the docstring block at the top of `__init__.py`.
 

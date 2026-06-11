@@ -1250,3 +1250,184 @@ class TestNewShortcuts:
 
     def test_is_playing(self):
         assert "is_playing()" in _compile("@var[p; @discord.is_playing[guild]]")
+
+
+# ─────────────────────────────────────────────────────────────
+# GROUP WITH OPTIONS — @param / @choice / @autocomplete in groups
+# ─────────────────────────────────────────────────────────────
+
+class TestGroupWithOptions:
+    def test_group_subcommand_typed_param(self):
+        src = (
+            '@discord.group[admin; "Admin commands"]\n'
+            '    @discord.slash[ban; "Ban a user"; interaction]\n'
+            '        @param[member; user; "User to ban"]\n'
+            '        @discord.respond[interaction; "banned"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "class AdminGroup(discord.app_commands.Group):" in code
+        assert "@admin.command(name='ban'" in code
+        assert "member: discord.Member" in code
+        assert "@discord.app_commands.describe(member=" in code
+
+    def test_group_subcommand_choices(self):
+        src = (
+            '@discord.group[cfg; "Config"]\n'
+            '    @discord.slash[mode; "Set mode"; interaction]\n'
+            '        @param[level; string; "Level"]\n'
+            "        @choice[level; Easy=easy; Hard=hard]\n"
+            '        @discord.respond[interaction; level]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@cfg.command(name='mode'" in code
+        assert "@discord.app_commands.choices(level=[" in code
+
+    def test_group_subcommand_autocomplete(self):
+        src = (
+            '@discord.group[music; "Music"]\n'
+            '    @discord.slash[play; "Play a song"; interaction]\n'
+            '        @param[song; string; "Song name"]\n'
+            "        @autocomplete[song]\n"
+            "            @return[[]]\n"
+            "        @end\n"
+            '        @discord.respond[interaction; song]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@play.autocomplete('song')" in code
+        assert "async def play_song_autocomplete(interaction, current: str):" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# TASK ADVANCED — time / count / wait_ready
+# ─────────────────────────────────────────────────────────────
+
+class TestTaskAdvanced:
+    def test_task_daily_time(self):
+        src = '@discord.task[report; time="09:30"]\n    @discord.log["daily"]\n@end'
+        code = _compile(src)
+        assert "time=__import__('datetime').time(hour=9, minute=30" in code
+        assert "tzinfo=__import__('datetime').timezone.utc" in code
+
+    def test_task_count(self):
+        src = "@discord.task[limited; minutes=1; count=5]\n    pass\n@end"
+        code = _compile(src)
+        assert "@__discord_tasks__.loop(minutes=1, count=5)" in code
+
+    def test_task_reconnect(self):
+        src = "@discord.task[t; seconds=30; reconnect=False]\n    pass\n@end"
+        assert "reconnect=False" in _compile(src)
+
+    def test_task_wait_ready(self):
+        src = "@discord.task[poller; seconds=30; wait_ready=True]\n    pass\n@end"
+        code = _compile(src)
+        assert "@poller.before_loop" in code
+        assert "await __bot__.wait_until_ready()" in code
+
+    def test_task_no_wait_ready_by_default(self):
+        src = "@discord.task[plain; minutes=5]\n    pass\n@end"
+        code = _compile(src)
+        assert "before_loop" not in code
+
+
+# ─────────────────────────────────────────────────────────────
+# ERROR HANDLER + PERSISTENT VIEW
+# ─────────────────────────────────────────────────────────────
+
+class TestErrorHandlerAndPersistence:
+    def test_error_handler(self):
+        src = (
+            "@discord.error_handler[ban; ctx; error]\n"
+            '    @discord.reply[ctx; f"Error: {error}"]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "@ban.error" in code
+        assert "async def ban_error(ctx, error):" in code
+        assert 'await ctx.reply(f"Error: {error}")' in code
+
+    def test_error_handler_default_params(self):
+        src = "@discord.error_handler[kick]\n    pass\n@end"
+        code = _compile(src)
+        assert "async def kick_error(ctx, error):" in code
+
+    def test_persistent_view(self):
+        src = (
+            "@discord.view[RoleMenu; persistent=True]\n"
+            '    @discord.button[Get Role; style=green; custom_id="role_btn"]\n'
+            '        @discord.respond[interaction; "done"]\n'
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "super().__init__(timeout=None)" in code
+        assert 'custom_id="role_btn"' in code
+
+
+# ─────────────────────────────────────────────────────────────
+# INLINE CHECKS + FORMATTING UTILS
+# ─────────────────────────────────────────────────────────────
+
+class TestInlineChecksAndFormat:
+    def test_has_role(self):
+        code = _compile('@var[ok; @discord.has_role[member; "Admin"]]')
+        assert 'discord.utils.get(member.roles, name="Admin") is not None' in code
+
+    def test_has_perm(self):
+        code = _compile("@var[ok; @discord.has_perm[member; ban_members]]")
+        assert "member.guild_permissions.ban_members" in code
+
+    def test_timestamp_default(self):
+        code = _compile("@var[t; @discord.timestamp[dt]]")
+        assert "discord.utils.format_dt(dt)" in code
+
+    def test_timestamp_relative(self):
+        code = _compile('@var[t; @discord.timestamp[dt; "R"]]')
+        assert 'discord.utils.format_dt(dt, style="R")' in code
+
+    def test_jump_and_avatar(self):
+        assert "message.jump_url" in _compile("@var[u; @discord.jump[message]]")
+        assert "user.display_avatar.url" in _compile("@var[a; @discord.avatar[user]]")
+
+    def test_escape(self):
+        assert "discord.utils.escape_markdown(text)" in _compile("@var[e; @discord.escape[text]]")
+        assert "discord.utils.escape_mentions(text)" in _compile("@var[e; @discord.escape_mentions[text]]")
+
+    def test_oauth_url(self):
+        assert "discord.utils.oauth_url(__bot__.user.id)" in _compile("@var[u; @discord.oauth_url[]]")
+
+    def test_snowflake_time(self):
+        assert "discord.utils.snowflake_time(123)" in _compile("@var[t; @discord.snowflake_time[123]]")
+
+    def test_mentions(self):
+        assert 'f"<@{uid}>"' in _compile("@var[m; @discord.user_mention[uid]]")
+        assert 'f"<#{cid}>"' in _compile("@var[m; @discord.channel_mention[cid]]")
+        assert 'f"<@&{rid}>"' in _compile("@var[m; @discord.role_mention[rid]]")
+
+    def test_spoiler_and_codeblock(self):
+        assert 'f"||{secret}||"' in _compile("@var[s; @discord.spoiler[secret]]")
+        code = _compile("@var[c; @discord.codeblock[snippet; py]]")
+        assert 'f"```py\\n{snippet}\\n```"' in code
+
+    def test_progress(self):
+        assert "__progress__(7, 10)" in _compile("@var[p; @discord.progress[7; 10]]")
+        assert "__progress__(x, total, 20)" in _compile("@var[p; @discord.progress[x; total; 20]]")
+
+    def test_progress_runtime(self):
+        # The injected runtime helper itself
+        import importlib.util
+        from pathlib import Path
+        mod_path = Path(__file__).parent.parent.parent / "mods" / "cruhon-discord" / "__init__.py"
+        spec = importlib.util.spec_from_file_location("cruhon_discord_mod", mod_path)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        assert m._cruhon_progress(5, 10) == "▰▰▰▰▰▱▱▱▱▱"
+        assert m._cruhon_progress(0, 10) == "▱" * 10
+        assert m._cruhon_progress(10, 10) == "▰" * 10
+        assert m._cruhon_progress(15, 10) == "▰" * 10   # clamped
+        assert m._cruhon_progress(1, 0) == "▱" * 10     # zero total → no crash

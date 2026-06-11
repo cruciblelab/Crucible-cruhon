@@ -1,5 +1,5 @@
 """
-cruhon-discord v1.2.0
+cruhon-discord v1.3.0
 ======================
 Discord bot plugin for Cruhon.
 "Even people who don't know coding can quickly and easily do whatever they want."
@@ -30,8 +30,13 @@ Discord bot plugin for Cruhon.
   @discord.hybrid[userinfo; ctx; member]            — BOTH prefix and slash
   @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
   @discord.slash[roll; "Roll dice"; ctx; sides]
-  @discord.task[cleanup; minutes=30]   — background task
-  @discord.listen[message; msg]        — additional event listener
+  @discord.task[cleanup; minutes=30]            — background task
+  @discord.task[report; time="09:30"]           — daily at 09:30 UTC
+  @discord.task[poll; seconds=30; wait_ready=True; count=5; reconnect=False]
+  @discord.listen[message; msg]                 — additional event listener
+  @discord.error_handler[ban; ctx; error]       — per-command error handler
+      @discord.reply[ctx; f"Error: {error}"]
+  @end
 
   Slash autocomplete (inside @discord.slash):
   @discord.slash[fruit; "Pick fruit"; interaction]
@@ -163,6 +168,19 @@ Discord bot plugin for Cruhon.
   @discord.group[admin; "Admin"] ... @end
   @discord.context_menu[Info; user] ... @end
 
+━━━ INLINE CHECKS & FORMATTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @if[@discord.has_role[member; "Admin"]]       — bool: has the role?
+  @if[@discord.has_perm[member; ban_members]]   — bool: has the permission?
+  @var[t; @discord.timestamp[dt; "R"]]    — Discord timestamp (<t:..:R>)
+  @var[u; @discord.jump[message]]         — message.jump_url
+  @var[a; @discord.avatar[user]]          — display avatar URL
+  @var[e; @discord.escape[text]]          — escape markdown
+  @var[m; @discord.user_mention[uid]]     — "<@id>" (also channel_/role_mention)
+  @var[s; @discord.spoiler[text]]         — "||text||"
+  @var[c; @discord.codeblock[code; py]]   — "```py\\n...\\n```"
+  @var[p; @discord.progress[7; 10]]       — "▰▰▰▰▰▰▰▱▱▱" progress bar
+  @var[u; @discord.oauth_url[]]           — bot invite URL
+
 ━━━ COLOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @var[c; @discord.color["#3498db"]]     — from hex string
   @var[c; @discord.color[52; 152; 219]]  — from RGB
@@ -211,7 +229,7 @@ import re
 _BLOCK_CMDS = {"on", "command", "hybrid", "slash", "task", "listen",
                "view", "button", "cog", "group", "modal",
                "select", "user_select", "role_select", "channel_select", "mentionable_select",
-               "context_menu"}
+               "context_menu", "error_handler"}
 
 # Friendly button style names → discord.ButtonStyle member (comprehensive)
 _BUTTON_STYLES = {
@@ -567,34 +585,14 @@ def _val(v: str) -> str:
     return repr(v)
 
 
-def _visit_dc_slash(transpiler, node):
+def _parse_slash_config(node):
     """
-    Basic:
-      @discord.slash[hello; "Say hi"; interaction]
-      @discord.slash[roll; "Roll dice"; interaction; sides]
-
-    With typed options and choices:
-      @discord.slash[ban; "Ban a user"; interaction]
-          @param[member; user; "User to ban"]            # required by default
-          @param[reason; string; "Reason"; optional]     # optional
-          @choice[reason; Spam=spam; Abuse=abuse]        # restrict choices
-          @discord.respond[interaction; f"Banned {member}"]
-      @end
-
-    Emits @__bot__.tree.command + @describe + @choices + typed signature.
+    Split a slash command body into option config and real body.
+    Returns (typed_params, describes, choices, autocompletes, body_children).
+    Shared by @discord.slash and @discord.group subcommands.
     """
     from cruhon.core.ast_nodes import PluginBlockNode
 
-    args = node.args
-    kwargs = node.kwargs
-    name = args[0].strip() if args else "slash_cmd"
-    description = args[1].strip() if len(args) > 1 else f'"{args[0].strip() if args else "command"}"'
-    ctx = args[2].strip() if len(args) > 2 else "interaction"
-    extra_params = [a.strip() for a in args[3:]]
-
-    indent = "    " * transpiler._indent
-
-    # Split body into @param / @choice / @autocomplete config vs. real command body
     typed_params = []     # (pname, anno, required)
     describes = {}        # pname -> description expr
     choices = {}          # pname -> [(label, value), ...]
@@ -638,6 +636,38 @@ def _visit_dc_slash(transpiler, node):
             choices[cname] = clist
         else:
             body_children.append(child)
+    return typed_params, describes, choices, autocompletes, body_children
+
+
+def _render_slash(transpiler, node, target="__bot__.tree"):
+    """
+    Render a slash command. `target` is the decorator owner:
+    "__bot__.tree" for top-level, the group variable name for group subcommands.
+
+    Basic:
+      @discord.slash[hello; "Say hi"; interaction]
+      @discord.slash[roll; "Roll dice"; interaction; sides]
+
+    With typed options and choices:
+      @discord.slash[ban; "Ban a user"; interaction]
+          @param[member; user; "User to ban"]            # required by default
+          @param[reason; string; "Reason"; optional]     # optional
+          @choice[reason; Spam=spam; Abuse=abuse]        # restrict choices
+          @discord.respond[interaction; f"Banned {member}"]
+      @end
+
+    Emits @<target>.command + @describe + @choices + typed signature.
+    """
+    args = node.args
+    kwargs = node.kwargs
+    name = args[0].strip() if args else "slash_cmd"
+    description = args[1].strip() if len(args) > 1 else f'"{args[0].strip() if args else "command"}"'
+    ctx = args[2].strip() if len(args) > 2 else "interaction"
+    extra_params = [a.strip() for a in args[3:]]
+
+    indent = "    " * transpiler._indent
+
+    typed_params, describes, choices, autocompletes, body_children = _parse_slash_config(node)
 
     # Build signature: ctx, untyped positional params, then typed params
     sig = [ctx] + extra_params
@@ -645,7 +675,7 @@ def _visit_dc_slash(transpiler, node):
         sig.append(f"{pname}: {anno}" if required else f"{pname}: {anno} = None")
 
     # Decorators
-    deco = [f"{indent}@__bot__.tree.command(name={name!r}, description={description})"]
+    deco = [f"{indent}@{target}.command(name={name!r}, description={description})"]
     deco += _check_decorators(kwargs, indent, "slash")
     if describes:
         parts = ", ".join(f"{n}={d}" for n, d in describes.items())
@@ -684,6 +714,11 @@ def _visit_dc_slash(transpiler, node):
     return "\n".join(lines)
 
 
+def _visit_dc_slash(transpiler, node):
+    """Top-level @discord.slash → @__bot__.tree.command."""
+    return _render_slash(transpiler, node, "__bot__.tree")
+
+
 def _visit_dc_context_menu(transpiler, node):
     """
     @discord.context_menu[Info; user]      (type: user | message)
@@ -710,7 +745,11 @@ def _visit_dc_task(transpiler, node):
     """
     @discord.task[cleanup; minutes=30]
     @discord.task[heartbeat; seconds=10]
+    @discord.task[daily_report; time="09:30"]      — run daily at 09:30 (UTC)
+    @discord.task[once; minutes=1; count=5]        — stop after 5 runs
+    @discord.task[poller; seconds=30; wait_ready=True] — wait until bot is ready
     → @__discord_tasks__.loop(...) + async def <name>():
+      (+ before_loop waiting for ready when wait_ready=True)
     """
     args = node.args
     kwargs = node.kwargs
@@ -718,7 +757,15 @@ def _visit_dc_task(transpiler, node):
     func_name = args[0].strip() if args else "background_task"
 
     # Time interval — kwarg takes priority, then second positional arg (minutes)
-    if "minutes" in kwargs:
+    if "time" in kwargs:
+        # time="09:30" → daily at that wall-clock time (UTC)
+        raw = kwargs["time"].strip().strip("\"'")
+        hh, _, mm = raw.partition(":")
+        loop_kw = (f"time=__import__('datetime').time("
+                   f"hour={int(hh) if hh.isdigit() else 0}, "
+                   f"minute={int(mm) if mm.isdigit() else 0}, "
+                   f"tzinfo=__import__('datetime').timezone.utc)")
+    elif "minutes" in kwargs:
         loop_kw = f"minutes={kwargs['minutes']}"
     elif "seconds" in kwargs:
         loop_kw = f"seconds={kwargs['seconds']}"
@@ -729,15 +776,50 @@ def _visit_dc_task(transpiler, node):
     else:
         loop_kw = "minutes=5"
 
+    extra_loop = []
+    if "count" in kwargs:
+        extra_loop.append(f"count={kwargs['count'].strip()}")
+    if "reconnect" in kwargs:
+        extra_loop.append(f"reconnect={kwargs['reconnect'].strip()}")
+    loop_args = ", ".join([loop_kw] + extra_loop)
+
     indent = "    " * transpiler._indent
     body_code = transpiler._block(node.body)
 
     lines = [
-        f"{indent}@__discord_tasks__.loop({loop_kw})",
+        f"{indent}@__discord_tasks__.loop({loop_args})",
         f"{indent}async def {func_name}():",
         body_code if body_code.strip() else f"{indent}    pass",
     ]
+
+    # wait_ready=True → don't start ticking until the bot is connected
+    if kwargs.get("wait_ready", "").strip() in ("True", "true", "1"):
+        lines.append(f"{indent}@{func_name}.before_loop")
+        lines.append(f"{indent}async def __{func_name}_before():")
+        lines.append(f"{indent}    await __bot__.wait_until_ready()")
+
     return "\n".join(lines)
+
+
+def _visit_dc_error_handler(transpiler, node):
+    """
+    @discord.error_handler[ban; ctx; error]      — per-command error handler
+        @discord.reply[ctx; f"Error: {error}"]
+    @end
+    → @ban.error + async def ban_error(ctx, error):
+    Works for both prefix commands and slash commands (same decorator name).
+    """
+    args = node.args
+    cmd = args[0].strip() if args else "command"
+    params = [a.strip() for a in args[1:]] or ["ctx", "error"]
+
+    indent = "    " * transpiler._indent
+    body_code = transpiler._block(node.body)
+    return "\n".join([
+        f"{indent}@{cmd}.error",
+        f"{indent}async def {cmd}_error({', '.join(params)}):",
+        body_code if body_code.strip() else f"{indent}    pass",
+    ])
 
 
 def _visit_dc_listen(transpiler, node):
@@ -847,6 +929,10 @@ def _visit_dc_view(transpiler, node):
 
     name = (node.args[0].strip().strip("\"'")) if node.args else "MyView"
     timeout = node.kwargs.get("timeout", "180").strip()
+    # persistent=True → timeout=None (register with @discord.add_view at startup;
+    # buttons should carry a custom_id so they survive restarts)
+    if node.kwargs.get("persistent", "").strip() in ("True", "true", "1"):
+        timeout = "None"
 
     base = "    " * transpiler._indent
 
@@ -996,19 +1082,11 @@ def _visit_dc_group(transpiler, node):
         f"{base}    pass",
         f"{base}{name} = {cls}(name={name!r}, description={desc})",
     ]
-    # Bind sub-commands with @<group>.command decorator
+    # Bind sub-commands with the @<group>.command decorator — full slash
+    # rendering, so @param / @choice / @autocomplete work inside groups too.
     for child in node.body:
         if isinstance(child, type(node)) and child.plugin_name == "_dc_slash":
-            cargs = child.args
-            cname = cargs[0].strip() if cargs else "sub"
-            cdesc = cargs[1].strip() if len(cargs) > 1 else repr(cname)
-            ctx = cargs[2].strip() if len(cargs) > 2 else "interaction"
-            extra = [a.strip() for a in cargs[3:]]
-            params = ", ".join([ctx] + extra)
-            body_code = transpiler._block(child.body)
-            lines.append(f"{base}@{name}.command(name={cname!r}, description={cdesc})")
-            lines.append(f"{base}async def {cname}({params}):")
-            lines.append(body_code if body_code.strip() else f"{base}    pass")
+            lines.append(_render_slash(transpiler, child, name))
     return "\n".join(lines)
 
 
@@ -1398,6 +1476,17 @@ async def _cruhon_confirm(dest, text="Are you sure?", timeout=60):
     except asyncio.TimeoutError:
         pass
     return res["v"]
+
+
+def _cruhon_progress(value, total, length=10, filled="▰", empty="▱"):
+    """Text progress bar — injected as __progress__ via api.inject.
+    __progress__(7, 10) → '▰▰▰▰▰▰▰▱▱▱'"""
+    try:
+        ratio = float(value) / float(total) if total else 0.0
+    except (TypeError, ZeroDivisionError):
+        ratio = 0.0
+    n = int(round(length * max(0.0, min(1.0, ratio))))
+    return filled * n + empty * (length - n)
 
 
 def _embed_inline_handler(parser):
@@ -2437,6 +2526,101 @@ def _build_handlers() -> dict:
         return f"({guild}.voice_client is not None and {guild}.voice_client.is_playing())"
     h["is_playing"] = is_playing
 
+    # ── INLINE CHECKS (boolean expressions) ───────────────────
+    def has_role(args):
+        # @if[@discord.has_role[member; "Admin"]]
+        member = args[0] if args else "member"
+        role = args[1] if len(args) > 1 else '"member"'
+        return f"(discord.utils.get({member}.roles, name={role}) is not None)"
+    h["has_role"] = has_role
+
+    def has_perm(args):
+        # @if[@discord.has_perm[member; ban_members]]
+        member = args[0] if args else "member"
+        perm = (args[1].strip().strip("\"'")) if len(args) > 1 else "administrator"
+        return f"{member}.guild_permissions.{perm}"
+    h["has_perm"] = has_perm
+
+    def is_bot_owner(args):
+        # @var[ok; await @discord.is_bot_owner[ctx.author]]  (coroutine)
+        user = args[0] if args else "user"
+        return f"await __bot__.is_owner({user})"
+    h["is_bot_owner"] = is_bot_owner
+
+    # ── FORMATTING & UTILS ────────────────────────────────────
+    def timestamp(args):
+        # @discord.timestamp[dt]       → <t:...:f>
+        # @discord.timestamp[dt; "R"]  → <t:...:R> (relative: "3 minutes ago")
+        dt = args[0] if args else "dt"
+        if len(args) > 1:
+            style = args[1].strip().strip("\"'")
+            return f'discord.utils.format_dt({dt}, style="{style}")'
+        return f"discord.utils.format_dt({dt})"
+    h["timestamp"] = timestamp
+
+    def jump(args):
+        return f"{args[0] if args else 'message'}.jump_url"
+    h["jump"] = jump
+
+    def avatar(args):
+        return f"{args[0] if args else 'user'}.display_avatar.url"
+    h["avatar"] = avatar
+
+    def created(args):
+        return f"{args[0] if args else 'obj'}.created_at"
+    h["created"] = created
+
+    def snowflake_time(args):
+        return f"discord.utils.snowflake_time({args[0] if args else '0'})"
+    h["snowflake_time"] = snowflake_time
+
+    def escape(args):
+        return f"discord.utils.escape_markdown({args[0] if args else 'text'})"
+    h["escape"] = escape
+
+    def escape_mentions(args):
+        return f"discord.utils.escape_mentions({args[0] if args else 'text'})"
+    h["escape_mentions"] = escape_mentions
+
+    def oauth_url(args):
+        if args:
+            return f"discord.utils.oauth_url({args[0]})"
+        return "discord.utils.oauth_url(__bot__.user.id)"
+    h["oauth_url"] = oauth_url
+
+    def user_mention(args):
+        return 'f"<@{' + (args[0].strip() if args else "uid") + '}>"'
+    h["user_mention"] = user_mention
+
+    def channel_mention(args):
+        return 'f"<#{' + (args[0].strip() if args else "cid") + '}>"'
+    h["channel_mention"] = channel_mention
+
+    def role_mention(args):
+        return 'f"<@&{' + (args[0].strip() if args else "rid") + '}>"'
+    h["role_mention"] = role_mention
+
+    def spoiler(args):
+        return 'f"||{' + (args[0].strip() if args else "text") + '}||"'
+    h["spoiler"] = spoiler
+
+    def codeblock(args):
+        # @discord.codeblock[code_str]  /  @discord.codeblock[code_str; py]
+        text = args[0].strip() if args else "text"
+        lang = (args[1].strip().strip("\"'")) if len(args) > 1 else ""
+        return 'f"```' + lang + '\\n{' + text + '}\\n```"'
+    h["codeblock"] = codeblock
+
+    def progress(args):
+        # @discord.progress[value; total]  → "▰▰▰▱▱▱▱▱▱▱"
+        # @discord.progress[value; total; 20]  → 20-char bar
+        value = args[0] if args else "0"
+        total = args[1] if len(args) > 1 else "100"
+        if len(args) > 2:
+            return f"__progress__({value}, {total}, {args[2].strip()})"
+        return f"__progress__({value}, {total})"
+    h["progress"] = progress
+
     return h
 
 
@@ -2469,6 +2653,7 @@ def register(api):
     api.block_command("_dc_channel_select",     _visit_dc_channel_select)
     api.block_command("_dc_mentionable_select", _visit_dc_mentionable_select)
     api.block_command("_dc_context_menu",       _visit_dc_context_menu)
+    api.block_command("_dc_error_handler",      _visit_dc_error_handler)
 
     # Sub-blocks: @on_submit / @body / @autocomplete (with body)
     #   on_submit/body → inside modal/select; autocomplete → inside slash
@@ -2496,6 +2681,7 @@ def register(api):
     # Lazy-imports discord so transpiling works without discord.py installed
     api.inject("__embed__", _cruhon_embed_helper)
 
-    # Power runtime helpers — pagination & confirm dialog
+    # Power runtime helpers — pagination, confirm dialog, progress bar
     api.inject("__paginate__", _cruhon_paginate)
     api.inject("__confirm__", _cruhon_confirm)
+    api.inject("__progress__", _cruhon_progress)
