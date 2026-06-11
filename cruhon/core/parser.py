@@ -53,6 +53,8 @@ class Parser:
         self._source_lines: list = []
         # Module aliases declared in the current parse — cleared each parse()
         self._module_aliases: set = set()
+        # Pending decorators accumulated before @func / @class
+        self._pending_decorators: list = []
         self._register_core_commands()
 
     # ── Mod API ───────────────────────────────────────────────
@@ -124,12 +126,13 @@ class Parser:
             "class":   self._parse_class,
             "try":     self._parse_try,
             "async":   self._parse_async_func,
-            "repeat":  self._parse_repeat,
-            "raw":     self._parse_raw,
-            "with":    self._parse_with,
-            "match":   self._parse_match,
-            "module":  self._parse_module,
-            "foreach": self._parse_foreach,
+            "repeat":    self._parse_repeat,
+            "raw":       self._parse_raw,
+            "with":      self._parse_with,
+            "match":     self._parse_match,
+            "module":    self._parse_module,
+            "foreach":   self._parse_foreach,
+            "decorator": self._parse_decorator,
         }
         self._commands.update({
             "export": self._parse_export,
@@ -365,15 +368,32 @@ class Parser:
                 raise ParseError("@lambda requires [body] or [params; body]", line)
 
             elif cmd == "comp":
-                # @comp[expr; var; iterable]  or  @comp[expr; var; iterable; condition]
+                # @comp[expr; var; iterable]
+                # @comp[expr; var; iterable; condition]
+                # @comp[expr; var; iterable; type=dict|set|gen]
+                # @comp[expr; var; iterable; condition; type=dict|set|gen]
                 self.advance()  # @comp
                 args = self.parse_args()
                 if len(args) < 3:
-                    raise ParseError("@comp requires [expr; var; iterable] or [expr; var; iterable; cond]", line)
+                    raise ParseError("@comp requires [expr; var; iterable]", line)
                 expr, var, iterable = args[0], args[1], args[2]
-                if len(args) >= 4:
-                    return f"[{expr} for {var} in {iterable} if {args[3]}]"
-                return f"[{expr} for {var} in {iterable}]"
+                # Extract type= kwarg and optional condition from remaining args
+                comp_type = "list"
+                cond = None
+                for a in args[3:]:
+                    stripped = a.strip()
+                    if stripped.startswith("type="):
+                        comp_type = stripped[5:].strip().strip("\"'")
+                    else:
+                        cond = stripped
+                core = f"{expr} for {var} in {iterable}" + (f" if {cond}" if cond else "")
+                if comp_type == "dict":
+                    return "{" + core + "}"
+                elif comp_type == "set":
+                    return "{" + core + "}"
+                elif comp_type in ("gen", "generator"):
+                    return f"({core})"
+                return f"[{core}]"
 
             elif cmd == "pipe":
                 # @pipe[value; fn1; fn2; fn3] → fn3(fn2(fn1(value)))
@@ -809,12 +829,20 @@ class Parser:
         if self.current.type == "INDENT":
             self.advance()
 
-        body = self._parse_block()
+        body = self._parse_block(stop_at=("end", "else"))
+        else_body: list = []
+
+        if self.current.type == "AT_CMD" and self.current.value == "else":
+            self.advance()
+            self.skip_newlines()
+            if self.current.type == "INDENT":
+                self.advance()
+            else_body = self._parse_block(stop_at=("end",))
 
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return ForNode(var=args[0], iterable=args[1], body=body, line=line)
+        return ForNode(var=args[0], iterable=args[1], body=body, else_body=else_body, line=line)
 
     def _parse_while(self) -> WhileNode:
         line = self.current.line
@@ -825,12 +853,20 @@ class Parser:
         if self.current.type == "INDENT":
             self.advance()
 
-        body = self._parse_block()
+        body = self._parse_block(stop_at=("end", "else"))
+        else_body: list = []
+
+        if self.current.type == "AT_CMD" and self.current.value == "else":
+            self.advance()
+            self.skip_newlines()
+            if self.current.type == "INDENT":
+                self.advance()
+            else_body = self._parse_block(stop_at=("end",))
 
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return WhileNode(condition=condition, body=body, line=line)
+        return WhileNode(condition=condition, body=body, else_body=else_body, line=line)
 
     def _parse_repeat(self) -> RepeatNode:
         line = self.current.line
@@ -851,6 +887,16 @@ class Parser:
 
         return RepeatNode(count=count, body=body, line=line)
 
+    def _parse_decorator(self):
+        # @decorator[fn]  or  @decorator[fn1; fn2; ...]
+        # Accumulates into _pending_decorators; consumed by the next @func/@class.
+        line = self.current.line
+        self.advance()  # @decorator
+        args = self.parse_args()
+        for a in args:
+            self._pending_decorators.append(a.strip())
+        return None   # no AST node emitted — decorators attach to the next def/class
+
     def _parse_func(self) -> FuncNode:
         line = self.current.line
         self.advance()  # @func
@@ -860,6 +906,8 @@ class Parser:
 
         name = args[0]
         params = list(args[1:])
+        decs = self._pending_decorators[:]
+        self._pending_decorators.clear()
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -870,7 +918,7 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return FuncNode(name=name, params=params, body=body, line=line)
+        return FuncNode(name=name, params=params, body=body, line=line, decorators=decs)
 
     def _parse_async_func(self) -> FuncNode:
         line = self.current.line
@@ -881,6 +929,8 @@ class Parser:
 
         name = args[0]
         params = list(args[1:])
+        decs = self._pending_decorators[:]
+        self._pending_decorators.clear()
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -891,7 +941,7 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return FuncNode(name=name, params=params, body=body, is_async=True, line=line)
+        return FuncNode(name=name, params=params, body=body, is_async=True, line=line, decorators=decs)
 
     def _parse_class(self) -> ClassNode:
         line = self.current.line
@@ -902,6 +952,8 @@ class Parser:
 
         name = args[0]
         parent = args[1] if len(args) > 1 else None
+        decs = self._pending_decorators[:]
+        self._pending_decorators.clear()
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -912,7 +964,7 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return ClassNode(name=name, parent=parent, body=body, line=line)
+        return ClassNode(name=name, parent=parent, body=body, line=line, decorators=decs)
 
     def _parse_try(self) -> TryNode:
         line = self.current.line

@@ -3899,3 +3899,151 @@ class TestSwap:
     def test_swap_preserves_values(self):
         ns = _run_ns('@var[x; "hello"]\n@var[y; "world"]\n@swap[x; y]')
         assert ns["x"] == "world" and ns["y"] == "hello"
+
+
+# ─────────────────────────────────────────────────────────────
+# FOR / WHILE ELSE CLAUSE
+# ─────────────────────────────────────────────────────────────
+
+class TestForWhileElse:
+    def test_for_else_codegen(self):
+        src = "@for[x; items]\n    pass\n@else\n    pass\n@end"
+        code = _compile(src)
+        assert "for x in items:" in code
+        assert "else:" in code
+
+    def test_for_else_runs_when_not_broken(self):
+        ns = _run_ns(
+            "@var[found; False]\n"
+            "@for[x; [1, 2, 3]]\n"
+            "    pass\n"
+            "@else\n"
+            "    @var[found; True]\n"
+            "@end"
+        )
+        assert ns["found"] is True
+
+    def test_for_else_skipped_on_break(self):
+        ns = _run_ns(
+            "@var[found; False]\n"
+            "@for[x; [1, 2, 3]]\n"
+            "    @break\n"
+            "@else\n"
+            "    @var[found; True]\n"
+            "@end"
+        )
+        assert ns["found"] is False
+
+    def test_while_else_codegen(self):
+        src = "@var[n; 0]\n@while[n < 3]\n    @var[n; n + 1]\n@else\n    pass\n@end"
+        code = _compile(src)
+        assert "while n < 3:" in code
+        assert "else:" in code
+
+    def test_while_else_runs_normally(self):
+        ns = _run_ns(
+            "@var[n; 0]\n"
+            "@var[done; False]\n"
+            "@while[n < 2]\n"
+            "    @var[n; n + 1]\n"
+            "@else\n"
+            "    @var[done; True]\n"
+            "@end"
+        )
+        assert ns["done"] is True
+
+
+# ─────────────────────────────────────────────────────────────
+# @comp — DICT / SET / GENERATOR
+# ─────────────────────────────────────────────────────────────
+
+class TestCompTypes:
+    def test_comp_list_default(self):
+        code = _compile("@var[r; @comp[x*2; x; range(5)]]")
+        assert "[x*2 for x in range(5)]" in code
+
+    def test_comp_list_with_cond(self):
+        code = _compile("@var[r; @comp[x; x; range(10); x % 2 == 0]]")
+        assert "[x for x in range(10) if x % 2 == 0]" in code
+
+    def test_comp_dict(self):
+        code = _compile("@var[d; @comp[k: v; k, v; pairs; type=dict]]")
+        assert "{k: v for k, v in pairs}" in code
+
+    def test_comp_dict_with_cond(self):
+        code = _compile("@var[d; @comp[k: v; k, v; pairs; v > 0; type=dict]]")
+        assert "{k: v for k, v in pairs if v > 0}" in code
+
+    def test_comp_set(self):
+        code = _compile("@var[s; @comp[x; x; items; type=set]]")
+        assert "{x for x in items}" in code
+
+    def test_comp_generator(self):
+        code = _compile("@var[g; @comp[x; x; range(10); type=gen]]")
+        assert "(x for x in range(10))" in code
+
+    def test_comp_dict_runs(self):
+        ns = _run_ns("@var[d; @comp[k: k*2; k; [1, 2, 3]; type=dict]]")
+        assert ns["d"] == {1: 2, 2: 4, 3: 6}
+
+    def test_comp_set_runs(self):
+        ns = _run_ns("@var[s; @comp[x % 3; x; range(6); type=set]]")
+        assert ns["s"] == {0, 1, 2}
+
+    def test_comp_generator_runs(self):
+        ns = _run_ns("@var[g; @comp[x; x; range(4); type=gen]]\n@var[r; list(g)]")
+        assert ns["r"] == [0, 1, 2, 3]
+
+
+# ─────────────────────────────────────────────────────────────
+# @decorator
+# ─────────────────────────────────────────────────────────────
+
+class TestDecorator:
+    def test_single_decorator_on_func(self):
+        src = "@decorator[staticmethod]\n@func[greet]\n    pass\n@end"
+        code = _compile(src)
+        assert "@staticmethod" in code
+        assert "def greet():" in code
+
+    def test_decorator_with_args(self):
+        src = "@decorator[lru_cache(maxsize=128)]\n@func[fib; n]\n    @return[n]\n@end"
+        code = _compile(src)
+        assert "@lru_cache(maxsize=128)" in code
+        assert "def fib(n):" in code
+
+    def test_multiple_decorators(self):
+        src = (
+            "@decorator[classmethod]\n"
+            "@decorator[some_wrap]\n"
+            "@func[factory; cls]\n"
+            "    pass\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@classmethod" in code
+        assert "@some_wrap" in code
+        assert "def factory(cls):" in code
+
+    def test_decorator_on_class(self):
+        src = "@decorator[dataclass]\n@class[Point]\n    pass\n@end"
+        code = _compile(src)
+        assert "@dataclass" in code
+        assert "class Point:" in code
+
+    def test_decorator_on_async_func(self):
+        src = "@decorator[my_dec]\n@async[worker; x]\n    @return[x]\n@end"
+        code = _compile(src)
+        assert "@my_dec" in code
+        assert "async def worker(x):" in code
+
+    def test_decorator_runs(self):
+        ns = _run_ns(
+            "@import[functools]\n"
+            "@decorator[functools.lru_cache(maxsize=None)]\n"
+            "@func[double; x]\n"
+            "    @return[x * 2]\n"
+            "@end\n"
+            "@var[r; double(7)]"
+        )
+        assert ns["r"] == 14

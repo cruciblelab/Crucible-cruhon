@@ -592,11 +592,17 @@ class Transpiler:
     def visit_ForNode(self, node: ForNode) -> str:
         lines = [self._line(f"for {node.var} in {node.iterable}:", node.line)]
         lines.append(self._block(node.body))
+        if node.else_body:
+            lines.append(self._line("else:", node.line))
+            lines.append(self._block(node.else_body))
         return "\n".join(lines)
 
     def visit_WhileNode(self, node: WhileNode) -> str:
         lines = [self._line(f"while {node.condition}:", node.line)]
         lines.append(self._block(node.body))
+        if node.else_body:
+            lines.append(self._line("else:", node.line))
+            lines.append(self._block(node.else_body))
         return "\n".join(lines)
 
     def visit_RepeatNode(self, node: RepeatNode) -> str:
@@ -612,13 +618,15 @@ class Transpiler:
             params = params[:-1]
         params_str = ", ".join(params)
         prefix = "async " if node.is_async else ""
-        lines = [self._line(f"{prefix}def {node.name}({params_str}){return_type}:", node.line)]
+        lines = [self._line(f"@{d}", node.line) for d in (node.decorators or [])]
+        lines.append(self._line(f"{prefix}def {node.name}({params_str}){return_type}:", node.line))
         lines.append(self._block(node.body))
         return "\n".join(lines)
 
     def visit_ClassNode(self, node: ClassNode) -> str:
         parent = f"({node.parent})" if node.parent else ""
-        lines = [self._line(f"class {node.name}{parent}:", node.line)]
+        lines = [self._line(f"@{d}", node.line) for d in (node.decorators or [])]
+        lines.append(self._line(f"class {node.name}{parent}:", node.line))
         lines.append(self._block(node.body))
         return "\n".join(lines)
 

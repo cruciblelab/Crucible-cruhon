@@ -183,6 +183,7 @@ class ForNode(Node):
     var: str = ""
     iterable: str = ""
     body: List[Node] = field(default_factory=list)
+    else_body: List[Node] = field(default_factory=list)
 
 
 @dataclass
@@ -190,6 +191,7 @@ class WhileNode(Node):
     """@while[condition]"""
     condition: str = ""
     body: List[Node] = field(default_factory=list)
+    else_body: List[Node] = field(default_factory=list)
 
 
 @dataclass
@@ -206,6 +208,7 @@ class FuncNode(Node):
     params: List[str] = field(default_factory=list)
     body: List[Node] = field(default_factory=list)
     is_async: bool = False
+    decorators: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -214,6 +217,7 @@ class ClassNode(Node):
     name: str = ""
     parent: Optional[str] = None
     body: List[Node] = field(default_factory=list)
+    decorators: List[str] = field(default_factory=list)
 
 
 @dataclass
