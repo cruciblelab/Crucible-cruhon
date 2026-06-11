@@ -1,5 +1,5 @@
 """
-cruhon-discord v1.3.0
+cruhon-discord v1.4.0
 ======================
 Discord bot plugin for Cruhon.
 "Even people who don't know coding can quickly and easily do whatever they want."
@@ -121,6 +121,10 @@ Discord bot plugin for Cruhon.
   @discord.create_text[guild; "channel-name"]
   @discord.create_voice[guild; "voice-channel"]
   @discord.delete_channel[channel]
+  @discord.lock_channel[channel]                — deny send_messages for @everyone
+  @discord.lock_channel[channel; role]          — deny send_messages for a role
+  @discord.unlock_channel[channel]              — restore send_messages for @everyone
+  @discord.unlock_channel[channel; role]        — restore for a specific role
 
 ━━━ LOOKUP (inline expression) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @var[m; @discord.get_member[guild; 123456789]]
@@ -210,6 +214,22 @@ Discord bot plugin for Cruhon.
     event_create / event_update / event_delete / event_user_add / event_user_remove
     poll_vote_add / poll_vote_remove / raw_poll_vote_add / raw_poll_vote_remove
     automod_action / automod_rule_create / automod_rule_update / automod_rule_delete
+
+━━━ AUTOMOD RULE MANAGEMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.automod_keyword[guild; "name"; ["bad", "words"]]
+      — shortcut: creates a keyword-block rule in one line
+  @discord.create_automod_rule[guild; name=...; event_type=...; trigger=...; actions=...]
+      — full control: all params passed as kwargs to guild.create_automod_rule()
+  @discord.edit_automod_rule[rule; name=...; enabled=True; actions=...]
+  @discord.delete_automod_rule[rule]
+  @discord.fetch_automod_rules[guild]           — returns list of AutoModRule
+
+━━━ SOUNDBOARD (discord.py ≥ 2.4) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @discord.fetch_soundboard_sounds[guild]
+  @discord.create_soundboard_sound[guild; "name"; sound_bytes]
+  @discord.create_soundboard_sound[guild; "name"; sound_bytes; volume=1.0; emoji_name="🔊"]
+  @discord.edit_soundboard_sound[sound; name=...; volume=...; emoji_id=...]
+  @discord.delete_soundboard_sound[sound]
     app_error (app_command_error)
     connect / disconnect / resumed / shard_ready
     raw_reaction_add / raw_reaction_remove / raw_reaction_clear
@@ -2178,6 +2198,20 @@ def _build_handlers() -> dict:
         return _call(ch, "set_permissions", [target], args, 2)
     h["set_permissions"] = set_permissions
 
+    def lock_channel(args):
+        # @discord.lock_channel[channel]              — locks for @everyone
+        # @discord.lock_channel[channel; role]        — locks for a specific role
+        ch = args[0] if args else "channel"
+        target = args[1] if len(args) > 1 else f"{ch}.guild.default_role"
+        return f"await {ch}.set_permissions({target}, send_messages=False)"
+    h["lock_channel"] = lock_channel
+
+    def unlock_channel(args):
+        ch = args[0] if args else "channel"
+        target = args[1] if len(args) > 1 else f"{ch}.guild.default_role"
+        return f"await {ch}.set_permissions({target}, send_messages=True)"
+    h["unlock_channel"] = unlock_channel
+
     def set_slowmode(args):
         ch = args[0] if args else "channel"
         secs = args[1] if len(args) > 1 else "0"
@@ -2392,6 +2426,28 @@ def _build_handlers() -> dict:
             f"type=discord.AutoModRuleActionType.block_message)])"
         )
     h["automod_keyword"] = automod_keyword
+
+    def create_automod_rule(args):
+        # @discord.create_automod_rule[guild; name=...; event_type=...; trigger=...; actions=...]
+        # All config via kwargs — passes them directly to guild.create_automod_rule()
+        g = args[0] if args else "guild"
+        return _call(g, "create_automod_rule", [], args, 1)
+    h["create_automod_rule"] = create_automod_rule
+
+    def edit_automod_rule(args):
+        # @discord.edit_automod_rule[rule; name=...; enabled=...; actions=...]
+        rule = args[0] if args else "rule"
+        return _call(rule, "edit", [], args, 1)
+    h["edit_automod_rule"] = edit_automod_rule
+
+    def delete_automod_rule(args):
+        return f"await {args[0] if args else 'rule'}.delete()"
+    h["delete_automod_rule"] = delete_automod_rule
+
+    def fetch_automod_rules(args):
+        g = args[0] if args else "guild"
+        return f"await {g}.fetch_automod_rules()"
+    h["fetch_automod_rules"] = fetch_automod_rules
 
     # ── MEMBER EXTRA ──────────────────────────────────────────
     def add_roles(args):
@@ -2620,6 +2676,33 @@ def _build_handlers() -> dict:
             return f"__progress__({value}, {total}, {args[2].strip()})"
         return f"__progress__({value}, {total})"
     h["progress"] = progress
+
+    # ── SOUNDBOARD (discord.py ≥ 2.4) ────────────────────────
+    def fetch_soundboard_sounds(args):
+        g = args[0] if args else "guild"
+        return f"await {g}.fetch_soundboard_sounds()"
+    h["fetch_soundboard_sounds"] = fetch_soundboard_sounds
+
+    def create_soundboard_sound(args):
+        # @discord.create_soundboard_sound[guild; "name"; sound_bytes]
+        # Optional kwargs: volume=1.0; emoji_id=...; emoji_name=...
+        g = args[0] if args else "guild"
+        name = _as_str(args[1]) if len(args) > 1 else '"sound"'
+        sound = args[2] if len(args) > 2 and "=" not in args[2] else "b''"
+        extra_start = 3 if (len(args) > 2 and "=" not in args[2]) else 2
+        parts = [f"name={name}", f"sound={sound}"] + _kw(args, extra_start)
+        return f"await {g}.create_soundboard_sound({', '.join(parts)})"
+    h["create_soundboard_sound"] = create_soundboard_sound
+
+    def edit_soundboard_sound(args):
+        # @discord.edit_soundboard_sound[sound; name=...; volume=...; emoji_id=...]
+        sound = args[0] if args else "sound"
+        return _call(sound, "edit", [], args, 1)
+    h["edit_soundboard_sound"] = edit_soundboard_sound
+
+    def delete_soundboard_sound(args):
+        return f"await {args[0] if args else 'sound'}.delete()"
+    h["delete_soundboard_sound"] = delete_soundboard_sound
 
     return h
 

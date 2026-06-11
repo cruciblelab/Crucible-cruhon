@@ -1431,3 +1431,78 @@ class TestInlineChecksAndFormat:
         assert m._cruhon_progress(10, 10) == "▰" * 10
         assert m._cruhon_progress(15, 10) == "▰" * 10   # clamped
         assert m._cruhon_progress(1, 0) == "▱" * 10     # zero total → no crash
+
+
+# ─────────────────────────────────────────────────────────────
+# LOCK / UNLOCK CHANNEL
+# ─────────────────────────────────────────────────────────────
+
+class TestLockUnlockChannel:
+    def test_lock_default_role(self):
+        code = _compile("@discord.lock_channel[channel]")
+        assert "channel.set_permissions(channel.guild.default_role, send_messages=False)" in code
+
+    def test_lock_specific_role(self):
+        code = _compile("@discord.lock_channel[channel; muted_role]")
+        assert "channel.set_permissions(muted_role, send_messages=False)" in code
+
+    def test_unlock_default_role(self):
+        code = _compile("@discord.unlock_channel[channel]")
+        assert "channel.set_permissions(channel.guild.default_role, send_messages=True)" in code
+
+    def test_unlock_specific_role(self):
+        code = _compile("@discord.unlock_channel[channel; admin_role]")
+        assert "channel.set_permissions(admin_role, send_messages=True)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# AUTOMOD FULL MANAGEMENT
+# ─────────────────────────────────────────────────────────────
+
+class TestAutomodManagement:
+    def test_fetch_automod_rules(self):
+        code = _compile("@var[rules; @discord.fetch_automod_rules[guild]]")
+        assert "await guild.fetch_automod_rules()" in code
+
+    def test_delete_automod_rule(self):
+        code = _compile("@discord.delete_automod_rule[rule]")
+        assert "await rule.delete()" in code
+
+    def test_edit_automod_rule(self):
+        code = _compile("@discord.edit_automod_rule[rule; enabled=False]")
+        assert "await rule.edit(enabled=False)" in code
+
+    def test_create_automod_rule_kwargs(self):
+        src = "@discord.create_automod_rule[guild; name=MyRule; enabled=True]"
+        code = _compile(src)
+        assert "await guild.create_automod_rule(name=MyRule, enabled=True)" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# SOUNDBOARD API
+# ─────────────────────────────────────────────────────────────
+
+class TestSoundboardAPI:
+    def test_fetch_soundboard_sounds(self):
+        code = _compile("@var[sounds; @discord.fetch_soundboard_sounds[guild]]")
+        assert "await guild.fetch_soundboard_sounds()" in code
+
+    def test_create_soundboard_sound(self):
+        src = '@discord.create_soundboard_sound[guild; "beep"; raw_bytes]'
+        code = _compile(src)
+        assert 'await guild.create_soundboard_sound(name="beep", sound=raw_bytes)' in code
+
+    def test_create_soundboard_sound_kwargs(self):
+        src = '@discord.create_soundboard_sound[guild; "beep"; raw_bytes; volume=0.8]'
+        code = _compile(src)
+        assert 'name="beep"' in code
+        assert "sound=raw_bytes" in code
+        assert "volume=0.8" in code
+
+    def test_edit_soundboard_sound(self):
+        code = _compile('@discord.edit_soundboard_sound[sound; name="new"; volume=1.0]')
+        assert 'await sound.edit(name="new", volume=1.0)' in code
+
+    def test_delete_soundboard_sound(self):
+        code = _compile("@discord.delete_soundboard_sound[sound]")
+        assert "await sound.delete()" in code

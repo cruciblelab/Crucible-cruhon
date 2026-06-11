@@ -37,12 +37,14 @@ See full example at [`examples/example_bot.clpy`](examples/example_bot.clpy).
 - **Reactions:** `react`, `add_reactions`, `unreact`, `clear_reactions`
 - **Embed:** `embed`, `add_field`, `set_footer`, `set_image`, `set_thumbnail`, `set_author`
 - **Moderation:** `ban`, `unban`, `kick`, `timeout`, `untimeout`, `add_role`, `remove_role`, `nickname`
-- **Channel:** `purge`, `bulk_purge`, `create_text`, `create_voice`, `delete_channel`
+- **Channel:** `purge`, `bulk_purge`, `create_text`, `create_voice`, `delete_channel`, `lock_channel`, `unlock_channel`
 - **Lookup:** `get_member`, `get_channel`, `get_role`, `find_member`, `me`, `mention`, `get_guild`, `get_user`
 - **Protection:** `ignore_self`, `ignore_bots`, `require_role`, `require_guild`
 - **Status:** `status`, `log`, `wait_for`
 - **Color:** `color` (`"#hex"` / RGB / named / decimal)
 - **Voice:** `join`, `leave`, `play`, `stop_audio`, `pause_audio`, `resume_audio`, `volume`, `is_playing`
+- **AutoMod:** `automod_keyword` (shortcut), `create_automod_rule`, `edit_automod_rule`, `delete_automod_rule`, `fetch_automod_rules`
+- **Soundboard:** `fetch_soundboard_sounds`, `create_soundboard_sound`, `edit_soundboard_sound`, `delete_soundboard_sound`
 - **Inline checks:** `has_role`, `has_perm`, `is_bot_owner`
 - **Formatting:** `timestamp`, `jump`, `avatar`, `created`, `escape`, `escape_mentions`, `user_mention`, `channel_mention`, `role_mention`, `spoiler`, `codeblock`, `progress`, `oauth_url`, `snowflake_time`
 
