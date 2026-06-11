@@ -252,8 +252,10 @@ class Transpiler:
             result = node.accept(self)
             if result:
                 lines.append(result)
+        if not lines:
+            lines.append(self._line("pass"))
         self._indent -= 1
-        return "\n".join(lines) if lines else self._line("pass")
+        return "\n".join(lines)
 
     # ── Single evaluation rule ────────────────────────────────
 
@@ -332,6 +334,15 @@ class Transpiler:
         except ValueError:
             pass
 
+        # ── Rule 3b: hex / octal / binary integer literals ────
+        _nv = v.lstrip("-").lstrip("+")
+        if _nv.startswith(("0x", "0X", "0o", "0O", "0b", "0B")) and len(_nv) > 2:
+            try:
+                int(v, 0)
+                return v
+            except ValueError:
+                pass
+
         # ── Rule 4: True / False / None ───────────────────────
         if v in ("True", "False", "None"):
             return v
@@ -351,6 +362,10 @@ class Transpiler:
             "==", "!=", ">=", "<=", ">", "<",
             " and ", " or ", " not ", " in ", " is ",
             " not in ", " is not ",
+            " if ", " else ",   # ternary: a if cond else b
+            " for ", " yield ", " await ",  # comprehension / coroutine
+            ":=",               # walrus
+            " lambda ",         # lambda expr
         ]
         has_operator = any(op in v for op in operators)
         has_call = "(" in v and ")" in v
@@ -697,9 +712,12 @@ class Transpiler:
     def visit_TryNode(self, node: TryNode) -> str:
         lines = [self._line("try:", node.line)]
         lines.append(self._block(node.body))
-        clauses = node.catch_clauses if node.catch_clauses else [
-            (node.catch_type, node.catch_var, node.catch_body)
-        ]
+        # Build clause list: prefer explicit multi-catch; fall back to legacy only if
+        # the legacy catch_body is non-empty. If no clauses at all (e.g. try/finally
+        # without any catch) we skip the except block entirely.
+        clauses = node.catch_clauses or []
+        if not clauses and node.catch_body:
+            clauses = [(node.catch_type, node.catch_var, node.catch_body)]
         for exc_type, var, cbody in clauses:
             if exc_type and var:
                 except_line = f"except {exc_type} as {var}:"

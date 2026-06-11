@@ -264,8 +264,27 @@ class Lexer:
         start = i
         if line[i] == "-":
             i += 1
-        while i < len(line) and (line[i].isdigit() or line[i] == "."):
+        # Hex / octal / binary literals: 0xFF, 0o77, 0b1010
+        if (i + 1 < len(line) and line[i] == "0"
+                and line[i + 1] in ("x", "X", "o", "O", "b", "B")):
+            i += 2
+            while i < len(line) and (line[i].isalnum() or line[i] == "_"):
+                i += 1
+            return line[start:i], i
+        # Decimal / float with optional _ separators and scientific notation
+        while i < len(line) and (line[i].isdigit() or line[i] == "."
+                                  or (line[i] == "_" and i + 1 < len(line)
+                                      and line[i + 1].isdigit())):
             i += 1
+        # Scientific notation: 1.5e-3, 1e10, 2.0E+4
+        if i < len(line) and line[i] in ("e", "E"):
+            j = i + 1
+            if j < len(line) and line[j] in ("+", "-"):
+                j += 1
+            if j < len(line) and line[j].isdigit():
+                i = j
+                while i < len(line) and line[i].isdigit():
+                    i += 1
         return line[start:i], i
 
     def _read_raw(self, line: str, i: int, line_num: int):
