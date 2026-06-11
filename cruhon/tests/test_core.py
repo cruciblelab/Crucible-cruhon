@@ -4135,3 +4135,139 @@ class TestImportAlias:
     def test_import_unknown_passthrough(self):
         code = _compile("@import[some_third_party_lib]")
         assert "import some_third_party_lib" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# v2.0.0 FIXES: f-string passthrough, @print multi-arg, @assert,
+#               @input inline, @raise from, STRING quoting
+# ─────────────────────────────────────────────────────────────
+
+class TestFStringPassthrough:
+    def test_fstring_var_codegen(self):
+        code = _compile('@var[r; f"hi {name}"]')
+        assert 'r = f"hi {name}"' in code
+
+    def test_fstring_var_runs(self):
+        ns = _run_ns('@var[name; "Ada"]\n@var[r; f"hi {name}"]')
+        assert ns["r"] == "hi Ada"
+
+    def test_rstring_passthrough(self):
+        code = _compile(r'@var[p; r"\d+"]')
+        assert r'p = r"\d+"' in code
+
+    def test_bstring_passthrough(self):
+        code = _compile('@var[b; b"bytes"]')
+        assert 'b = b"bytes"' in code
+
+    def test_fstring_in_print(self, capsys):
+        run_source('@var[x; 7]\n@print[f"x = {x}"]')
+        assert capsys.readouterr().out.strip() == "x = 7"
+
+    def test_fstring_with_single_quote_prefix(self):
+        code = _compile("@var[r; f'hello {name}']")
+        assert "f'hello {name}'" in code
+
+
+class TestPrintMultiArg:
+    def test_two_args_codegen(self):
+        code = _compile("@print[a; b]")
+        assert "print(" in code
+        assert '"a"' in code and '"b"' in code
+
+    def test_three_args_runs(self, capsys):
+        run_source('@print[hello; world; !]')
+        out = capsys.readouterr().out.strip()
+        assert out == "hello world !"
+
+    def test_sep_kwarg_codegen(self):
+        code = _compile('@print[a; b; sep=", "]')
+        assert 'sep=", "' in code
+
+    def test_sep_kwarg_runs(self, capsys):
+        run_source('@var[x; 1]\n@var[y; 2]\n@print[{x}; {y}; sep="-"]')
+        assert capsys.readouterr().out.strip() == "1-2"
+
+    def test_end_kwarg_codegen(self):
+        code = _compile('@print[hello; end=""]')
+        assert 'end=""' in code
+
+    def test_end_kwarg_runs(self, capsys):
+        run_source('@print[hi; end="!"]\n@print[]')
+        out = capsys.readouterr().out
+        assert "hi!" in out
+
+    def test_single_arg_unchanged(self, capsys):
+        run_source('@print[hello]')
+        assert capsys.readouterr().out.strip() == "hello"
+
+
+class TestAssertOptionalMessage:
+    def test_no_message_codegen(self):
+        code = _compile("@assert[x > 0]")
+        assert "assert x > 0" in code
+        assert "assert x > 0," not in code
+
+    def test_with_message_codegen(self):
+        code = _compile('@assert[x > 0; "must be positive"]')
+        assert 'assert x > 0, "must be positive"' in code
+
+    def test_no_message_passes(self):
+        run_source("@var[x; 5]\n@assert[x > 0]")  # no exception
+
+    def test_no_message_fails(self):
+        with pytest.raises((AssertionError, RunError)):
+            run_source("@var[x; -1]\n@assert[x > 0]")
+
+
+class TestInputInline:
+    def test_input_inline_codegen(self):
+        code = _compile('@var[x; @input[Enter name:]]')
+        assert 'input("Enter name:")' in code
+
+    def test_input_inline_in_if(self):
+        code = _compile('@if[@input[Continue? ] == "yes"]\n    pass\n@end')
+        assert "input(" in code
+
+    def test_input_quoted_prompt(self):
+        code = _compile('@var[x; @input["Enter: "]]')
+        assert 'input("Enter: ")' in code
+
+    def test_input_no_prompt(self):
+        code = _compile('@var[x; @input[]]')
+        assert 'input()' in code
+
+
+class TestRaiseFrom:
+    def test_raise_from_codegen(self):
+        code = _compile("@raise[RuntimeError; something; from=original]")
+        assert "raise RuntimeError(" in code
+        assert "from original" in code
+
+    def test_raise_from_none_suppresses_chain(self):
+        code = _compile("@raise[ValueError; bad; from=None]")
+        assert "from None" in code
+
+    def test_raise_without_from_unchanged(self):
+        code = _compile("@raise[ValueError; bad]")
+        assert "from" not in code
+        assert "raise ValueError(" in code
+
+    def test_raise_from_runs(self):
+        with pytest.raises((RuntimeError, RunError)):
+            run_source(
+                "@try\n"
+                "    @raise[RuntimeError; outer; from=None]\n"
+                "@catch[RuntimeError]\n"
+                "    pass\n"
+                "@end"
+            )
+
+
+class TestStringEmbeddedQuotes:
+    def test_single_quoted_with_double_inside(self):
+        ns = _run_ns('@var[x; \'say "hi"\']')
+        assert ns["x"] == 'say "hi"'
+
+    def test_double_quoted_escaping(self):
+        ns = _run_ns(r'@var[x; "say \"hi\""]')
+        assert ns["x"] == 'say "hi"'

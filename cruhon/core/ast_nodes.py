@@ -52,8 +52,11 @@ class ConstNode(Node):
 
 @dataclass
 class PrintNode(Node):
-    """@print[value]"""
+    """@print[value]  or  @print[a; b; c; sep=", "; end=""]"""
     value: Any = None
+    extra: List[str] = field(default_factory=list)
+    sep: Optional[str] = None
+    end: Optional[str] = None
 
 
 @dataclass
@@ -88,9 +91,9 @@ class ExprNode(Node):
 
 @dataclass
 class AssertNode(Node):
-    """@assert[condition; message]"""
+    """@assert[condition]  or  @assert[condition; message]"""
     condition: str = ""
-    message: str = ""
+    message: Optional[str] = None
 
 
 @dataclass
@@ -266,9 +269,10 @@ class DelNode(Node):
 
 @dataclass
 class RaiseNode(Node):
-    """@raise[ExceptionType; message]  or  @raise  (re-raise)"""
+    """@raise[ExcType; msg]  or  @raise[ExcType; msg; from=cause]  or  @raise"""
     exception: str = ""
     message: Optional[str] = None
+    cause: Optional[str] = None
 
 
 @dataclass

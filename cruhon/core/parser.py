@@ -313,6 +313,7 @@ class Parser:
         inline_expr_cmds = {
             "env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe",
             "dictcomp", "setcomp", "gencomp", "set", "tuple", "when", "default",
+            "input",
         }
 
         if cmd in inline_expr_cmds:
@@ -476,13 +477,25 @@ class Parser:
                     raise ParseError("@default requires [value; fallback]", line)
                 return f"({args[0]} if {args[0]} is not None else {args[1]})"
 
+            elif cmd == "input":
+                # @input[prompt] as inline expression → input("prompt")
+                self.advance()  # @input
+                args = self.parse_args()
+                if not args:
+                    return "input()"
+                p = args[0]
+                # Wrap bare text in quotes (mirrors visit_InputNode display context)
+                if p and not (p.startswith('"') or p.startswith("'")):
+                    p = f'"{p}"'
+                return f"input({p})"
+
         # Plugin-registered inline commands
         if cmd in self._inline_commands:
             return self._inline_commands[cmd](self)
 
         # Unknown inline command — raise error with line info
         builtin = ("@env, @list, @dict, @fetch, @ctx, @lambda, @comp, @pipe, "
-                   "@dictcomp, @setcomp, @gencomp, @set, @tuple, @when, @default")
+                   "@dictcomp, @setcomp, @gencomp, @set, @tuple, @when, @default, @input")
         plugin_names = ", ".join(f"@{k}" for k in self._inline_commands) if self._inline_commands else ""
         available = f"{builtin}{', ' + plugin_names if plugin_names else ''}"
         raise ParseError(
@@ -552,9 +565,19 @@ class Parser:
                 self.advance()
                 continue
 
-            # STRING token — reconstruct with quotes so split_args sees it quoted
+            # STRING token — reconstruct with quotes so split_args sees it quoted.
+            # Use single quotes when the value contains double quotes to avoid
+            # producing malformed Python literals like "say "hello"".
             if tok.type == "STRING":
-                raw_parts.append(f'"{tok.value}"')
+                val = tok.value
+                if '"' in val:
+                    if "'" not in val:
+                        raw_parts.append(f"'{val}'")
+                    else:
+                        escaped = val.replace('"', '\\"')
+                        raw_parts.append(f'"{escaped}"')
+                else:
+                    raw_parts.append(f'"{val}"')
             elif tok.type == "SEMICOLON":
                 # Keep semicolons in the raw string — split_args handles them
                 raw_parts.append(";")
@@ -628,11 +651,26 @@ class Parser:
     # ── Core command parse methods ────────────────────────────
 
     def _parse_print(self) -> PrintNode:
+        import re as _re
         line = self.current.line
         self.advance()  # @print
         args = self.parse_args()
-        value = args[0] if args else ""
-        return PrintNode(value=value, line=line)
+        # Separate sep= and end= kwargs from positional args
+        positional = []
+        sep = None
+        end_ = None
+        for arg in args:
+            m = _re.match(r'^(sep|end)\s*=\s*(.+)$', arg.strip())
+            if m:
+                if m.group(1) == "sep":
+                    sep = m.group(2)
+                else:
+                    end_ = m.group(2)
+            else:
+                positional.append(arg)
+        value = positional[0] if positional else ""
+        extra = positional[1:]
+        return PrintNode(value=value, extra=extra, sep=sep, end=end_, line=line)
 
     def _parse_var(self) -> VarNode:
         line = self.current.line
@@ -655,9 +693,9 @@ class Parser:
         self.advance()  # @assert
         args = self.parse_args()
         if not args:
-            raise ParseError("@assert requires [condition; message]", line)
+            raise ParseError("@assert requires [condition] or [condition; message]", line)
         condition = args[0]
-        message = args[1] if len(args) > 1 else '""'
+        message = args[1] if len(args) > 1 else None
         return AssertNode(condition=condition, message=message, line=line)
 
     def _parse_env(self) -> EnvNode:
@@ -1035,14 +1073,23 @@ class Parser:
         return DelNode(targets=args, line=line)
 
     def _parse_raise(self) -> "RaiseNode":
+        import re as _re
         line = self.current.line
         self.advance()  # @raise
         args = self.parse_args()
         if not args:
             return RaiseNode(exception="", message=None, line=line)  # bare re-raise
-        exception = args[0]
-        message = args[1] if len(args) > 1 else None
-        return RaiseNode(exception=exception, message=message, line=line)
+        positional = []
+        cause = None
+        for arg in args:
+            m = _re.match(r'^from\s*=\s*(.+)$', arg.strip())
+            if m:
+                cause = m.group(1).strip()
+            else:
+                positional.append(arg)
+        exception = positional[0] if positional else ""
+        message = positional[1] if len(positional) > 1 else None
+        return RaiseNode(exception=exception, message=message, cause=cause, line=line)
 
     def _parse_with(self) -> "WithNode":
         line = self.current.line

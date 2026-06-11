@@ -291,6 +291,11 @@ class Transpiler:
             if _result is not None:
                 return _result
 
+        # ── Rule 0.5: Python string literal with prefix (f"", r"", b"", etc.) ──
+        # Pass through as-is — wrapping would double-apply the prefix.
+        if len(v) >= 3 and re.match(r'^[fFrRbBuU]{1,3}["\']', v):
+            return v
+
         # ── Rule 1: quoted string, no interpolation ───────────
         if (v.startswith('"') and v.endswith('"') and len(v) >= 2) or \
            (v.startswith("'") and v.endswith("'") and len(v) >= 2):
@@ -453,8 +458,16 @@ class Transpiler:
         return "\n".join(lines)
 
     def visit_PrintNode(self, node: PrintNode) -> str:
-        value = self._eval_value(str(node.value), "display")
-        return self._line(f"print({value})", node.line)
+        values = [self._eval_value(str(node.value), "display")]
+        for extra in (node.extra or []):
+            values.append(self._eval_value(str(extra), "display"))
+        kwargs = []
+        if node.sep is not None:
+            kwargs.append(f"sep={node.sep}")
+        if node.end is not None:
+            kwargs.append(f"end={node.end}")
+        all_args = ", ".join(values + kwargs)
+        return self._line(f"print({all_args})", node.line)
 
     def visit_InputNode(self, node: InputNode) -> str:
         prompt = self._eval_value(str(node.prompt), "display") if node.prompt else '""'
@@ -472,8 +485,10 @@ class Transpiler:
         return self._line(f"{node.name} = {value}  # const", node.line)
 
     def visit_AssertNode(self, node: AssertNode) -> str:
-        msg = self._eval_value(str(node.message), "display") if node.message else '""'
-        return self._line(f"assert {node.condition}, {msg}", node.line)
+        if node.message:
+            msg = self._eval_value(str(node.message), "display")
+            return self._line(f"assert {node.condition}, {msg}", node.line)
+        return self._line(f"assert {node.condition}", node.line)
 
     def visit_EnvNode(self, node: EnvNode) -> str:
         """
@@ -672,8 +687,12 @@ class Transpiler:
         exc = self._eval_value(str(node.exception), "expr")
         if node.message:
             msg = self._eval_value(str(node.message), "expr")
-            return self._line(f"raise {exc}({msg})", node.line)
-        return self._line(f"raise {exc}", node.line)
+            base = f"raise {exc}({msg})"
+        else:
+            base = f"raise {exc}"
+        if getattr(node, "cause", None):
+            base += f" from {node.cause}"
+        return self._line(base, node.line)
 
     def visit_TryNode(self, node: TryNode) -> str:
         lines = [self._line("try:", node.line)]
