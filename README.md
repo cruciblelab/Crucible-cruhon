@@ -60,6 +60,13 @@ cruhon run hello.clpy
 |---|---|
 | `cruhon run file.clpy` | Run a script |
 | `cruhon run file.clpy --show-python` | Show generated Python before running |
+| `cruhon run file.clpy --watch` | Re-run automatically when `.clpy` files change |
+| `cruhon repl` | Start an interactive session (`:help`, `:vars`, `:clear`, `:quit`) |
+| `cruhon docs` | List plugins that ship a command reference |
+| `cruhon docs discord` | Show a plugin's full command reference |
+| `cruhon fmt file.clpy` | Normalize indentation (writes the file) |
+| `cruhon fmt file.clpy --check` | Exit non-zero if not formatted (CI-friendly) |
+| `cruhon fmt file.clpy --stdout` | Print formatted result without writing |
 | `cruhon build file.clpy` | Compile `.clpy` → `.py` |
 | `cruhon build file.clpy -o out.py` | Compile to a specific output file |
 | `cruhon check file.clpy` | Check for syntax errors without running |
