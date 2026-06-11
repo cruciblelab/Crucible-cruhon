@@ -222,20 +222,25 @@ class ClassNode(Node):
 
 @dataclass
 class TryNode(Node):
-    """@try ... @catch[e] ... @finally ... @end"""
+    """@try ... @catch[ExcType; e] ... @catch[Other] ... @finally ... @end"""
     body: List[Node] = field(default_factory=list)
-    catch_var: str = "e"
-    catch_type: Optional[str] = None          # @catch[TypeError; e] or @catch[TypeError]
-    catch_body: List[Node] = field(default_factory=list)
+    # catch_clauses: list of (exc_type: str|None, var: str, body: List[Node])
+    catch_clauses: List[tuple] = field(default_factory=list)
     finally_body: List[Node] = field(default_factory=list)
+    # Legacy single-catch fields kept for back-compat (populated from catch_clauses[0])
+    catch_var: str = "e"
+    catch_type: Optional[str] = None
+    catch_body: List[Node] = field(default_factory=list)
 
 
 @dataclass
 class WithNode(Node):
-    """@with[expr as var] ... @end  or  @with[expr] ... @end"""
+    """@with[expr as var; expr2 as var2; ...] ... @end"""
     expr: str = ""
     var: Optional[str] = None
     body: List[Node] = field(default_factory=list)
+    # Multiple context managers: list of (expr, var_or_None)
+    managers: List[tuple] = field(default_factory=list)
 
 
 @dataclass

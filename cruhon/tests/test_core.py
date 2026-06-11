@@ -328,9 +328,15 @@ class TestTranspiler:
         code = _transpile("@import[requests; req]")
         assert "import requests as req" in code
 
-    def test_import_unknown_raises(self):
-        with pytest.raises(TranspileError):
-            _transpile("@import[nonexistent_lib_xyz]")
+    def test_import_unknown_passthrough(self):
+        # Unknown libraries pass through as plain Python imports —
+        # the runtime will raise ImportError if the package isn't installed.
+        code = _transpile("@import[nonexistent_lib_xyz]")
+        assert "import nonexistent_lib_xyz" in code
+
+    def test_import_unknown_with_alias(self):
+        code = _transpile("@import[numpy as np]")
+        assert "import numpy as np" in code
 
     def test_env_auto_import(self):
         code = _transpile("@var[h; @env[HOME]]")
@@ -4047,3 +4053,85 @@ class TestDecorator:
             "@var[r; double(7)]"
         )
         assert ns["r"] == 14
+
+
+# ─────────────────────────────────────────────────────────────
+# MULTI-CATCH, MULTI-WITH, IMPORT ALIAS
+# ─────────────────────────────────────────────────────────────
+
+class TestMultiCatch:
+    def test_two_except_clauses(self):
+        src = (
+            "@try\n"
+            "    pass\n"
+            "@catch[TypeError]\n"
+            "    pass\n"
+            "@catch[ValueError; e]\n"
+            "    pass\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "except TypeError:" in code
+        assert "except ValueError as e:" in code
+
+    def test_three_except_clauses(self):
+        src = (
+            "@try\n"
+            "    pass\n"
+            "@catch[KeyError]\n"
+            "    pass\n"
+            "@catch[IndexError]\n"
+            "    pass\n"
+            "@catch[Exception; err]\n"
+            "    pass\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "except KeyError:" in code
+        assert "except IndexError:" in code
+        assert "except Exception as err:" in code
+
+    def test_multi_catch_runs(self):
+        ns = _run_ns(
+            "@var[result; None]\n"
+            "@try\n"
+            "    @var[x; int('bad')]\n"
+            "@catch[TypeError]\n"
+            "    @var[result; 'type']\n"
+            "@catch[ValueError]\n"
+            "    @var[result; 'value']\n"
+            "@end"
+        )
+        assert ns["result"] == "value"
+
+
+class TestMultiWith:
+    def test_single_context_manager(self):
+        code = _compile("@with[open('a.txt') as f]\n    pass\n@end")
+        assert "with open('a.txt') as f:" in code
+
+    def test_two_context_managers(self):
+        code = _compile("@with[open('a') as f; open('b') as g]\n    pass\n@end")
+        assert "with open('a') as f, open('b') as g:" in code
+
+    def test_three_context_managers(self):
+        code = _compile("@with[A() as a; B() as b; C() as c]\n    pass\n@end")
+        assert "with A() as a, B() as b, C() as c:" in code
+
+    def test_no_alias(self):
+        code = _compile("@with[lock]\n    pass\n@end")
+        assert "with lock:" in code
+
+
+class TestImportAlias:
+    def test_import_as_inline(self):
+        code = _compile("@import[numpy as np]")
+        assert "import numpy as np" in code
+
+    def test_import_as_second_arg(self):
+        code = _compile("@import[os.path; path]")
+        assert "import os.path as path" in code
+
+    def test_import_unknown_passthrough(self):
+        code = _compile("@import[some_third_party_lib]")
+        assert "import some_third_party_lib" in code

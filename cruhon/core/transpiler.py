@@ -167,19 +167,21 @@ class Transpiler:
             if isinstance(node, ImportNode):
                 lib_module = get_lib(node.lib)
                 if lib_module is None:
-                    # Check if it's a known builtin namespace vs truly unknown
                     if is_lib_namespace(node.lib):
                         raise TranspileError(
                             f"@{node.lib} is a builtin namespace — no @import needed. "
                             f"Use @{node.lib}.command[...] directly.",
                             node.line
                         )
-                    raise TranspileError(
-                        f"Library '{node.lib}' is not yet supported in Cruhon. "
-                        f"See library.md for the full list.",
-                        node.line
-                    )
-                # Skip import for builtin namespaces
+                    # Unknown library: emit a plain Python import and let the
+                    # runtime decide whether the package is installed.
+                    alias = f" as {node.alias}" if node.alias else ""
+                    stmt = f"import {node.lib}{alias}"
+                    if stmt not in seen:
+                        seen.add(stmt)
+                        lines.append(stmt)
+                    continue
+                # Builtin Cruhon namespace — no import statement needed
                 if lib_module == _BUILTIN:
                     raise TranspileError(
                         f"@{node.lib} is a builtin namespace — no @import needed. "
@@ -631,10 +633,9 @@ class Transpiler:
         return "\n".join(lines)
 
     def visit_WithNode(self, node) -> str:
-        if node.var:
-            header = self._line(f"with {node.expr} as {node.var}:", node.line)
-        else:
-            header = self._line(f"with {node.expr}:", node.line)
+        managers = node.managers if node.managers else [(node.expr, node.var)]
+        parts = [f"{e} as {v}" if v else e for e, v in managers]
+        header = self._line(f"with {', '.join(parts)}:", node.line)
         return "\n".join([header, self._block(node.body)])
 
     def visit_AsyncForNode(self, node) -> str:
@@ -677,16 +678,20 @@ class Transpiler:
     def visit_TryNode(self, node: TryNode) -> str:
         lines = [self._line("try:", node.line)]
         lines.append(self._block(node.body))
-        if node.catch_type and node.catch_var:
-            except_line = f"except {node.catch_type} as {node.catch_var}:"
-        elif node.catch_type:
-            except_line = f"except {node.catch_type}:"
-        elif node.catch_var:
-            except_line = f"except Exception as {node.catch_var}:"
-        else:
-            except_line = "except:"
-        lines.append(self._line(except_line))
-        lines.append(self._block(node.catch_body))
+        clauses = node.catch_clauses if node.catch_clauses else [
+            (node.catch_type, node.catch_var, node.catch_body)
+        ]
+        for exc_type, var, cbody in clauses:
+            if exc_type and var:
+                except_line = f"except {exc_type} as {var}:"
+            elif exc_type:
+                except_line = f"except {exc_type}:"
+            elif var:
+                except_line = f"except Exception as {var}:"
+            else:
+                except_line = "except:"
+            lines.append(self._line(except_line))
+            lines.append(self._block(cbody))
         if node.finally_body:
             lines.append(self._line("finally:"))
             lines.append(self._block(node.finally_body))

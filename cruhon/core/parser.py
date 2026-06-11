@@ -768,8 +768,15 @@ class Parser:
         line = self.current.line
         self.advance()
         args = self.parse_args()
-        lib = args[0] if args else ""
-        alias = args[1] if len(args) > 1 else None
+        raw = args[0] if args else ""
+        # Support "numpy as np" inline alias syntax
+        if " as " in raw:
+            lib_part, alias_part = raw.split(" as ", 1)
+            lib = lib_part.strip()
+            alias = alias_part.strip()
+        else:
+            lib = raw.strip()
+            alias = args[1].strip() if len(args) > 1 else None
         return ImportNode(lib=lib, alias=alias, line=line)
 
     def _parse_await(self) -> AwaitNode:
@@ -975,31 +982,29 @@ class Parser:
             self.advance()
 
         body = self._parse_block()
-        catch_var = "e"
-        catch_body = []
+        catch_clauses = []
         finally_body = []
 
-        catch_type = None
-        if self.current.type == "AT_CMD" and self.current.value == "catch":
+        while self.current.type == "AT_CMD" and self.current.value == "catch":
             self.advance()
             args = self.parse_args()
+            exc_type = None
+            var = "e"
             if len(args) >= 2:
-                # @catch[TypeError; e]  — type + var
-                catch_type = args[0].strip()
-                catch_var = args[1].strip()
+                exc_type = args[0].strip()
+                var = args[1].strip()
             elif len(args) == 1:
                 a = args[0].strip()
-                if a and a[0].isupper():
-                    # @catch[TypeError]  — type only, no var
-                    catch_type = a
-                    catch_var = ""
+                if a and (a[0].isupper() or "." in a or "," in a):
+                    exc_type = a
+                    var = ""
                 else:
-                    # @catch[e]  — bare variable (backward compat)
-                    catch_var = a
+                    var = a
             self.skip_newlines()
             if self.current.type == "INDENT":
                 self.advance()
-            catch_body = self._parse_block()
+            cb = self._parse_block()
+            catch_clauses.append((exc_type, var, cb))
 
         if self.current.type == "AT_CMD" and self.current.value == "finally":
             self.advance()
@@ -1011,11 +1016,14 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
+        # Populate legacy single-catch fields for backward compat
+        first = catch_clauses[0] if catch_clauses else (None, "e", [])
         return TryNode(
             body=body,
-            catch_var=catch_var,
-            catch_type=catch_type,
-            catch_body=catch_body,
+            catch_clauses=catch_clauses,
+            catch_var=first[1],
+            catch_type=first[0],
+            catch_body=first[2],
             finally_body=finally_body,
             line=line
         )
@@ -1040,16 +1048,15 @@ class Parser:
         line = self.current.line
         self.advance()  # @with
         args = self.parse_args()
-        raw = args[0] if args else ""
 
-        # Split "expr as var" pattern
-        var = None
-        if " as " in raw:
-            expr_part, var_part = raw.split(" as ", 1)
-            expr = expr_part.strip()
-            var = var_part.strip()
-        else:
-            expr = raw.strip()
+        def _split_as(raw: str):
+            raw = raw.strip()
+            if " as " in raw:
+                e, v = raw.split(" as ", 1)
+                return e.strip(), v.strip()
+            return raw, None
+
+        managers = [_split_as(a) for a in args] if args else [("", None)]
 
         self.skip_newlines()
         if self.current.type == "INDENT":
@@ -1060,7 +1067,8 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return WithNode(expr=expr, var=var, body=body, line=line)
+        expr, var = managers[0]
+        return WithNode(expr=expr, var=var, body=body, managers=managers, line=line)
 
     def _parse_async_block(self) -> Node:
         """Dispatch @async.for / @async.with to their respective parsers."""
