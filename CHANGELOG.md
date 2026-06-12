@@ -4,7 +4,53 @@ All notable changes are documented here.
 
 ---
 
-## v2.3.0 (current) — Full Namespace Expansion & cruhon-shortcuts-pro
+## v2.4.0 (current) — Data & Format Namespaces & cruhon-shortcuts-data
+
+### 10 new stdlib namespaces
+
+All standard-library backed — no `@import` needed, fully sandboxed codegen.
+
+| Namespace      | Wraps                  | Highlights |
+|----------------|------------------------|-----------|
+| `@xml.*`       | `xml.etree.ElementTree`| `parse`, `from_string`, `find`, `find_all`, `find_text`, `to_dict`, `attrib`, `children`, `count` |
+| `@toml.*`      | `tomllib`              | `loads`, `load`, `get`, `keys`, `has` (read-only) |
+| `@diff.*`      | `difflib`              | `ratio`, `is_similar`, `unified`, `context`, `ndiff`, `lines`, `close_matches`, `best_match` |
+| `@decimal.*`   | `decimal`              | exact base-10: `make`, `add/sub/mul/div`, `round`, `quantize`, `sum`, `sqrt`, `compare` |
+| `@fraction.*`  | `fractions`            | exact rationals: `make`, `from_float`, `add/sub/mul/div`, `numerator`, `denominator`, `limit` |
+| `@ip.*`        | `ipaddress`            | `address`, `network`, `is_private/global/loopback`, `version`, `hosts`, `num_addresses`, `contains` |
+| `@platform.*`  | `platform`             | `system`, `release`, `machine`, `python_version`, `is_windows/linux/mac`, `is_64bit`, `uname` |
+| `@unicode.*`   | `unicodedata`          | `name`, `lookup`, `category`, `numeric`, `normalize`, `nfc/nfd/nfkc/nfkd`, `strip_accents` |
+| `@binascii.*`  | `binascii`             | `hexlify`, `unhexlify`, `b2a_base64`, `a2b_base64`, `crc32`, `crc_hqx` |
+| `@shlex.*`     | `shlex`                | `split`, `join`, `quote`, `quote_all` |
+
+Note: `@decimal.add["0.1"; "0.2"]` returns exactly `0.3` — no binary
+floating-point error.
+
+### `cruhon-shortcuts-data` plugin
+
+A third configurable shortcut plugin (`mods/cruhon-shortcuts-data/`,
+6 files, 3 groups) covering the new namespaces. Loads cleanly alongside
+`cruhon-shortcuts` and `cruhon-shortcuts-pro` — all rewrite names distinct.
+
+- **format group** — `@xml_parse`, `@xml_load`, `@xml_dict`, `@xml_text`,
+  `@toml_load`, `@toml_get`, `@diff_ratio`, `@similar`, `@closest`,
+  `@fuzzy`, plus `@xml.text_all`, `@xml.attr_all`, `@diff.changed`,
+  `@toml.flatten`
+- **numbers group** — `@dec_of`, `@dec_add`, `@dec_round`, `@money`,
+  `@frac`, `@frac_str`, `@frac_add`, plus `@decimal.money`,
+  `@decimal.percent`, `@decimal.average`, `@fraction.as_percent`,
+  `@fraction.reciprocal`
+- **system group** — `@ip_addr`, `@is_private_ip`, `@ip_hosts`,
+  `@os_name`, `@py_version`, `@machine`, `@hostname`, `@char_name`,
+  `@strip_accents`, `@hexlify`, `@unhexlify`, `@sh_split`, `@sh_quote`,
+  plus `@ip.is_ipv4/is_ipv6`, `@ip.first_host`, `@platform.summary`,
+  `@binascii.hex_spaced`
+
+### Tests: **1401** (+85 from v2.3.0)
+
+---
+
+## v2.3.0 — Full Namespace Expansion & cruhon-shortcuts-pro
 
 ### Fully expanded 5 stdlib namespaces
 

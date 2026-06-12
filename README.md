@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.2.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.4.0
 
 ---
 
@@ -461,7 +461,7 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries (38 namespaces, 900+ commands)
+## Standard Libraries (48 namespaces, 1000+ commands)
 
 See [`library.md`](library.md) for the complete reference.
 
@@ -681,24 +681,61 @@ Full set: `@random` `@collections` `@itertools` `@functools` `@sys` `@io`
 
 New set: `@string` `@struct` `@zlib` `@calendar` `@email`.
 
-### Shortcut plugin — shorter syntax for everything
-
-The bundled `cruhon-shortcuts` plugin lets you drop the namespace prefix on
-the most common operations, and adds 200+ extra convenience methods:
+### Data & format wrappers (10 namespaces, new in v2.4)
 
 ```clpy
-@var[text; @read["notes.txt"]]           # @read → @file.read
-@var[head; @file.head["log.txt"; 20]]    # first 20 lines (new method)
-@var[stamp; @now[]]                       # @now → @date.now
-@var[id; @uuid[]]                         # @uuid → @crypto.uuid
-@var[pw; @random.password[16]]            # new method
-@var[stats; @statistics.summary[scores]]  # mean/median/stdev/min/max
+# XML
+@var[root; @xml.from_string["<a><b>hi</b></a>"]]
+@var[txt; @xml.find_text[root; "b"]]
+
+# TOML (read)
+@var[cfg; @toml.loads["port = 8080"]]
+
+# Fuzzy matching & diffs
+@var[score; @diff.ratio["color"; "colour"]]
+@var[best; @diff.best_match["colur"; ["color", "flavor"]]]
+
+# Exact arithmetic (no float error)
+@var[total; @decimal.add["0.1"; "0.2"]]   # → 0.3 exactly
+@var[third; @fraction.make[1; 3]]          # → 1/3
+
+# Networking, platform, text
+@var[priv; @ip.is_private["10.0.0.1"]]     # → True
+@var[os; @platform.system[]]
+@var[clean; @unicode.strip_accents["café"]]  # → "cafe"
+@var[args; @shlex.split["echo hello world"]]
 ```
 
-Fully configurable in `mods/cruhon-shortcuts/mod.json` — pick groups, toggle
+New set: `@xml` `@toml` `@diff` `@decimal` `@fraction` `@ip` `@platform`
+`@unicode` `@binascii` `@shlex`.
+
+### Shortcut plugins — shorter syntax for everything
+
+Three bundled shortcut plugins let you drop the namespace prefix on common
+operations and add hundreds of extra convenience methods. All three load
+together without conflicts:
+
+```clpy
+# cruhon-shortcuts (base — every namespace)
+@var[text; @read["notes.txt"]]            # @read → @file.read
+@var[stamp; @now[]]                        # @now → @date.now
+@var[id; @uuid[]]                          # @uuid → @crypto.uuid
+
+# cruhon-shortcuts-pro (math / lists / dicts / text / logic)
+@var[x; @clamp[value; 0; 100]]             # @clamp → @math.clamp
+@var[slug; @snake_case["Hello World"]]     # @snake_case → @text.snake_case
+@var[g; @group_by[items; key_fn]]          # @group_by → @collections.group_by
+
+# cruhon-shortcuts-data (xml / toml / diff / decimal / fraction / ip / …)
+@var[cfg; @toml_load["port = 8080"]]       # @toml_load → @toml.loads
+@var[amt; @money["3.14159"]]               # @money → @decimal.money (2 dp)
+@var[ok; @is_private_ip["10.0.0.1"]]       # @is_private_ip → @ip.is_private
+```
+
+Each plugin is fully configurable in its `mod.json` — pick groups, toggle
 global vs. method aliases, disable specific shortcuts, or add your own.
 
-See [`library.md`](library.md) for the full reference on all 900+ commands.
+See [`library.md`](library.md) for the full reference on all 1000+ commands.
 
 ---
 

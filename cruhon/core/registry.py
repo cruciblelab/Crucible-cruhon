@@ -69,6 +69,17 @@ _LIBS: dict[str, str] = {
     "zlib":        "zlib",
     "calendar":    "calendar",
     "email":       "email",
+    # New in v2.4.0 — data & format namespaces
+    "xml":         "xml.etree.ElementTree",
+    "toml":        "tomllib",
+    "diff":        "difflib",
+    "decimal":     "decimal",
+    "fraction":    "fractions",
+    "ip":          "ipaddress",
+    "platform":    "platform",
+    "unicode":     "unicodedata",
+    "binascii":    "binascii",
+    "shlex":       "shlex",
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -255,6 +266,16 @@ def _register_stdlib():
     from .libs.zlib_        import register as _r_zlib
     from .libs.calendar_    import register as _r_calendar
     from .libs.email_       import register as _r_email
+    from .libs.xml_         import register as _r_xml
+    from .libs.toml_        import register as _r_toml
+    from .libs.diff_        import register as _r_diff
+    from .libs.decimal_     import register as _r_decimal
+    from .libs.fraction_    import register as _r_fraction
+    from .libs.ip_          import register as _r_ip
+    from .libs.platform_    import register as _r_platform
+    from .libs.unicode_     import register as _r_unicode
+    from .libs.binascii_    import register as _r_binascii
+    from .libs.shlex_       import register as _r_shlex
     _r_file()
     _r_time()
     _r_date()
@@ -294,5 +315,15 @@ def _register_stdlib():
     _r_zlib()
     _r_calendar()
     _r_email()
+    _r_xml()
+    _r_toml()
+    _r_diff()
+    _r_decimal()
+    _r_fraction()
+    _r_ip()
+    _r_platform()
+    _r_unicode()
+    _r_binascii()
+    _r_shlex()
 
 _register_stdlib()

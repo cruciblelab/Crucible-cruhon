@@ -114,6 +114,28 @@ Backing namespaces for the `cruhon-shortcuts` plugin. No `@import` needed.
 | `@calendar.*`    | `calendar`     | is_leap, leap_days, month_range, days_in_month, weekday, month_name, month_abbr, day_name, day_abbr, month_dates, year_dates, month_text, year_text, weekheader, is_weekday, is_weekend, first_weekday_of, get_first_weekday, day_of_year, week_of_year, quarter, next_month, prev_month, timegm |
 | `@email.*`       | `email`        | message, make, set_content, add_html, set_header, attach_file, attach_text, attach_bytes, parse, parse_bytes, subject, sender, recipients, cc, bcc, reply_to, date_header, message_id, content_type, header, headers, body, html_body, is_multipart, parts, as_string, to_bytes, all_attachments, set_cc, set_bcc, set_reply_to, parse_address, format_address, valid_address, address_list |
 
+### Data & format wrappers (new in v2.4)
+
+Standard-library backed. No `@import` needed.
+
+| Namespace      | Wraps                   | Commands |
+|----------------|-------------------------|----------|
+| `@xml.*`       | `xml.etree.ElementTree` | parse, from_string, to_string, find, find_all, find_text, children, iter, count, tag, text, attrib, get, to_dict |
+| `@toml.*`      | `tomllib`               | loads, load, get, keys, has (read-only — see note below) |
+| `@diff.*`      | `difflib`               | ratio, quick_ratio, is_similar, unified, context, ndiff, lines, close_matches, best_match |
+| `@decimal.*`   | `decimal`               | make, to_float, to_str, to_int, add, sub, mul, div, sum, round, quantize, floor, ceil, sqrt, abs, compare, is_zero |
+| `@fraction.*`  | `fractions`             | make, from_float, from_str, numerator, denominator, to_float, to_str, to_tuple, add, sub, mul, div, limit |
+| `@ip.*`        | `ipaddress`             | address, network, interface, version, is_private, is_global, is_loopback, is_multicast, hosts, num_addresses, netmask, broadcast, network_address, contains, supernet, to_int, from_int |
+| `@platform.*`  | `platform`              | system, release, version, platform, node, machine, processor, architecture, python_version, python_version_tuple, python_impl, python_compiler, uname, is_windows, is_linux, is_mac, is_64bit |
+| `@unicode.*`   | `unicodedata`           | name, lookup, category, bidirectional, combining, mirrored, numeric, digit, decimal, normalize, nfc, nfd, nfkc, nfkd, strip_accents, unidata_version |
+| `@binascii.*`  | `binascii`              | hexlify, unhexlify, b2a_hex, a2b_hex, b2a_base64, a2b_base64, crc32, crc_hqx |
+| `@shlex.*`     | `shlex`                 | split, join, quote, quote_all |
+
+`@decimal` uses exact base-10 arithmetic — `@decimal.add["0.1"; "0.2"]`
+returns `0.3` exactly, with no binary rounding error. `@toml` is read-only
+(`tomllib` is a parser); to write TOML build the string or use a
+third-party package.
+
 ### Plugin namespaces
 
 | Namespace   | Type    | Commands |
@@ -174,6 +196,28 @@ global-rewrite names are distinct. Configuration via `mod.json`:
 | `dicts`  | `@pick_keys`, `@omit_keys`, `@map_vals`, `@filter_keys`, `@deep_merge`, `@dict_diff`, `@flat_dict`, `@swap_kv`, `@rename_key`, `@key_of`, `@values_where` |
 | `text`   | `@camel_case`, `@snake_case`, `@kebab_case`, `@pascal_case`, `@word_freq`, `@normalize_ws`, `@excerpt`, `@initials`, `@squeeze`, `@ordinal`, `@pluralize`, `@de_accent`, `@wrap_lines` |
 | `logic`  | `@coalesce`, `@first_true`, `@count_if`, `@any_match`, `@all_match`, `@none_match`, `@first_where`, `@last_where`, `@default_if_none`, `@safe_get`, `@group_by`, `@tally` |
+
+### Data shortcut plugin (`cruhon-shortcuts-data`)
+
+A third shortcut plugin (`mods/cruhon-shortcuts-data/`) for the v2.4 data
+& format namespaces. Loads cleanly alongside the other two shortcut
+plugins. Configuration via `mod.json`:
+
+```json
+{
+  "groups": "all",
+  "disabled": [],
+  "custom": {}
+}
+```
+
+`groups` accepts `"all"` or any subset of: `format`, `numbers`, `system`.
+
+| Group     | Highlights |
+|-----------|-----------|
+| `format`  | `@xml_parse`, `@xml_load`, `@xml_dict`, `@xml_text`, `@toml_load`, `@toml_get`, `@diff_ratio`, `@similar`, `@closest`, `@fuzzy`, plus `@xml.text_all`, `@diff.changed`, `@toml.flatten` |
+| `numbers` | `@dec_of`, `@dec_add`, `@dec_round`, `@money`, `@frac`, `@frac_str`, `@frac_add`, plus `@decimal.money`, `@decimal.percent`, `@decimal.average`, `@fraction.reciprocal` |
+| `system`  | `@ip_addr`, `@is_private_ip`, `@ip_hosts`, `@os_name`, `@py_version`, `@machine`, `@hostname`, `@char_name`, `@strip_accents`, `@hexlify`, `@unhexlify`, `@sh_split`, plus `@ip.is_ipv4/is_ipv6`, `@platform.summary`, `@binascii.hex_spaced` |
 
 ### `@file` quick reference
 

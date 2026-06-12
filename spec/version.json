@@ -1,5 +1,5 @@
 {
-  "current": "2.3.0",
+  "current": "2.4.0",
   "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
@@ -55,6 +55,11 @@
       "version": "2.3.0",
       "status": "released",
       "summary": "v2.3.0: Full expansion of the 5 v2.2 stdlib namespaces + second shortcut plugin. @string.*: char utilities (ascii_to_int, filter, exclude, count_in, translate) + random string generators (random_lower/upper/digits_str). @struct.*: unpack_list, first, pad, byte_order, to_hex, from_hex_str, native. @zlib.*: base64 wrappers (compress_b64/str, decompress_b64/str), adler32_hex, saved_bytes, is_zlib. @calendar.*: is_weekday/weekend, first_weekday_of, day_of_year, week_of_year, year_text, quarter, next_month, prev_month. @email.*: cc/bcc/reply_to/content_type getters, to_bytes, html_body, attach_text/bytes, all_attachments, set_cc/bcc/reply_to, address_list. New cruhon-shortcuts-pro plugin (mods/cruhon-shortcuts-pro, 5 groups, 120+ operations): @math.* (clamp/lerp/sign/gcd/lcm/sin/cos/tan/degrees/…), @collections.* lists (window/transpose/unzip/rotate/partition/chunks/sorted_by/…), @collections.* dicts (pick_keys/omit_keys/deep_merge/dict_diff/flatten_nested/…), @collections.* logic (coalesce/first_where/count_if/group_by/tally/…), @text.* (camel_case/snake_case/kebab_case/word_freq/ordinal/de_accent/…). 1316-test suite."
+    },
+    {
+      "version": "2.4.0",
+      "status": "released",
+      "summary": "v2.4.0: 10 new data & format stdlib namespaces (no @import needed): @xml (xml.etree — parse/from_string/find/find_all/to_dict/find_text), @toml (tomllib — loads/load/get/keys/has), @diff (difflib — ratio/is_similar/unified/ndiff/close_matches/best_match), @decimal (exact base-10 math — make/add/mul/round/sum/sqrt/quantize), @fraction (exact rationals — make/from_float/add/numerator/limit), @ip (ipaddress — address/network/is_private/version/hosts/num_addresses/contains), @platform (system/release/machine/python_version/is_windows/is_linux/is_mac), @unicode (unicodedata — name/lookup/category/numeric/normalize/nfc/strip_accents), @binascii (hexlify/unhexlify/b2a_base64/crc32), @shlex (split/join/quote/quote_all). Third shortcut plugin cruhon-shortcuts-data (mods/cruhon-shortcuts-data, 3 groups: format/numbers/system) with aliases like @xml_parse, @toml_load, @similar, @dec_of, @frac, @money, @is_private_ip, @os_name, @char_name, @hexlify, @sh_split plus new convenience methods (@xml.text_all, @diff.changed, @decimal.money/percent/average, @fraction.reciprocal, @ip.is_ipv4/is_ipv6/first_host, @platform.summary, @binascii.hex_spaced). Loads cleanly alongside cruhon-shortcuts and cruhon-shortcuts-pro. 1401-test suite."
     }
   ],
   "frozen_at": null,

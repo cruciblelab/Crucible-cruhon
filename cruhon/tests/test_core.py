@@ -5316,6 +5316,308 @@ class TestEmailLibExpanded:
 
 
 # ─────────────────────────────────────────────────────────────
+# DATA & FORMAT NAMESPACES (new in v2.4.0)
+# ─────────────────────────────────────────────────────────────
+
+class TestXmlLib:
+    def test_from_string_and_tag(self):
+        ns = _run_ns('@var[r; @xml.from_string["<root><a>1</a></root>"]]\n@var[t; @xml.tag[r]]')
+        assert ns["t"] == "root"
+
+    def test_find_text(self):
+        ns = _run_ns('@var[r; @xml.from_string["<a><b>hi</b></a>"]]\n@var[t; @xml.find_text[r; "b"]]')
+        assert ns["t"] == "hi"
+
+    def test_attrib(self):
+        ns = _run_ns('@var[r; @xml.from_string["<a id=\\"5\\" name=\\"x\\"/>"]]\n@var[d; @xml.attrib[r]]')
+        assert ns["d"] == {"id": "5", "name": "x"}
+
+    def test_get_attribute(self):
+        ns = _run_ns('@var[r; @xml.from_string["<a id=\\"5\\"/>"]]\n@var[v; @xml.get[r; "id"]]')
+        assert ns["v"] == "5"
+
+    def test_find_all_count(self):
+        ns = _run_ns(
+            '@var[r; @xml.from_string["<root><i>1</i><i>2</i><i>3</i></root>"]]\n'
+            '@var[c; @xml.count[r; "i"]]'
+        )
+        assert ns["c"] == 3
+
+    def test_children(self):
+        ns = _run_ns(
+            '@var[r; @xml.from_string["<root><a/><b/></root>"]]\n'
+            '@var[ch; @xml.children[r]]'
+        )
+        assert len(ns["ch"]) == 2
+
+    def test_to_dict(self):
+        ns = _run_ns(
+            '@var[r; @xml.from_string["<a x=\\"1\\"><b>hi</b></a>"]]\n'
+            '@var[d; @xml.to_dict[r]]'
+        )
+        assert ns["d"]["tag"] == "a"
+        assert ns["d"]["attrib"] == {"x": "1"}
+        assert ns["d"]["children"][0]["text"] == "hi"
+
+    def test_to_string_codegen(self):
+        h = get_lib_call("xml", "to_string")
+        assert "tostring" in h(["el"])
+
+
+class TestTomlLib:
+    def test_loads(self):
+        ns = _run_ns('@var[d; @toml.loads["a = 1\\nb = \\"x\\""]]')
+        assert ns["d"] == {"a": 1, "b": "x"}
+
+    def test_get(self):
+        ns = _run_ns('@var[v; @toml.get["port = 8080"; "port"]]')
+        assert ns["v"] == 8080
+
+    def test_get_default(self):
+        ns = _run_ns('@var[v; @toml.get["a = 1"; "missing"; 99]]')
+        assert ns["v"] == 99
+
+    def test_keys(self):
+        ns = _run_ns('@var[k; @toml.keys["a = 1\\nb = 2"]]')
+        assert set(ns["k"]) == {"a", "b"}
+
+    def test_has_true(self):
+        ns = _run_ns('@var[r; @toml.has["a = 1"; "a"]]')
+        assert ns["r"] is True
+
+
+class TestDiffLib:
+    def test_ratio_identical(self):
+        ns = _run_ns('@var[r; @diff.ratio["abc"; "abc"]]')
+        assert ns["r"] == 1.0
+
+    def test_ratio_partial(self):
+        ns = _run_ns('@var[r; @diff.ratio["hello"; "hallo"]]')
+        assert 0.5 < ns["r"] < 1.0
+
+    def test_is_similar_true(self):
+        ns = _run_ns('@var[r; @diff.is_similar["hello world"; "hello werld"]]')
+        assert ns["r"] is True
+
+    def test_is_similar_false(self):
+        ns = _run_ns('@var[r; @diff.is_similar["abc"; "xyz"]]')
+        assert ns["r"] is False
+
+    def test_close_matches(self):
+        ns = _run_ns('@var[r; @diff.close_matches["appel"; ["apple", "ape", "banana"]]]')
+        assert "apple" in ns["r"]
+
+    def test_best_match(self):
+        ns = _run_ns('@var[r; @diff.best_match["colour"; ["color", "flavor"]]]')
+        assert ns["r"] == "color"
+
+    def test_unified_runs(self):
+        ns = _run_ns('@var[r; @diff.unified["line1\\nline2"; "line1\\nCHANGED"]]')
+        assert isinstance(ns["r"], list)
+        assert any("CHANGED" in _l for _l in ns["r"])
+
+
+class TestDecimalLib:
+    def test_add_exact(self):
+        ns = _run_ns('@var[r; @decimal.add["0.1"; "0.2"]]')
+        assert str(ns["r"]) == "0.3"
+
+    def test_mul(self):
+        ns = _run_ns('@var[r; @decimal.mul["1.5"; "2"]]')
+        assert str(ns["r"]) == "3.0"
+
+    def test_round(self):
+        ns = _run_ns('@var[r; @decimal.round["3.14159"; 2]]')
+        assert str(ns["r"]) == "3.14"
+
+    def test_round_half_up(self):
+        ns = _run_ns('@var[r; @decimal.round["2.5"; 0]]')
+        assert str(ns["r"]) == "3"
+
+    def test_sum(self):
+        ns = _run_ns('@var[r; @decimal.sum[["0.1", "0.2", "0.3"]]]')
+        assert str(ns["r"]) == "0.6"
+
+    def test_to_float(self):
+        ns = _run_ns('@var[r; @decimal.to_float[@decimal.make["1.25"]]]')
+        assert ns["r"] == 1.25
+
+    def test_sqrt(self):
+        ns = _run_ns('@var[r; @decimal.sqrt["2"]]')
+        assert str(ns["r"]).startswith("1.4142")
+
+    def test_compare(self):
+        ns = _run_ns('@var[r; @decimal.compare["1"; "2"]]')
+        assert ns["r"] == -1
+
+
+class TestFractionLib:
+    def test_make_and_str(self):
+        ns = _run_ns('@var[r; @fraction.make[1; 3]]\n@var[s; @fraction.to_str[r]]')
+        assert ns["s"] == "1/3"
+
+    def test_make_reduces(self):
+        ns = _run_ns('@var[r; @fraction.make[2; 4]]\n@var[s; @fraction.to_str[r]]')
+        assert ns["s"] == "1/2"
+
+    def test_add_exact(self):
+        ns = _run_ns('@var[r; @fraction.add[@fraction.make[1; 3]; @fraction.make[1; 6]]]\n@var[s; @fraction.to_str[r]]')
+        assert ns["s"] == "1/2"
+
+    def test_from_float(self):
+        ns = _run_ns('@var[r; @fraction.from_float[0.25]]\n@var[s; @fraction.to_str[r]]')
+        assert ns["s"] == "1/4"
+
+    def test_numerator_denominator(self):
+        ns = _run_ns(
+            '@var[f; @fraction.make[3; 7]]\n'
+            '@var[n; @fraction.numerator[f]]\n'
+            '@var[d; @fraction.denominator[f]]'
+        )
+        assert ns["n"] == 3 and ns["d"] == 7
+
+    def test_to_tuple(self):
+        ns = _run_ns('@var[r; @fraction.to_tuple[@fraction.make[2; 5]]]')
+        assert ns["r"] == (2, 5)
+
+
+class TestIpLib:
+    def test_is_private_true(self):
+        ns = _run_ns('@var[r; @ip.is_private["192.168.1.1"]]')
+        assert ns["r"] is True
+
+    def test_is_private_false(self):
+        ns = _run_ns('@var[r; @ip.is_private["8.8.8.8"]]')
+        assert ns["r"] is False
+
+    def test_is_loopback(self):
+        ns = _run_ns('@var[r; @ip.is_loopback["127.0.0.1"]]')
+        assert ns["r"] is True
+
+    def test_version_v4(self):
+        ns = _run_ns('@var[r; @ip.version["10.0.0.1"]]')
+        assert ns["r"] == 4
+
+    def test_version_v6(self):
+        ns = _run_ns('@var[r; @ip.version["::1"]]')
+        assert ns["r"] == 6
+
+    def test_num_addresses(self):
+        ns = _run_ns('@var[r; @ip.num_addresses["10.0.0.0/24"]]')
+        assert ns["r"] == 256
+
+    def test_contains_true(self):
+        ns = _run_ns('@var[r; @ip.contains["10.0.0.0/8"; "10.5.5.5"]]')
+        assert ns["r"] is True
+
+    def test_contains_false(self):
+        ns = _run_ns('@var[r; @ip.contains["10.0.0.0/8"; "192.168.1.1"]]')
+        assert ns["r"] is False
+
+    def test_to_int_roundtrip(self):
+        ns = _run_ns(
+            '@var[n; @ip.to_int["1.2.3.4"]]\n'
+            '@var[a; @ip.from_int[n]]'
+        )
+        assert str(ns["a"]) == "1.2.3.4"
+
+
+class TestPlatformLib:
+    def test_system_runs(self):
+        ns = _run_ns("@var[r; @platform.system[]]")
+        import platform
+        assert ns["r"] == platform.system()
+
+    def test_python_version(self):
+        ns = _run_ns("@var[r; @platform.python_version[]]")
+        import platform
+        assert ns["r"] == platform.python_version()
+
+    def test_is_linux_or_not(self):
+        ns = _run_ns("@var[r; @platform.is_linux[]]")
+        assert isinstance(ns["r"], bool)
+
+    def test_is_64bit(self):
+        ns = _run_ns("@var[r; @platform.is_64bit[]]")
+        assert isinstance(ns["r"], bool)
+
+    def test_machine_codegen(self):
+        h = get_lib_call("platform", "machine")
+        assert "machine()" in h([])
+
+
+class TestUnicodeLib:
+    def test_name(self):
+        ns = _run_ns('@var[r; @unicode.name["A"]]')
+        assert ns["r"] == "LATIN CAPITAL LETTER A"
+
+    def test_lookup(self):
+        ns = _run_ns('@var[r; @unicode.lookup["LATIN SMALL LETTER A"]]')
+        assert ns["r"] == "a"
+
+    def test_category(self):
+        ns = _run_ns('@var[r; @unicode.category["5"]]')
+        assert ns["r"] == "Nd"
+
+    def test_numeric(self):
+        ns = _run_ns('@var[r; @unicode.numeric["\\u00bd"]]')
+        assert ns["r"] == 0.5
+
+    def test_strip_accents(self):
+        ns = _run_ns('@var[r; @unicode.strip_accents["café résumé"]]')
+        assert ns["r"] == "cafe resume"
+
+    def test_nfc_codegen(self):
+        h = get_lib_call("unicode", "nfc")
+        assert "NFC" in h(["s"])
+
+
+class TestBinasciiLib:
+    def test_hexlify(self):
+        ns = _run_ns('@var[r; @binascii.hexlify[b"AB"]]')
+        assert ns["r"] == "4142"
+
+    def test_hexlify_str_input(self):
+        ns = _run_ns('@var[r; @binascii.hexlify["AB"]]')
+        assert ns["r"] == "4142"
+
+    def test_unhexlify(self):
+        ns = _run_ns('@var[r; @binascii.unhexlify["4142"]]')
+        assert ns["r"] == b"AB"
+
+    def test_crc32(self):
+        import binascii
+        ns = _run_ns('@var[r; @binascii.crc32["hello"]]')
+        assert ns["r"] == (binascii.crc32(b"hello") & 0xFFFFFFFF)
+
+    def test_b2a_base64_codegen(self):
+        h = get_lib_call("binascii", "b2a_base64")
+        assert "b2a_base64" in h(["data"])
+
+
+class TestShlexLib:
+    def test_split(self):
+        ns = _run_ns('@var[r; @shlex.split["echo hello world"]]')
+        assert ns["r"] == ["echo", "hello", "world"]
+
+    def test_split_quoted(self):
+        ns = _run_ns('@var[r; @shlex.split["cmd \\"a b\\" c"]]')
+        assert ns["r"] == ["cmd", "a b", "c"]
+
+    def test_quote(self):
+        ns = _run_ns('@var[r; @shlex.quote["a b c"]]')
+        assert ns["r"] == "'a b c'"
+
+    def test_join(self):
+        ns = _run_ns('@var[r; @shlex.join[["echo", "a b"]]]')
+        assert ns["r"] == "echo 'a b'"
+
+    def test_quote_all(self):
+        ns = _run_ns('@var[r; @shlex.quote_all[["a b", "c"]]]')
+        assert ns["r"] == ["'a b'", "c"]
+
+
+# ─────────────────────────────────────────────────────────────
 # MOD LOADER SYSTEM FIXES (10 correctness fixes)
 # ─────────────────────────────────────────────────────────────
 
