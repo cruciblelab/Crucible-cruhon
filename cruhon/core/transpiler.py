@@ -92,7 +92,7 @@ class Transpiler:
                 node = transform_node(node)
                 for attr in ("body", "else_body", "catch_body", "finally_body", "default_body"):
                     children = getattr(node, attr, None)
-                    if children:
+                    if children and isinstance(children, list):
                         setattr(node, attr, transform_body(children))
                 if hasattr(node, "elif_branches") and node.elif_branches:
                     node.elif_branches = [
@@ -654,6 +654,22 @@ class Transpiler:
     def visit_MacroCallNode(self, node) -> str:
         args_str = ", ".join(node.args)
         return self._line(f"__macro_{node.name}({args_str})", node.line)
+
+    def visit_TemplateDefNode(self, node) -> str:
+        body_repr = repr(node.body)
+        return self._line(f"__tmpl_{node.name} = {body_repr}", node.line)
+
+    def visit_LetNode(self, node) -> str:
+        lines = [self._line(f"{name} = {value}", node.line) for name, value in node.pairs]
+        return "\n".join(lines)
+
+    def visit_PipelineNode(self, node) -> str:
+        if not node.funcs:
+            return self._line(f"__pipeline_{node.name} = lambda __v: __v", node.line)
+        composed = "__v"
+        for fn in node.funcs:
+            composed = f"({fn})({composed})"
+        return self._line(f"__pipeline_{node.name} = lambda __v: {composed}", node.line)
 
     def visit_ExprNode(self, node: ExprNode) -> str:
         return self._line(node.expr, node.line)

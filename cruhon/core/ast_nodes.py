@@ -425,6 +425,26 @@ class MacroCallNode(Node):
 
 
 @dataclass
+class TemplateDefNode(Node):
+    """@template[name] ... @end — define a named string template with {key} placeholders"""
+    name: str = ""
+    body: str = ""
+
+
+@dataclass
+class LetNode(Node):
+    """@let[x; v1; y; v2; ...] — multiple variable assignment shorthand"""
+    pairs: List[tuple] = field(default_factory=list)
+
+
+@dataclass
+class PipelineNode(Node):
+    """@pipeline[name; fn1; fn2; ...] — define a named function-composition pipeline"""
+    name: str = ""
+    funcs: List[str] = field(default_factory=list)
+
+
+@dataclass
 class PluginBlockNode(Node):
     """
     Generic block node for plugin-defined block commands.

@@ -136,12 +136,19 @@ class Parser:
             "retry":     self._parse_retry,
             "timeout":   self._parse_timeout,
             "macro":     self._parse_macro,
+            "template":  self._parse_template,
         }
         self._commands.update({
-            "export": self._parse_export,
-            "use":    self._parse_use,
-            "from":   self._parse_from,
-            "call":   self._parse_call,
+            "export":   self._parse_export,
+            "use":      self._parse_use,
+            "from":     self._parse_from,
+            "call":     self._parse_call,
+            "let":      self._parse_let,
+            "pipeline": self._parse_pipeline,
+            "spread":   self._parse_spread,
+            "unpack":   self._parse_unpack,
+            "apply":    self._parse_apply,
+            "render":   self._parse_render,
         })
 
     # ── Token navigation ──────────────────────────────────────
@@ -317,7 +324,7 @@ class Parser:
         inline_expr_cmds = {
             "env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe",
             "dictcomp", "setcomp", "gencomp", "set", "tuple", "when", "default",
-            "input", "call",
+            "input", "call", "spread", "unpack", "apply", "render",
         }
 
         if cmd in inline_expr_cmds:
@@ -502,6 +509,49 @@ class Parser:
                 macro_name = args[0].strip()
                 call_args = ", ".join(args[1:])
                 return f"__macro_{macro_name}({call_args})"
+
+            elif cmd == "spread":
+                # @spread[fn; iterable] → fn(*iterable)
+                self.advance()  # @spread
+                args = self.parse_args()
+                if len(args) < 2:
+                    raise ParseError("@spread requires [fn; iterable]", line)
+                return f"{args[0]}(*{args[1]})"
+
+            elif cmd == "unpack":
+                # @unpack[fn; mapping] → fn(**mapping)
+                self.advance()  # @unpack
+                args = self.parse_args()
+                if len(args) < 2:
+                    raise ParseError("@unpack requires [fn; mapping]", line)
+                return f"{args[0]}(**{args[1]})"
+
+            elif cmd == "apply":
+                # @apply[pipeline_name; value] → __pipeline_name(value)
+                self.advance()  # @apply
+                args = self.parse_args()
+                if len(args) < 2:
+                    raise ParseError("@apply requires [pipeline_name; value]", line)
+                pipeline_name = args[0].strip()
+                return f"__pipeline_{pipeline_name}({args[1]})"
+
+            elif cmd == "render":
+                # @render[name; k=v; ...] → __tmpl_name.format_map({...})
+                self.advance()  # @render
+                args = self.parse_args()
+                if not args:
+                    raise ParseError("@render requires a template name", line)
+                tmpl_name = args[0].strip()
+                pairs = []
+                for a in args[1:]:
+                    a = a.strip()
+                    eq = a.find("=")
+                    if eq > 0:
+                        k = a[:eq].strip()
+                        v = a[eq + 1:].strip()
+                        pairs.append(f'"{k}": {v}')
+                mapping = "{" + ", ".join(pairs) + "}" if pairs else "{}"
+                return f"__tmpl_{tmpl_name}.format_map({mapping})"
 
         # Plugin-registered inline commands
         if cmd in self._inline_commands:
@@ -1450,6 +1500,123 @@ class Parser:
         name = args[0].strip()
         call_args = list(args[1:])
         return MacroCallNode(name=name, args=call_args, line=line)
+
+    def _parse_template(self) -> "TemplateDefNode":
+        from .ast_nodes import TemplateDefNode
+        tmpl_line = self.current.line
+        self.advance()  # @template
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@template requires a name", tmpl_line)
+        name = args[0].strip()
+
+        # Body capture — same pattern as _parse_raw
+        content_start = tmpl_line  # 0-based index of line after @template
+        end_line_num = len(self._source_lines) + 1
+        while self.current.type != "EOF":
+            tok = self.current
+            if tok.type in ("NEWLINE", "COMMENT", "INDENT", "DEDENT"):
+                self.advance()
+                continue
+            if tok.type == "AT_CMD" and tok.value == "end":
+                end_line_num = tok.line
+                self.advance()
+                break
+            while self.current.type not in ("NEWLINE", "EOF"):
+                if self.current.type == "AT_CMD" and self.current.value == "end":
+                    end_line_num = self.current.line
+                    self.advance()
+                    break
+                self.advance()
+            else:
+                continue
+            break
+
+        raw_lines = self._source_lines[content_start:end_line_num - 1]
+        if raw_lines:
+            non_empty = [ln for ln in raw_lines if ln.strip()]
+            if non_empty:
+                min_indent = min(len(ln) - len(ln.lstrip()) for ln in non_empty)
+            else:
+                min_indent = 0
+            raw_lines = [ln[min_indent:] if len(ln) >= min_indent else ln
+                         for ln in raw_lines]
+        while raw_lines and not raw_lines[0].strip():
+            raw_lines.pop(0)
+        while raw_lines and not raw_lines[-1].strip():
+            raw_lines.pop()
+
+        body = "\n".join(raw_lines)
+        return TemplateDefNode(name=name, body=body, line=tmpl_line)
+
+    def _parse_let(self) -> "LetNode":
+        from .ast_nodes import LetNode
+        line = self.current.line
+        self.advance()  # @let
+        args = self.parse_args()
+        if len(args) % 2 != 0:
+            raise ParseError(
+                "@let requires an even number of arguments (name; value pairs)", line)
+        pairs = [(args[i].strip(), args[i + 1]) for i in range(0, len(args), 2)]
+        return LetNode(pairs=pairs, line=line)
+
+    def _parse_pipeline(self) -> "PipelineNode":
+        from .ast_nodes import PipelineNode
+        line = self.current.line
+        self.advance()  # @pipeline
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@pipeline requires at least a name", line)
+        name = args[0].strip()
+        funcs = [a.strip() for a in args[1:]]
+        return PipelineNode(name=name, funcs=funcs, line=line)
+
+    def _parse_spread(self) -> "ExprNode":
+        from .ast_nodes import ExprNode
+        line = self.current.line
+        self.advance()  # @spread
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@spread requires [fn; iterable]", line)
+        return ExprNode(expr=f"{args[0]}(*{args[1]})", line=line)
+
+    def _parse_unpack(self) -> "ExprNode":
+        from .ast_nodes import ExprNode
+        line = self.current.line
+        self.advance()  # @unpack
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@unpack requires [fn; mapping]", line)
+        return ExprNode(expr=f"{args[0]}(**{args[1]})", line=line)
+
+    def _parse_apply(self) -> "ExprNode":
+        from .ast_nodes import ExprNode
+        line = self.current.line
+        self.advance()  # @apply
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@apply requires [pipeline_name; value]", line)
+        pipeline_name = args[0].strip()
+        return ExprNode(expr=f"__pipeline_{pipeline_name}({args[1]})", line=line)
+
+    def _parse_render(self) -> "ExprNode":
+        from .ast_nodes import ExprNode
+        line = self.current.line
+        self.advance()  # @render
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@render requires a template name", line)
+        tmpl_name = args[0].strip()
+        pairs = []
+        for a in args[1:]:
+            a = a.strip()
+            eq = a.find("=")
+            if eq > 0:
+                k = a[:eq].strip()
+                v = a[eq + 1:].strip()
+                pairs.append(f'"{k}": {v}')
+        mapping = "{" + ", ".join(pairs) + "}" if pairs else "{}"
+        return ExprNode(expr=f"__tmpl_{tmpl_name}.format_map({mapping})", line=line)
 
     def _parse_namespace_call(self) -> Node:
         """

@@ -16,7 +16,7 @@ string:
 @whitespace[]           → @string.whitespace[]
 @printable[]            → @string.printable[]
 @capwords[s]            → @string.capwords[s]
-@template[tpl]          → @string.template[tpl]
+@str_template[tpl]      → @string.template[tpl]
 @substitute[tpl; m]     → @string.substitute[tpl; m]
 @ascii_to_int[c]        → @string.ascii_to_int[c]
 @int_to_ascii[n]        → @string.int_to_ascii[n]
@@ -28,7 +28,7 @@ string:
 
 struct:
 @pack[fmt; ...]         → @struct.pack[fmt; ...]
-@unpack[fmt; data]      → @struct.unpack[fmt; data]
+@struct_unpack[fmt; d]  → @struct.unpack[fmt; d]
 @unpack_list[fmt; data] → @struct.unpack_list[fmt; data]
 @calcsize[fmt]          → @struct.calcsize[fmt]
 @struct_hex[fmt; ...]   → @struct.to_hex[fmt; ...]
@@ -128,7 +128,7 @@ GLOBAL_REWRITES: dict[str, str] = {
     "@whitespace[":      "@string.whitespace[",
     "@printable[":       "@string.printable[",
     "@capwords[":        "@string.capwords[",
-    "@template[":        "@string.template[",
+    "@str_template[":    "@string.template[",
     "@substitute[":      "@string.substitute[",
     # string — new core methods
     "@ascii_to_int[":    "@string.ascii_to_int[",
@@ -140,7 +140,7 @@ GLOBAL_REWRITES: dict[str, str] = {
     "@rnd_digits[":      "@string.random_digits_str[",
     # struct
     "@pack[":            "@struct.pack[",
-    "@unpack[":          "@struct.unpack[",
+    "@struct_unpack[":   "@struct.unpack[",
     "@unpack_list[":     "@struct.unpack_list[",
     "@calcsize[":        "@struct.calcsize[",
     "@struct_hex[":      "@struct.to_hex[",
