@@ -1,5 +1,5 @@
 {
-  "current": "2.1.0",
+  "current": "2.2.0",
   "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
@@ -45,6 +45,11 @@
       "version": "2.1.0",
       "status": "released",
       "summary": "v2.1.0: Rich diagnostics (core/diagnostics.py) — source excerpt + caret + hint + did-you-mean, more readable than Python. Opt-in diagnostic logging to file via CRUHON_LOG / --log. 20 new stdlib namespaces (@random @collections @itertools @functools @sys @io @copy @base64 @url @statistics @contextlib @enum @dataclasses @typing @threading @queue @heapq @bisect @operator @pprint). Plugin freedom: api.inject_once, unregister_command/remove_hook/remove_inject/remove_eval_hook, override node-name map fixed for all 40+ nodes, on_error fires for Parse/RunError, after_run gets source/python_code, pip mod version + config support. 1247-test suite."
+    },
+    {
+      "version": "2.2.0",
+      "status": "released",
+      "summary": "v2.2.0: cruhon-shortcuts plugin — a fully configurable shortcut layer (mods/cruhon-shortcuts, 13 group files) giving shorter syntax for all namespaces: global aliases (@read→@file.read, @now→@date.now, @uuid→@crypto.uuid) plus 200+ new convenience methods (@file.head/tail/grep, @date.tomorrow/age, @random.password, @statistics.summary, @collections.histogram, etc.). 5 new core stdlib namespaces backing it: @string @struct @zlib @calendar @email. Config keys: groups / global_aliases / method_aliases / disabled / custom. 1271-test suite."
     }
   ],
   "frozen_at": null,

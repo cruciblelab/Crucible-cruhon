@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.1.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.2.0
 
 ---
 
@@ -461,7 +461,7 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries (33 namespaces, 700+ commands)
+## Standard Libraries (38 namespaces, 900+ commands)
 
 See [`library.md`](library.md) for the complete reference.
 
@@ -654,7 +654,51 @@ Full set: `@random` `@collections` `@itertools` `@functools` `@sys` `@io`
 `@copy` `@base64` `@url` `@statistics` `@contextlib` `@enum` `@dataclasses`
 `@typing` `@threading` `@queue` `@heapq` `@bisect` `@operator` `@pprint`.
 
-See [`library.md`](library.md) for the full reference on all 700+ commands.
+### More stdlib wrappers (5 namespaces, new in v2.2)
+
+```clpy
+# Strings & templates
+@var[chars; @string.ascii_letters[]]
+@var[msg; @string.substitute["Hi $name"; {"name": "Bob"}]]
+@var[id; @string.random[12]]
+
+# Binary packing
+@var[data; @struct.pack[">I"; 42]]
+@var[vals; @struct.unpack[">I"; data]]
+
+# Compression & checksums
+@var[c; @zlib.compress[big_text]]
+@var[sum; @zlib.crc32_hex["abc"]]
+
+# Calendar math
+@var[leap; @calendar.is_leap[2024]]
+@var[days; @calendar.days_in_month[2024; 2]]
+
+# Email messages
+@var[m; @email.make["Hi"; "a@b.com"; "c@d.com"; "Hello!"]]
+@var[ok; @email.valid_address["x@y.com"]]
+```
+
+New set: `@string` `@struct` `@zlib` `@calendar` `@email`.
+
+### Shortcut plugin — shorter syntax for everything
+
+The bundled `cruhon-shortcuts` plugin lets you drop the namespace prefix on
+the most common operations, and adds 200+ extra convenience methods:
+
+```clpy
+@var[text; @read["notes.txt"]]           # @read → @file.read
+@var[head; @file.head["log.txt"; 20]]    # first 20 lines (new method)
+@var[stamp; @now[]]                       # @now → @date.now
+@var[id; @uuid[]]                         # @uuid → @crypto.uuid
+@var[pw; @random.password[16]]            # new method
+@var[stats; @statistics.summary[scores]]  # mean/median/stdev/min/max
+```
+
+Fully configurable in `mods/cruhon-shortcuts/mod.json` — pick groups, toggle
+global vs. method aliases, disable specific shortcuts, or add your own.
+
+See [`library.md`](library.md) for the full reference on all 900+ commands.
 
 ---
 

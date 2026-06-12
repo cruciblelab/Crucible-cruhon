@@ -40,6 +40,8 @@ ALL_GROUPS: list[str] = [
     "data",
     "stdlib",
     "types",
+    "io",
+    "binary",
 ]
 
 

@@ -1,9 +1,9 @@
 {
     "name": "cruhon-shortcuts",
-    "version": "1.0.0",
-    "description": "Shortcut plugin for Cruhon — global aliases and short method names for all 33 built-in namespaces. Write @read instead of @file.read, @now instead of @date.now, @uuid instead of @crypto.uuid, and hundreds more.",
+    "version": "1.1.0",
+    "description": "Shortcut plugin for Cruhon — global aliases and short method names for all 38 built-in namespaces. Write @read instead of @file.read, @now instead of @date.now, @uuid instead of @crypto.uuid, and hundreds more.",
     "author": "CrucibleLab",
-    "cruhon": ">=2.1.0",
+    "cruhon": ">=2.2.0",
 
     "groups": "all",
 

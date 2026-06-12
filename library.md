@@ -102,12 +102,53 @@ One-line access to the most-used Python standard libraries. No `@import` needed.
 | `@operator.*`    | `operator`     | itemgetter, attrgetter, methodcaller, add, sub, mul, eq, lt, contains… |
 | `@pprint.*`      | `pprint`       | print, format, pp, isreadable, isrecursive, saferepr, PrettyPrinter |
 
+### More stdlib wrappers (new in v2.2)
+
+Backing namespaces for the `cruhon-shortcuts` plugin. No `@import` needed.
+
+| Namespace        | Wraps          | Commands |
+|------------------|----------------|----------|
+| `@string.*`      | `string`       | ascii_letters, ascii_lowercase, digits, punctuation, whitespace, printable, template, substitute, safe_substitute, capwords |
+| `@struct.*`      | `struct`       | pack, unpack, pack_into, unpack_from, iter_unpack, calcsize, compile |
+| `@zlib.*`        | `zlib`         | compress, decompress, decompress_text, crc32, crc32_hex, adler32, compressor, decompressor, ratio |
+| `@calendar.*`    | `calendar`     | is_leap, leap_days, month_range, days_in_month, weekday, month_name, month_abbr, day_name, day_abbr, month_dates, month_text, weekheader, timegm |
+| `@email.*`       | `email`        | message, make, set_content, add_html, set_header, attach_file, parse, parse_bytes, subject, sender, recipients, header, headers, body, is_multipart, parts, as_string, parse_address, format_address, valid_address |
+
 ### Plugin namespaces
 
 | Namespace   | Type    | Commands |
 |-------------|---------|----------|
 | `@db.*`     | plugin  | 138 commands — see `mods/cruhon-db` |
 | `@discord.*`| plugin  | ~60 commands — see `mods/cruhon-discord` |
+
+### Shortcut plugin (`cruhon-shortcuts`)
+
+A fully configurable shortcut layer over **every** namespace. It does not add
+a namespace of its own — instead it installs:
+
+- **Global aliases** — `@read` → `@file.read`, `@now` → `@date.now`,
+  `@uuid` → `@crypto.uuid`, `@rand` → `@random.randint`, `@mean` →
+  `@statistics.mean`, and hundreds more.
+- **Method aliases** — `@file.cat`, `@file.ls`, `@date.ts`, `@http.fetch`, …
+- **200+ new convenience methods** — `@file.head`, `@file.tail`, `@file.grep`,
+  `@date.tomorrow`, `@date.age`, `@random.password`, `@statistics.summary`,
+  `@collections.histogram`, `@string.random`, `@struct.hexdump`, …
+
+Everything is toggleable from `mods/cruhon-shortcuts/mod.json`:
+
+```json
+{
+  "groups": "all",
+  "global_aliases": true,
+  "method_aliases": true,
+  "disabled": ["@get[", "@post["],
+  "custom": { "@slurp[": "@file.read[" }
+}
+```
+
+`groups` accepts `"all"` or any subset of: `file`, `http`, `date`, `text`,
+`math`, `crypto`, `collections`, `system`, `data`, `stdlib`, `types`, `io`,
+`binary`. See `mods/cruhon-shortcuts/` for the full per-group command list.
 
 ### `@file` quick reference
 

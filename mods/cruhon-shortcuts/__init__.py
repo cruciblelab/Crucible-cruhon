@@ -32,7 +32,7 @@ Configuration (mod.json)
 ────────────────────────
 groups          "all"  or  ["file", "http", "date", "text", "math",
                              "crypto", "collections", "system", "data",
-                             "stdlib", "types", "io"]
+                             "stdlib", "types", "io", "binary"]
                 Which shortcut groups to activate.
 
 global_aliases  true / false
@@ -115,6 +115,7 @@ _GROUP_MODULES: dict[str, str] = {
     "stdlib":      "shortcuts_stdlib",
     "types":       "shortcuts_types",
     "io":          "shortcuts_io",
+    "binary":      "shortcuts_binary",
 }
 
 

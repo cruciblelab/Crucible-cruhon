@@ -63,6 +63,12 @@ _LIBS: dict[str, str] = {
     "bisect":      "bisect",
     "operator":    "operator",
     "pprint":      "pprint",
+    # New in v2.2.0 — backing modules for the cruhon-shortcuts plugin
+    "string":      "string",
+    "struct":      "struct",
+    "zlib":        "zlib",
+    "calendar":    "calendar",
+    "email":       "email",
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -244,6 +250,11 @@ def _register_stdlib():
     from .libs.bisect_      import register as _r_bisect
     from .libs.operator_    import register as _r_operator
     from .libs.pprint_      import register as _r_pprint
+    from .libs.string_      import register as _r_string
+    from .libs.struct_      import register as _r_struct
+    from .libs.zlib_        import register as _r_zlib
+    from .libs.calendar_    import register as _r_calendar
+    from .libs.email_       import register as _r_email
     _r_file()
     _r_time()
     _r_date()
@@ -278,5 +289,10 @@ def _register_stdlib():
     _r_bisect()
     _r_operator()
     _r_pprint()
+    _r_string()
+    _r_struct()
+    _r_zlib()
+    _r_calendar()
+    _r_email()
 
 _register_stdlib()

@@ -4954,6 +4954,128 @@ class TestPprintLib:
 
 
 # ─────────────────────────────────────────────────────────────
+# NEW STDLIB NAMESPACES (v2.2) — string / struct / zlib / calendar / email
+# ─────────────────────────────────────────────────────────────
+
+class TestStringLib:
+    def test_digits_codegen(self):
+        h = get_lib_call("string", "digits")
+        assert "__import__('string').digits" in h([])
+
+    def test_digits_runs(self):
+        ns = _run_ns("@var[r; @string.digits[]]")
+        assert ns["r"] == "0123456789"
+
+    def test_punctuation_runs(self):
+        import string
+        ns = _run_ns("@var[r; @string.punctuation[]]")
+        assert ns["r"] == string.punctuation
+
+    def test_capwords_runs(self):
+        ns = _run_ns('@var[r; @string.capwords["hello world"]]')
+        assert ns["r"] == "Hello World"
+
+    def test_substitute_runs(self):
+        ns = _run_ns('@var[r; @string.substitute["Hi $name"; {"name": "Bob"}]]')
+        assert ns["r"] == "Hi Bob"
+
+    def test_template_codegen(self):
+        h = get_lib_call("string", "template")
+        assert "__import__('string').Template(t)" in h(["t"])
+
+
+class TestStructLib:
+    def test_calcsize_codegen(self):
+        h = get_lib_call("struct", "calcsize")
+        assert "__import__('struct').calcsize" in h(['">I"'])
+
+    def test_pack_unpack_roundtrip(self):
+        ns = _run_ns(
+            '@var[data; @struct.pack[">I"; 42]]\n'
+            '@var[r; @struct.unpack[">I"; data]]'
+        )
+        assert ns["data"] == b"\x00\x00\x00*"
+        assert ns["r"] == (42,)
+
+    def test_calcsize_runs(self):
+        ns = _run_ns('@var[r; @struct.calcsize[">I"]]')
+        assert ns["r"] == 4
+
+    def test_compile_codegen(self):
+        h = get_lib_call("struct", "compile")
+        assert "__import__('struct').Struct" in h(['">I"'])
+
+
+class TestZlibLib:
+    def test_compress_decompress_roundtrip(self):
+        ns = _run_ns(
+            '@var[c; @zlib.compress["hello hello hello"]]\n'
+            '@var[r; @zlib.decompress_text[c]]'
+        )
+        assert ns["r"] == "hello hello hello"
+
+    def test_crc32_runs(self):
+        import zlib
+        ns = _run_ns('@var[r; @zlib.crc32["abc"]]')
+        assert ns["r"] == (zlib.crc32(b"abc") & 0xFFFFFFFF)
+
+    def test_crc32_hex_runs(self):
+        ns = _run_ns('@var[r; @zlib.crc32_hex["abc"]]')
+        assert ns["r"] == "352441c2"
+
+    def test_adler32_codegen(self):
+        h = get_lib_call("zlib", "adler32")
+        assert "__import__('zlib').adler32" in h(["data"])
+
+
+class TestCalendarLib:
+    def test_is_leap_runs(self):
+        ns = _run_ns("@var[r; @calendar.is_leap[2024]]")
+        assert ns["r"] is True
+
+    def test_is_leap_false(self):
+        ns = _run_ns("@var[r; @calendar.is_leap[2023]]")
+        assert ns["r"] is False
+
+    def test_days_in_month_runs(self):
+        ns = _run_ns("@var[r; @calendar.days_in_month[2024; 2]]")
+        assert ns["r"] == 29
+
+    def test_month_name_runs(self):
+        ns = _run_ns("@var[r; @calendar.month_name[3]]")
+        assert ns["r"] == "March"
+
+    def test_weekday_codegen(self):
+        h = get_lib_call("calendar", "weekday")
+        assert "__import__('calendar').weekday" in h(["2024", "6", "12"])
+
+
+class TestEmailLib:
+    def test_make_and_subject(self):
+        ns = _run_ns(
+            '@var[m; @email.make["Hi"; "a@b.com"; "c@d.com"; "body"]]\n'
+            '@var[s; @email.subject[m]]'
+        )
+        assert ns["s"] == "Hi"
+
+    def test_valid_address_true(self):
+        ns = _run_ns('@var[r; @email.valid_address["x@y.com"]]')
+        assert ns["r"] is True
+
+    def test_valid_address_false(self):
+        ns = _run_ns('@var[r; @email.valid_address["not-an-email"]]')
+        assert ns["r"] is False
+
+    def test_parse_address_runs(self):
+        ns = _run_ns('@var[r; @email.parse_address["Bob <bob@x.com>"]]')
+        assert ns["r"] == ("Bob", "bob@x.com")
+
+    def test_message_codegen(self):
+        h = get_lib_call("email", "message")
+        assert "EmailMessage()" in h([])
+
+
+# ─────────────────────────────────────────────────────────────
 # MOD LOADER SYSTEM FIXES (10 correctness fixes)
 # ─────────────────────────────────────────────────────────────
 

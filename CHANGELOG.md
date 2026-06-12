@@ -4,7 +4,44 @@ All notable changes are documented here.
 
 ---
 
-## v2.1.0 (current) — Diagnostics, More Stdlib, Plugin Freedom
+## v2.2.0 (current) — Shortcut Plugin & 5 New Namespaces
+
+### `cruhon-shortcuts` plugin
+
+A new bundled plugin (`mods/cruhon-shortcuts/`, 14 files) that adds a fully
+configurable shortcut layer over every namespace:
+
+- **Global aliases** via a `before_parse` rewrite hook — `@read` →
+  `@file.read`, `@now` → `@date.now`, `@uuid` → `@crypto.uuid`, `@rand` →
+  `@random.randint`, `@mean` → `@statistics.mean`, and hundreds more.
+- **Method aliases** — `@file.cat`, `@file.ls`, `@date.ts`, `@http.fetch`,
+  `@itertools.flat`, `@statistics.avg`, etc.
+- **200+ new convenience methods** registered via `api.lib_call()` —
+  `@file.head/tail/grep/wc/sha256_file`, `@date.tomorrow/yesterday/age/quarter`,
+  `@random.roll/flip/password/alphanumeric`, `@collections.histogram/window`,
+  `@statistics.summary/normalize/zscore`, `@text.camel_to_snake`,
+  `@string.random`, `@struct.hexdump`, and more.
+
+Configuration (`mod.json`): `groups` (`"all"` or a subset of 13 groups),
+`global_aliases`, `method_aliases`, `disabled`, and `custom` rewrites.
+
+### 5 new core stdlib namespaces
+
+Added to back the shortcut plugin (no `@import` needed):
+
+- **`@string.*`** — character-class constants, `Template` substitution, `capwords`.
+- **`@struct.*`** — binary `pack`/`unpack`, `calcsize`, compiled `Struct`.
+- **`@zlib.*`** — `compress`/`decompress`, `crc32`/`crc32_hex`, `adler32`.
+- **`@calendar.*`** — `is_leap`, `days_in_month`, `weekday`, month/day names.
+- **`@email.*`** — build, parse, and inspect MIME messages; address utilities.
+
+### Tests
+
+Suite grows to **1271** tests (24 new for the 5 namespaces).
+
+---
+
+## v2.1.0 — Diagnostics, More Stdlib, Plugin Freedom
 
 ### Rich, readable diagnostics
 
