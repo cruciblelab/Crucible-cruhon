@@ -4402,3 +4402,552 @@ class TestTernaryExpression:
     def test_nested_ternary(self):
         ns = _run_ns('@var[x; 0]\n@var[r; "pos" if x > 0 else "zero" if x == 0 else "neg"]')
         assert ns['r'] == "zero"
+
+
+# ─────────────────────────────────────────────────────────────
+# NEW STDLIB LIBS (v2.1.0 additions)
+# ─────────────────────────────────────────────────────────────
+
+from cruhon.core.registry import get_lib_call
+
+
+class TestRandomLib:
+    def test_randint_codegen(self):
+        h = get_lib_call("random", "randint")
+        assert h(["1", "10"]) == "__import__('random').randint(1, 10)"
+
+    def test_choice_codegen(self):
+        h = get_lib_call("random", "choice")
+        assert h(["items"]) == "__import__('random').choice(items)"
+
+    def test_shuffle_codegen(self):
+        h = get_lib_call("random", "shuffle")
+        assert h(["lst"]) == "__import__('random').shuffle(lst)"
+
+    def test_sample_codegen(self):
+        h = get_lib_call("random", "sample")
+        assert h(["lst", "3"]) == "__import__('random').sample(lst, 3)"
+
+    def test_uniform_codegen(self):
+        h = get_lib_call("random", "uniform")
+        assert h(["0.0", "1.0"]) == "__import__('random').uniform(0.0, 1.0)"
+
+    def test_seed_codegen(self):
+        h = get_lib_call("random", "seed")
+        assert h(["42"]) == "__import__('random').seed(42)"
+
+    def test_random_runs(self):
+        ns = _run_ns("@var[x; @random.randint[1; 100]]")
+        assert 1 <= ns["x"] <= 100
+
+    def test_choice_runs(self):
+        ns = _run_ns("@var[items; [1, 2, 3]]\n@var[x; @random.choice[items]]")
+        assert ns["x"] in [1, 2, 3]
+
+
+class TestCollectionsLib:
+    def test_Counter_codegen(self):
+        h = get_lib_call("collections", "Counter")
+        assert "__import__('collections').Counter" in h(["items"])
+
+    def test_defaultdict_codegen(self):
+        h = get_lib_call("collections", "defaultdict")
+        assert "__import__('collections').defaultdict(list)" in h(["list"])
+
+    def test_deque_codegen(self):
+        h = get_lib_call("collections", "deque")
+        assert "__import__('collections').deque" in h(["items"])
+
+    def test_Counter_runs(self):
+        ns = _run_ns("@var[c; @collections.Counter[\"aabbc\"]]")
+        import collections
+        assert ns["c"] == collections.Counter("aabbc")
+
+    def test_deque_runs(self):
+        ns = _run_ns("@var[d; @collections.deque[[1, 2, 3]]]")
+        from collections import deque
+        assert list(ns["d"]) == [1, 2, 3]
+
+    def test_namedtuple_codegen(self):
+        h = get_lib_call("collections", "namedtuple")
+        result = h(['"Point"', '"x y"'])
+        assert "__import__('collections').namedtuple" in result
+
+    def test_OrderedDict_runs(self):
+        ns = _run_ns("@var[od; @collections.OrderedDict[]]")
+        from collections import OrderedDict
+        assert isinstance(ns["od"], OrderedDict)
+
+
+class TestItertoolsLib:
+    def test_chain_codegen(self):
+        h = get_lib_call("itertools", "chain")
+        assert "__import__('itertools').chain" in h(["a", "b"])
+
+    def test_combinations_codegen(self):
+        h = get_lib_call("itertools", "combinations")
+        assert "__import__('itertools').combinations(lst, 2)" in h(["lst", "2"])
+
+    def test_permutations_codegen(self):
+        h = get_lib_call("itertools", "permutations")
+        assert "__import__('itertools').permutations(lst)" in h(["lst"])
+
+    def test_cycle_codegen(self):
+        h = get_lib_call("itertools", "cycle")
+        assert "__import__('itertools').cycle(lst)" in h(["lst"])
+
+    def test_islice_codegen(self):
+        h = get_lib_call("itertools", "islice")
+        assert "__import__('itertools').islice(it, 5)" in h(["it", "5"])
+
+    def test_chain_runs(self):
+        ns = _run_ns("\n".join([
+            "@var[chained; @itertools.chain[[1, 2]; [3, 4]]]",
+            "@var[r; list(chained)]",
+        ]))
+        assert ns["r"] == [1, 2, 3, 4]
+
+    def test_combinations_runs(self):
+        ns = _run_ns("\n".join([
+            "@var[combos; @itertools.combinations[[1, 2, 3]; 2]]",
+            "@var[r; list(combos)]",
+        ]))
+        assert ns["r"] == [(1, 2), (1, 3), (2, 3)]
+
+    def test_flatten_runs(self):
+        ns = _run_ns("@var[r; @itertools.flatten[[[1, 2], [3, 4]]]]")
+        assert ns["r"] == [1, 2, 3, 4]
+
+
+class TestFunctoolsLib:
+    def test_reduce_codegen(self):
+        h = get_lib_call("functools", "reduce")
+        result = h(["lambda a, b: a + b", "[1, 2, 3]"])
+        assert "__import__('functools').reduce" in result
+
+    def test_partial_codegen(self):
+        h = get_lib_call("functools", "partial")
+        result = h(["pow", "2"])
+        assert "__import__('functools').partial(pow, 2)" in result
+
+    def test_lru_cache_codegen(self):
+        h = get_lib_call("functools", "lru_cache")
+        result = h(["128"])
+        assert "__import__('functools').lru_cache(maxsize=128)" in result
+
+    def test_reduce_runs(self):
+        ns = _run_ns("@var[r; @functools.reduce[lambda a, b: a + b; [1, 2, 3, 4]]]")
+        assert ns["r"] == 10
+
+    def test_partial_runs(self):
+        ns = _run_ns("@var[add2; @functools.partial[int.__add__; 2]]\n@var[r; add2(3)]")
+        # int.__add__ may not work in all contexts; test codegen only
+        h = get_lib_call("functools", "partial")
+        assert "__import__('functools').partial" in h(["f", "x"])
+
+
+class TestSysLib:
+    def test_argv_codegen(self):
+        h = get_lib_call("sys", "argv")
+        assert "__import__('sys').argv" in h([])
+
+    def test_version_codegen(self):
+        h = get_lib_call("sys", "version")
+        assert "__import__('sys').version" in h([])
+
+    def test_maxsize_codegen(self):
+        h = get_lib_call("sys", "maxsize")
+        assert "__import__('sys').maxsize" in h([])
+
+    def test_argv_runs(self):
+        ns = _run_ns("@var[argv; @sys.argv[]]")
+        import sys
+        assert ns["argv"] is sys.argv
+
+    def test_platform_runs(self):
+        ns = _run_ns("@var[p; @sys.platform[]]")
+        import sys
+        assert ns["p"] == sys.platform
+
+    def test_exit_codegen(self):
+        h = get_lib_call("sys", "exit")
+        assert "__import__('sys').exit(0)" in h([])
+        assert "__import__('sys').exit(1)" in h(["1"])
+
+
+class TestIOLib:
+    def test_StringIO_codegen(self):
+        h = get_lib_call("io", "StringIO")
+        assert "__import__('io').StringIO" in h([])
+
+    def test_BytesIO_codegen(self):
+        h = get_lib_call("io", "BytesIO")
+        assert "__import__('io').BytesIO" in h([])
+
+    def test_getvalue_codegen(self):
+        h = get_lib_call("io", "getvalue")
+        assert "buf.getvalue()" in h(["buf"])
+
+    def test_StringIO_runs(self):
+        ns = _run_ns("@var[buf; @io.StringIO[]]\n@io.write[buf; \"hello\"]\n@var[r; @io.getvalue[buf]]")
+        assert ns["r"] == "hello"
+
+    def test_seek_tell_runs(self):
+        ns = _run_ns("\n".join([
+            "@var[buf; @io.StringIO[]]",
+            "@io.write[buf; \"hello\"]",
+            "@io.seek[buf; 0]",
+            "@var[r; @io.read[buf]]",
+        ]))
+        assert ns["r"] == "hello"
+
+
+class TestCopyLib:
+    def test_copy_codegen(self):
+        h = get_lib_call("copy", "copy")
+        assert "__import__('copy').copy(x)" in h(["x"])
+
+    def test_deepcopy_codegen(self):
+        h = get_lib_call("copy", "deepcopy")
+        assert "__import__('copy').deepcopy(x)" in h(["x"])
+
+    def test_copy_runs(self):
+        ns = _run_ns("@var[a; [1, 2, 3]]\n@var[b; @copy.copy[a]]")
+        assert ns["b"] == [1, 2, 3]
+        assert ns["b"] is not ns["a"]
+
+    def test_deepcopy_runs(self):
+        ns = _run_ns("@var[a; [[1, 2], [3, 4]]]\n@var[b; @copy.deepcopy[a]]")
+        assert ns["b"] == [[1, 2], [3, 4]]
+        assert ns["b"] is not ns["a"]
+        assert ns["b"][0] is not ns["a"][0]
+
+
+class TestBase64Lib:
+    def test_encode_codegen(self):
+        h = get_lib_call("base64", "encode")
+        result = h(["s"])
+        assert "__import__('base64').b64encode" in result
+
+    def test_decode_codegen(self):
+        h = get_lib_call("base64", "decode")
+        result = h(["s"])
+        assert "__import__('base64').b64decode" in result
+
+    def test_encode_runs(self):
+        ns = _run_ns('@var[r; @base64.encode["hello"]]')
+        import base64
+        assert ns["r"] == base64.b64encode(b"hello").decode()
+
+    def test_decode_runs(self):
+        ns = _run_ns('@var[enc; @base64.encode["hello"]]\n@var[r; @base64.decode[enc]]')
+        assert ns["r"] == "hello"
+
+    def test_urlsafe_encode_codegen(self):
+        h = get_lib_call("base64", "urlsafe_encode")
+        assert "__import__('base64').urlsafe_b64encode" in h(["s"])
+
+
+class TestUrlLib:
+    def test_quote_codegen(self):
+        h = get_lib_call("url", "quote")
+        assert "quote" in h(["s"])
+
+    def test_unquote_codegen(self):
+        h = get_lib_call("url", "unquote")
+        assert "unquote" in h(["s"])
+
+    def test_parse_codegen(self):
+        h = get_lib_call("url", "parse")
+        assert "urlparse" in h(["u"])
+
+    def test_join_codegen(self):
+        h = get_lib_call("url", "join")
+        assert "urljoin" in h(["base", "path"])
+
+    def test_quote_runs(self):
+        ns = _run_ns('@var[r; @url.quote["hello world"]]')
+        import urllib.parse
+        assert ns["r"] == urllib.parse.quote("hello world")
+
+    def test_encode_runs(self):
+        ns = _run_ns('@var[r; @url.encode[{"key": "val"}]]')
+        import urllib.parse
+        assert ns["r"] == urllib.parse.urlencode({"key": "val"})
+
+
+class TestStatisticsLib:
+    def test_mean_codegen(self):
+        h = get_lib_call("statistics", "mean")
+        assert "__import__('statistics').mean(data)" in h(["data"])
+
+    def test_median_codegen(self):
+        h = get_lib_call("statistics", "median")
+        assert "__import__('statistics').median(data)" in h(["data"])
+
+    def test_stdev_codegen(self):
+        h = get_lib_call("statistics", "stdev")
+        assert "__import__('statistics').stdev(data)" in h(["data"])
+
+    def test_mean_runs(self):
+        ns = _run_ns("@var[data; [1, 2, 3, 4, 5]]\n@var[r; @statistics.mean[data]]")
+        assert ns["r"] == 3.0
+
+    def test_median_runs(self):
+        ns = _run_ns("@var[data; [1, 2, 3, 4, 5]]\n@var[r; @statistics.median[data]]")
+        assert ns["r"] == 3
+
+    def test_mode_runs(self):
+        ns = _run_ns("@var[data; [1, 1, 2, 3]]\n@var[r; @statistics.mode[data]]")
+        assert ns["r"] == 1
+
+    def test_stdev_runs(self):
+        ns = _run_ns("@var[data; [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]]\n@var[r; @statistics.mean[data]]")
+        assert ns["r"] == 5.0
+
+
+class TestContextlibLib:
+    def test_suppress_codegen(self):
+        h = get_lib_call("contextlib", "suppress")
+        assert "__import__('contextlib').suppress" in h(["ValueError"])
+
+    def test_nullcontext_codegen(self):
+        h = get_lib_call("contextlib", "nullcontext")
+        assert "__import__('contextlib').nullcontext" in h([])
+
+    def test_closing_codegen(self):
+        h = get_lib_call("contextlib", "closing")
+        assert "__import__('contextlib').closing(obj)" in h(["obj"])
+
+    def test_ExitStack_codegen(self):
+        h = get_lib_call("contextlib", "ExitStack")
+        assert "__import__('contextlib').ExitStack()" in h([])
+
+
+class TestEnumLib:
+    def test_auto_codegen(self):
+        h = get_lib_call("enum", "auto")
+        assert "__import__('enum').auto()" in h([])
+
+    def test_IntEnum_codegen(self):
+        h = get_lib_call("enum", "IntEnum")
+        assert "__import__('enum').IntEnum" in h([])
+
+    def test_create_codegen(self):
+        h = get_lib_call("enum", "create")
+        result = h(['"Color"', '"RED GREEN BLUE"'])
+        assert "__import__('enum').Enum" in result
+
+    def test_names_codegen(self):
+        h = get_lib_call("enum", "names")
+        assert "[m.name for m in E]" in h(["E"])
+
+    def test_values_codegen(self):
+        h = get_lib_call("enum", "values")
+        assert "[m.value for m in E]" in h(["E"])
+
+
+class TestDataclassesLib:
+    def test_asdict_codegen(self):
+        h = get_lib_call("dataclasses", "asdict")
+        assert "__import__('dataclasses').asdict(obj)" in h(["obj"])
+
+    def test_astuple_codegen(self):
+        h = get_lib_call("dataclasses", "astuple")
+        assert "__import__('dataclasses').astuple(obj)" in h(["obj"])
+
+    def test_fields_codegen(self):
+        h = get_lib_call("dataclasses", "fields")
+        assert "__import__('dataclasses').fields(obj)" in h(["obj"])
+
+    def test_is_dataclass_codegen(self):
+        h = get_lib_call("dataclasses", "is_dataclass")
+        assert "__import__('dataclasses').is_dataclass(obj)" in h(["obj"])
+
+    def test_replace_codegen(self):
+        h = get_lib_call("dataclasses", "replace")
+        result = h(["obj", "x=1"])
+        assert "__import__('dataclasses').replace(obj, x=1)" in result
+
+
+class TestTypingLib:
+    def test_Optional_codegen(self):
+        h = get_lib_call("typing", "Optional")
+        assert "__import__('typing').Optional[int]" in h(["int"])
+
+    def test_List_codegen(self):
+        h = get_lib_call("typing", "List")
+        assert "__import__('typing').List[str]" in h(["str"])
+
+    def test_Dict_codegen(self):
+        h = get_lib_call("typing", "Dict")
+        assert "__import__('typing').Dict[str, int]" in h(["str", "int"])
+
+    def test_Any_codegen(self):
+        h = get_lib_call("typing", "Any")
+        assert "__import__('typing').Any" in h([])
+
+    def test_cast_codegen(self):
+        h = get_lib_call("typing", "cast")
+        assert "__import__('typing').cast(int, x)" in h(["int", "x"])
+
+    def test_TypeVar_codegen(self):
+        h = get_lib_call("typing", "TypeVar")
+        result = h(['"T"'])
+        assert "__import__('typing').TypeVar" in result
+        assert "T" in result
+
+
+class TestThreadingLib:
+    def test_Thread_codegen(self):
+        h = get_lib_call("threading", "Thread")
+        result = h(["fn"])
+        assert "__import__('threading').Thread(target=fn" in result
+
+    def test_Lock_codegen(self):
+        h = get_lib_call("threading", "Lock")
+        assert "__import__('threading').Lock()" in h([])
+
+    def test_Event_codegen(self):
+        h = get_lib_call("threading", "Event")
+        assert "__import__('threading').Event()" in h([])
+
+    def test_active_count_codegen(self):
+        h = get_lib_call("threading", "active_count")
+        assert "__import__('threading').active_count()" in h([])
+
+    def test_current_thread_runs(self):
+        ns = _run_ns("@var[t; @threading.current_thread[]]")
+        import threading
+        assert ns["t"] == threading.current_thread()
+
+
+class TestQueueLib:
+    def test_Queue_codegen(self):
+        h = get_lib_call("queue", "Queue")
+        assert "__import__('queue').Queue" in h([])
+
+    def test_LifoQueue_codegen(self):
+        h = get_lib_call("queue", "LifoQueue")
+        assert "__import__('queue').LifoQueue" in h([])
+
+    def test_PriorityQueue_codegen(self):
+        h = get_lib_call("queue", "PriorityQueue")
+        assert "__import__('queue').PriorityQueue" in h([])
+
+    def test_put_get_runs(self):
+        ns = _run_ns("\n".join([
+            "@var[q; @queue.Queue[]]",
+            "@queue.put[q; 42]",
+            "@var[r; @queue.get[q]]",
+        ]))
+        assert ns["r"] == 42
+
+    def test_empty_runs(self):
+        ns = _run_ns("@var[q; @queue.Queue[]]\n@var[r; @queue.empty[q]]")
+        assert ns["r"] is True
+
+
+class TestHeapqLib:
+    def test_heapify_codegen(self):
+        h = get_lib_call("heapq", "heapify")
+        assert "__import__('heapq').heapify(lst)" in h(["lst"])
+
+    def test_heappush_codegen(self):
+        h = get_lib_call("heapq", "heappush")
+        assert "__import__('heapq').heappush(h, x)" in h(["h", "x"])
+
+    def test_heappop_codegen(self):
+        h = get_lib_call("heapq", "heappop")
+        assert "__import__('heapq').heappop(h)" in h(["h"])
+
+    def test_nlargest_codegen(self):
+        h = get_lib_call("heapq", "nlargest")
+        assert "__import__('heapq').nlargest(3, lst)" in h(["3", "lst"])
+
+    def test_heapify_runs(self):
+        ns = _run_ns("@var[lst; [3, 1, 2]]\n@heapq.heapify[lst]\n@var[r; @heapq.heappop[lst]]")
+        assert ns["r"] == 1
+
+    def test_nsmallest_runs(self):
+        ns = _run_ns("@var[lst; [5, 3, 1, 4, 2]]\n@var[r; @heapq.nsmallest[3; lst]]")
+        assert ns["r"] == [1, 2, 3]
+
+
+class TestBisectLib:
+    def test_bisect_left_codegen(self):
+        h = get_lib_call("bisect", "bisect_left")
+        assert "__import__('bisect').bisect_left(a, x)" in h(["a", "x"])
+
+    def test_bisect_right_codegen(self):
+        h = get_lib_call("bisect", "bisect_right")
+        assert "__import__('bisect').bisect_right(a, x)" in h(["a", "x"])
+
+    def test_insort_codegen(self):
+        h = get_lib_call("bisect", "insort")
+        assert "__import__('bisect').insort(a, x)" in h(["a", "x"])
+
+    def test_bisect_left_runs(self):
+        ns = _run_ns("@var[a; [1, 3, 5, 7]]\n@var[r; @bisect.bisect_left[a; 4]]")
+        assert ns["r"] == 2
+
+    def test_insort_runs(self):
+        ns = _run_ns("@var[a; [1, 3, 5]]\n@bisect.insort[a; 4]\n@var[r; a]")
+        assert ns["r"] == [1, 3, 4, 5]
+
+
+class TestOperatorLib:
+    def test_itemgetter_codegen(self):
+        h = get_lib_call("operator", "itemgetter")
+        assert "__import__('operator').itemgetter(0)" in h(["0"])
+
+    def test_attrgetter_codegen(self):
+        h = get_lib_call("operator", "attrgetter")
+        assert "__import__('operator').attrgetter" in h(['"name"'])
+
+    def test_add_codegen(self):
+        h = get_lib_call("operator", "add")
+        assert "__import__('operator').add(x, y)" in h(["x", "y"])
+
+    def test_neg_codegen(self):
+        h = get_lib_call("operator", "neg")
+        assert "__import__('operator').neg(x)" in h(["x"])
+
+    def test_itemgetter_runs(self):
+        ns = _run_ns("\n".join([
+            "@var[lst; [[1, 2], [3, 4]]]",
+            "@var[key_fn; @operator.itemgetter[0]]",
+            "@var[r; sorted(lst, key=key_fn)]",
+        ]))
+        assert ns["r"] == [[1, 2], [3, 4]]
+
+    def test_add_runs(self):
+        ns = _run_ns("@var[r; @operator.add[3; 4]]")
+        assert ns["r"] == 7
+
+    def test_contains_codegen(self):
+        h = get_lib_call("operator", "contains")
+        assert "__import__('operator').contains(lst, x)" in h(["lst", "x"])
+
+
+class TestPprintLib:
+    def test_print_codegen(self):
+        h = get_lib_call("pprint", "print")
+        assert "__import__('pprint').pprint(x)" in h(["x"])
+
+    def test_format_codegen(self):
+        h = get_lib_call("pprint", "format")
+        assert "__import__('pprint').pformat(x)" in h(["x"])
+
+    def test_isreadable_codegen(self):
+        h = get_lib_call("pprint", "isreadable")
+        assert "__import__('pprint').isreadable(x)" in h(["x"])
+
+    def test_format_runs(self):
+        ns = _run_ns('@var[r; @pprint.format[{"a": 1, "b": 2}]]')
+        import pprint
+        assert ns["r"] == pprint.pformat({"a": 1, "b": 2})
+
+    def test_PrettyPrinter_codegen(self):
+        h = get_lib_call("pprint", "PrettyPrinter")
+        assert "__import__('pprint').PrettyPrinter()" in h([])

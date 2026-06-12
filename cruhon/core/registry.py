@@ -46,6 +46,23 @@ _LIBS: dict[str, str] = {
     "archive":     _BUILTIN,     # @archive.* — compression, no import needed
     "mail":        _BUILTIN,     # @mail.* — email operations, no import needed
     "csv":         _BUILTIN,     # @csv.* — CSV operations, no import needed
+    # New in v2.1.0
+    "collections": "collections",
+    "itertools":   "itertools",
+    "functools":   "functools",
+    "io":          "io",
+    "copy":        "copy",
+    "base64":      "base64",
+    "url":         _BUILTIN,     # @url.* — urllib.parse, no top-level import needed
+    "statistics":  "statistics",
+    "contextlib":  "contextlib",
+    "enum":        "enum",
+    "threading":   "threading",
+    "queue":       "queue",
+    "heapq":       "heapq",
+    "bisect":      "bisect",
+    "operator":    "operator",
+    "pprint":      "pprint",
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -193,20 +210,40 @@ def list_mods() -> list[str]:
 
 # ─── Stdlib registration ──────────────────────────────────────
 def _register_stdlib():
-    from .libs.file_    import register as _r_file
-    from .libs.time_    import register as _r_time
-    from .libs.date_    import register as _r_date
-    from .libs.math_    import register as _r_math
-    from .libs.json_    import register as _r_json
-    from .libs.color_   import register as _r_color
-    from .libs.text_    import register as _r_text
-    from .libs.csv_     import register as _r_csv
-    from .libs.crypto_  import register as _r_crypto
-    from .libs.log_     import register as _r_log
-    from .libs.config_  import register as _r_config
-    from .libs.shell_   import register as _r_shell
-    from .libs.archive_ import register as _r_archive
-    from .libs.mail_    import register as _r_mail
+    from .libs.file_        import register as _r_file
+    from .libs.time_        import register as _r_time
+    from .libs.date_        import register as _r_date
+    from .libs.math_        import register as _r_math
+    from .libs.json_        import register as _r_json
+    from .libs.color_       import register as _r_color
+    from .libs.text_        import register as _r_text
+    from .libs.csv_         import register as _r_csv
+    from .libs.crypto_      import register as _r_crypto
+    from .libs.log_         import register as _r_log
+    from .libs.config_      import register as _r_config
+    from .libs.shell_       import register as _r_shell
+    from .libs.archive_     import register as _r_archive
+    from .libs.mail_        import register as _r_mail
+    from .libs.random_      import register as _r_random
+    from .libs.collections_ import register as _r_collections
+    from .libs.itertools_   import register as _r_itertools
+    from .libs.functools_   import register as _r_functools
+    from .libs.sys_         import register as _r_sys
+    from .libs.io_          import register as _r_io
+    from .libs.copy_        import register as _r_copy
+    from .libs.base64_      import register as _r_base64
+    from .libs.url_         import register as _r_url
+    from .libs.statistics_  import register as _r_statistics
+    from .libs.contextlib_  import register as _r_contextlib
+    from .libs.enum_        import register as _r_enum
+    from .libs.dataclasses_ import register as _r_dataclasses
+    from .libs.typing_      import register as _r_typing
+    from .libs.threading_   import register as _r_threading
+    from .libs.queue_       import register as _r_queue
+    from .libs.heapq_       import register as _r_heapq
+    from .libs.bisect_      import register as _r_bisect
+    from .libs.operator_    import register as _r_operator
+    from .libs.pprint_      import register as _r_pprint
     _r_file()
     _r_time()
     _r_date()
@@ -221,5 +258,25 @@ def _register_stdlib():
     _r_shell()
     _r_archive()
     _r_mail()
+    _r_random()
+    _r_collections()
+    _r_itertools()
+    _r_functools()
+    _r_sys()
+    _r_io()
+    _r_copy()
+    _r_base64()
+    _r_url()
+    _r_statistics()
+    _r_contextlib()
+    _r_enum()
+    _r_dataclasses()
+    _r_typing()
+    _r_threading()
+    _r_queue()
+    _r_heapq()
+    _r_bisect()
+    _r_operator()
+    _r_pprint()
 
 _register_stdlib()
