@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.0.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.1.0
 
 ---
 
@@ -1253,6 +1253,14 @@ pip install -e .
 python -m pytest cruhon/tests/
 cruhon run cruhon/examples/hello.clpy
 ```
+
+---
+
+## Contact
+
+- **Discord:** [discord.gg/fQTEY2kF](https://discord.gg/fQTEY2kF)
+- **Email:** [cruciblelab@hotmail.com](mailto:cruciblelab@hotmail.com)
+- **GitHub:** [github.com/cruciblelab](https://github.com/cruciblelab)
 
 ---
 

@@ -184,7 +184,8 @@ def cmd_mods(args):
         for w in warnings:
             print(f"    {w}")
 
-    print("\n  To create a plugin: cruhon new --plugin <name>\n")
+    print("\n  To create a plugin: cruhon new --plugin <name>")
+    print("  \033[90mCommunity: https://discord.gg/fQTEY2kF  ·  cruciblelab@hotmail.com\033[0m\n")
 
 
 def cmd_libs(args):

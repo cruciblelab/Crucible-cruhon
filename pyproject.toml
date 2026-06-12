@@ -8,7 +8,7 @@ version = "2.1.0"
 description = "A modern, extensible scripting language built on Python — by CrucibleLab"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "CrucibleLab", email = "hello@cruciblelab.dev" }]
+authors = [{ name = "CrucibleLab", email = "cruciblelab@hotmail.com" }]
 keywords = ["language", "dsl", "scripting", "transpiler", "cruhon"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -48,3 +48,4 @@ include = ["cruhon*"]
 Homepage   = "https://github.com/cruciblelab/cruhon"
 Repository = "https://github.com/cruciblelab/cruhon"
 Issues     = "https://github.com/cruciblelab/cruhon/issues"
+Discord    = "https://discord.gg/fQTEY2kF"
