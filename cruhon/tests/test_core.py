@@ -5076,6 +5076,246 @@ class TestEmailLib:
 
 
 # ─────────────────────────────────────────────────────────────
+# EXPANDED CORE LIBS (string, struct, zlib, calendar, email)
+# ─────────────────────────────────────────────────────────────
+
+class TestStringLibExpanded:
+    def test_ascii_to_int_runs(self):
+        ns = _run_ns('@var[r; @string.ascii_to_int["A"]]')
+        assert ns["r"] == 65
+
+    def test_int_to_ascii_runs(self):
+        ns = _run_ns("@var[r; @string.int_to_ascii[65]]")
+        assert ns["r"] == "A"
+
+    def test_filter_runs(self):
+        ns = _run_ns('@var[r; @string.filter["hello123"; "0123456789"]]')
+        assert ns["r"] == "123"
+
+    def test_exclude_runs(self):
+        ns = _run_ns('@var[r; @string.exclude["hello123"; "0123456789"]]')
+        assert ns["r"] == "hello"
+
+    def test_count_in_runs(self):
+        ns = _run_ns('@var[r; @string.count_in["hello"; "aeiou"]]')
+        assert ns["r"] == 2
+
+    def test_translate_runs(self):
+        ns = _run_ns('@var[r; @string.translate["hello"; "aeiou"; "AEIOU"]]')
+        assert ns["r"] == "hEllO"
+
+    def test_random_lower_length(self):
+        ns = _run_ns("@var[r; @string.random_lower[10]]")
+        assert len(ns["r"]) == 10
+        assert ns["r"].islower()
+
+    def test_random_upper_length(self):
+        ns = _run_ns("@var[r; @string.random_upper[6]]")
+        assert len(ns["r"]) == 6
+        assert ns["r"].isupper()
+
+    def test_random_digits_str_length(self):
+        ns = _run_ns("@var[r; @string.random_digits_str[8]]")
+        assert len(ns["r"]) == 8
+        assert ns["r"].isdigit()
+
+    def test_formatter_codegen(self):
+        h = get_lib_call("string", "formatter")
+        assert "Formatter()" in h([])
+
+    def test_maketrans_codegen(self):
+        h = get_lib_call("string", "maketrans")
+        assert "str.maketrans" in h(['"abc"', '"ABC"'])
+
+
+class TestStructLibExpanded:
+    def test_unpack_list_runs(self):
+        ns = _run_ns(
+            '@var[data; @struct.pack[">II"; 1; 2]]\n'
+            '@var[r; @struct.unpack_list[">II"; data]]'
+        )
+        assert ns["r"] == [1, 2]
+        assert isinstance(ns["r"], list)
+
+    def test_first_runs(self):
+        ns = _run_ns(
+            '@var[data; @struct.pack[">I"; 42]]\n'
+            '@var[r; @struct.first[">I"; data]]'
+        )
+        assert ns["r"] == 42
+
+    def test_pad_runs(self):
+        ns = _run_ns("@var[r; @struct.pad[4]]")
+        assert ns["r"] == b"\x00\x00\x00\x00"
+
+    def test_byte_order_runs(self):
+        import sys
+        ns = _run_ns("@var[r; @struct.byte_order[]]")
+        assert ns["r"] == sys.byteorder
+
+    def test_to_hex_runs(self):
+        ns = _run_ns('@var[r; @struct.to_hex[">I"; 255]]')
+        assert ns["r"] == "000000ff"
+
+    def test_from_hex_str_runs(self):
+        ns = _run_ns('@var[r; @struct.from_hex_str["000000ff"]]')
+        assert ns["r"] == b"\x00\x00\x00\xff"
+
+    def test_from_hex_str_codegen(self):
+        h = get_lib_call("struct", "from_hex_str")
+        assert "bytes.fromhex" in h(['"ff"'])
+
+
+class TestZlibLibExpanded:
+    def test_compress_b64_roundtrip(self):
+        ns = _run_ns(
+            '@var[c; @zlib.compress_b64["hello"]]\n'
+            '@var[r; @zlib.decompress_b64[c]]'
+        )
+        assert ns["r"] == b"hello"
+
+    def test_compress_str_roundtrip(self):
+        ns = _run_ns(
+            '@var[c; @zlib.compress_str["world"]]\n'
+            '@var[r; @zlib.decompress_str[c]]'
+        )
+        assert ns["r"] == "world"
+
+    def test_adler32_hex_runs(self):
+        import zlib
+        ns = _run_ns('@var[r; @zlib.adler32_hex["abc"]]')
+        expected = format(zlib.adler32(b"abc") & 0xFFFFFFFF, "08x")
+        assert ns["r"] == expected
+
+    def test_saved_bytes_positive(self):
+        ns = _run_ns('@var[r; @zlib.saved_bytes["hello hello hello hello hello"]]')
+        assert ns["r"] > 0
+
+    def test_is_zlib_true(self):
+        ns = _run_ns(
+            '@var[c; @zlib.compress["test data"]]\n'
+            '@var[r; @zlib.is_zlib[c]]'
+        )
+        assert ns["r"] is True
+
+    def test_is_zlib_false(self):
+        ns = _run_ns('@var[r; @zlib.is_zlib[b"not compressed"]]')
+        assert ns["r"] is False
+
+
+class TestCalendarLibExpanded:
+    def test_is_weekday_true(self):
+        ns = _run_ns("@var[r; @calendar.is_weekday[2024; 6; 10]]")
+        assert ns["r"] is True
+
+    def test_is_weekend_true(self):
+        ns = _run_ns("@var[r; @calendar.is_weekend[2024; 6; 8]]")
+        assert ns["r"] is True
+
+    def test_first_weekday_of_runs(self):
+        ns = _run_ns("@var[r; @calendar.first_weekday_of[2024; 6]]")
+        assert isinstance(ns["r"], int)
+        assert 0 <= ns["r"] <= 6
+
+    def test_day_of_year_runs(self):
+        ns = _run_ns("@var[r; @calendar.day_of_year[2024; 1; 1]]")
+        assert ns["r"] == 1
+
+    def test_day_of_year_dec(self):
+        ns = _run_ns("@var[r; @calendar.day_of_year[2024; 12; 31]]")
+        assert ns["r"] == 366
+
+    def test_week_of_year_runs(self):
+        ns = _run_ns("@var[r; @calendar.week_of_year[2024; 1; 1]]")
+        assert isinstance(ns["r"], int)
+
+    def test_year_text_runs(self):
+        ns = _run_ns("@var[r; @calendar.year_text[2024]]")
+        assert "2024" in ns["r"]
+
+    def test_quarter_q1(self):
+        ns = _run_ns("@var[r; @calendar.quarter[1]]")
+        assert ns["r"] == 1
+
+    def test_quarter_q4(self):
+        ns = _run_ns("@var[r; @calendar.quarter[12]]")
+        assert ns["r"] == 4
+
+    def test_next_month_regular(self):
+        ns = _run_ns("@var[r; @calendar.next_month[2024; 6]]")
+        assert ns["r"] == (2024, 7)
+
+    def test_next_month_december(self):
+        ns = _run_ns("@var[r; @calendar.next_month[2024; 12]]")
+        assert ns["r"] == (2025, 1)
+
+    def test_prev_month_regular(self):
+        ns = _run_ns("@var[r; @calendar.prev_month[2024; 6]]")
+        assert ns["r"] == (2024, 5)
+
+    def test_prev_month_january(self):
+        ns = _run_ns("@var[r; @calendar.prev_month[2024; 1]]")
+        assert ns["r"] == (2023, 12)
+
+
+class TestEmailLibExpanded:
+    def test_cc_header(self):
+        ns = _run_ns(
+            '@var[m; @email.make["Hi"; "a@b.com"; "c@d.com"; "body"]]\n'
+            '@var[r; @email.cc[m]]'
+        )
+        assert ns["r"] == ""
+
+    def test_content_type_runs(self):
+        ns = _run_ns(
+            '@var[m; @email.message[]]\n'
+            '@var[r; @email.content_type[m]]'
+        )
+        assert isinstance(ns["r"], str)
+
+    def test_to_bytes_runs(self):
+        ns = _run_ns(
+            '@var[m; @email.make["Hi"; "a@b.com"; "c@d.com"; "body"]]\n'
+            '@var[r; @email.to_bytes[m]]'
+        )
+        assert isinstance(ns["r"], bytes)
+        assert b"Hi" in ns["r"]
+
+    def test_all_attachments_empty(self):
+        ns = _run_ns(
+            '@var[m; @email.message[]]\n'
+            '@var[r; @email.all_attachments[m]]'
+        )
+        assert ns["r"] == []
+
+    def test_address_list_runs(self):
+        ns = _run_ns('@var[r; @email.address_list["Bob <bob@x.com>, alice@y.com"]]')
+        assert len(ns["r"]) == 2
+        assert ns["r"][0] == ("Bob", "bob@x.com")
+
+    def test_reply_to_empty(self):
+        ns = _run_ns(
+            '@var[m; @email.message[]]\n'
+            '@var[r; @email.reply_to[m]]'
+        )
+        assert ns["r"] == ""
+
+    def test_bcc_empty(self):
+        ns = _run_ns(
+            '@var[m; @email.message[]]\n'
+            '@var[r; @email.bcc[m]]'
+        )
+        assert ns["r"] == ""
+
+    def test_html_body_empty(self):
+        ns = _run_ns(
+            '@var[m; @email.make["S"; "a@b.com"; "c@d.com"; "text"]]\n'
+            '@var[r; @email.html_body[m]]'
+        )
+        assert isinstance(ns["r"], str)
+
+
+# ─────────────────────────────────────────────────────────────
 # MOD LOADER SYSTEM FIXES (10 correctness fixes)
 # ─────────────────────────────────────────────────────────────
 

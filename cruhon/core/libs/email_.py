@@ -6,38 +6,62 @@ messages. This is the *message* layer — for actually sending mail use
 the `@mail.*` namespace (smtplib / imaplib). No `@import` needed.
 
 ━━━ BUILD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @email.message[]                    → empty EmailMessage
-  @email.make[subject; from; to; body]→ ready-to-send EmailMessage
-  @email.set_content[msg; body]       — set the plain-text body
-  @email.add_html[msg; html]          — add an HTML alternative part
-  @email.set_header[msg; name; value] — set/replace a header
-  @email.attach_file[msg; path]       — attach a file from disk
+  @email.message[]                       → empty EmailMessage
+  @email.make[subject; from; to; body]   → ready-to-send EmailMessage
+  @email.set_content[msg; body]          — set the plain-text body
+  @email.add_html[msg; html]             — add an HTML alternative part
+  @email.set_header[msg; name; value]    — set/replace a header
+  @email.attach_file[msg; path]          — attach a file from disk (binary)
+  @email.attach_text[msg; path]          — attach a text file (UTF-8)
+  @email.attach_bytes[msg; data; name]   — attach raw bytes with filename
 
 ━━━ PARSE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @email.parse[raw_text]              → EmailMessage from a raw string
-  @email.parse_bytes[raw_bytes]       → EmailMessage from raw bytes
+  @email.parse[raw_text]                 → EmailMessage from a raw string
+  @email.parse_bytes[raw_bytes]          → EmailMessage from raw bytes
 
 ━━━ INSPECT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @email.subject[msg]                 → Subject header
-  @email.sender[msg]                  → From header
-  @email.recipients[msg]              → To header
-  @email.header[msg; name]            → arbitrary header value
-  @email.headers[msg]                 → dict of all headers
-  @email.body[msg]                    → plain-text body content
-  @email.is_multipart[msg]            → bool
-  @email.parts[msg]                   → list of payload parts
-  @email.as_string[msg]               → serialize the whole message to text
+  @email.subject[msg]       → Subject header
+  @email.sender[msg]        → From header
+  @email.recipients[msg]    → To header
+  @email.cc[msg]            → Cc header
+  @email.bcc[msg]           → Bcc header
+  @email.reply_to[msg]      → Reply-To header
+  @email.date_header[msg]   → Date header
+  @email.message_id[msg]    → Message-ID header
+  @email.content_type[msg]  → Content-Type (e.g. "text/plain")
+  @email.header[msg; name]  → arbitrary header value
+  @email.headers[msg]       → dict of all headers
+  @email.body[msg]          → plain-text body content
+  @email.html_body[msg]     → HTML alternative body (empty string if none)
+  @email.is_multipart[msg]  → bool
+  @email.parts[msg]         → list of payload parts (walk)
+  @email.as_string[msg]     → serialize the whole message to text
+  @email.to_bytes[msg]      → serialize the whole message to bytes
+  @email.all_attachments[msg] → list of attachment filenames
+
+━━━ HEADER SETTERS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @email.set_cc[msg; addr]       — set/replace Cc header
+  @email.set_bcc[msg; addr]      — set/replace Bcc header
+  @email.set_reply_to[msg; addr] — set/replace Reply-To header
 
 ━━━ ADDRESS UTILITIES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  @email.parse_address[s]             → (display_name, email_addr)
-  @email.format_address[name; addr]   → "Name <addr>" string
-  @email.valid_address[s]             → bool — looks like a valid address
+  @email.parse_address[s]         → (display_name, email_addr)
+  @email.format_address[name; a]  → "Name <addr>" string
+  @email.valid_address[s]         → bool — looks like a valid address
+  @email.address_list[s]          → list of (name, addr) from comma-separated string
 """
 from ..registry import register_lib, register_lib_call
 
 _EM  = "__import__('email.message', fromlist=['EmailMessage'])"
-_EU  = "__import__('email.utils', fromlist=['parseaddr', 'formataddr'])"
+_EU  = "__import__('email.utils', fromlist=['parseaddr', 'formataddr', 'getaddresses'])"
 _EP  = "__import__('email', fromlist=['message_from_string', 'message_from_bytes'])"
+
+
+def _set_hdr(msg_expr: str, hdr: str, val_expr: str) -> str:
+    return (
+        f"(lambda _m: (_m.__delitem__('{hdr}'), _m.__setitem__('{hdr}', {val_expr}))[-1] "
+        f"if '{hdr}' in _m else _m.__setitem__('{hdr}', {val_expr}))({msg_expr})"
+    )
 
 
 def register():
@@ -85,6 +109,22 @@ def register():
             f"None"
         ))
 
+    register_lib_call("email", "attach_text",
+        lambda a: (
+            f"(lambda _m, _p: _m.add_attachment("
+            f"open(_p, 'r', encoding='utf-8').read(), subtype='plain', "
+            f"filename=__import__('os').path.basename(_p)))({a[0]}, {a[1]})"
+            if len(a) > 1 else "None"
+        ))
+
+    register_lib_call("email", "attach_bytes",
+        lambda a: (
+            f"(lambda _m, _d, _n: _m.add_attachment("
+            f"_d, maintype='application', subtype='octet-stream', "
+            f"filename=_n))({a[0]}, {a[1]}, {a[2]})"
+            if len(a) > 2 else "None"
+        ))
+
     # ── PARSE ─────────────────────────────────────────────────
     register_lib_call("email", "parse",
         lambda a: f"{_EP}.message_from_string({a[0]})")
@@ -92,7 +132,7 @@ def register():
     register_lib_call("email", "parse_bytes",
         lambda a: f"{_EP}.message_from_bytes({a[0]})")
 
-    # ── INSPECT ───────────────────────────────────────────────
+    # ── HEADER GETTERS ────────────────────────────────────────
     register_lib_call("email", "subject",
         lambda a: f"{a[0]}.get('Subject', '')")
 
@@ -101,6 +141,24 @@ def register():
 
     register_lib_call("email", "recipients",
         lambda a: f"{a[0]}.get('To', '')")
+
+    register_lib_call("email", "cc",
+        lambda a: f"{a[0]}.get('Cc', '')" if a else "''")
+
+    register_lib_call("email", "bcc",
+        lambda a: f"{a[0]}.get('Bcc', '')" if a else "''")
+
+    register_lib_call("email", "reply_to",
+        lambda a: f"{a[0]}.get('Reply-To', '')" if a else "''")
+
+    register_lib_call("email", "date_header",
+        lambda a: f"{a[0]}.get('Date', '')" if a else "''")
+
+    register_lib_call("email", "message_id",
+        lambda a: f"{a[0]}.get('Message-ID', '')" if a else "''")
+
+    register_lib_call("email", "content_type",
+        lambda a: f"{a[0]}.get_content_type()" if a else "''")
 
     register_lib_call("email", "header",
         lambda a: f"{a[0]}.get({a[1]}, '')" if len(a) > 1 else f"''")
@@ -116,6 +174,13 @@ def register():
             f"if not _m.is_multipart() else ''))({a[0]})"
         ))
 
+    register_lib_call("email", "html_body",
+        lambda a: (
+            f"(lambda _m: (lambda _p: _p.get_content() if _p is not None else '')"
+            f"(_m.get_body(preferencelist=('html',)) if hasattr(_m, 'get_body') else None))({a[0]})"
+            if a else "''"
+        ))
+
     register_lib_call("email", "is_multipart",
         lambda a: f"{a[0]}.is_multipart()")
 
@@ -124,6 +189,36 @@ def register():
 
     register_lib_call("email", "as_string",
         lambda a: f"{a[0]}.as_string()")
+
+    register_lib_call("email", "to_bytes",
+        lambda a: f"{a[0]}.as_bytes()" if a else "b''")
+
+    register_lib_call("email", "all_attachments",
+        lambda a: (
+            f"[_p.get_filename() for _p in {a[0]}.walk() "
+            f"if _p.get_content_disposition() == 'attachment' "
+            f"and _p.get_filename() is not None]"
+            if a else "[]"
+        ))
+
+    # ── HEADER SETTERS ────────────────────────────────────────
+    register_lib_call("email", "set_cc",
+        lambda a: (
+            _set_hdr(a[0], "Cc", a[1])
+            if len(a) > 1 else "None"
+        ))
+
+    register_lib_call("email", "set_bcc",
+        lambda a: (
+            _set_hdr(a[0], "Bcc", a[1])
+            if len(a) > 1 else "None"
+        ))
+
+    register_lib_call("email", "set_reply_to",
+        lambda a: (
+            _set_hdr(a[0], "Reply-To", a[1])
+            if len(a) > 1 else "None"
+        ))
 
     # ── ADDRESS UTILITIES ─────────────────────────────────────
     register_lib_call("email", "parse_address",
@@ -138,4 +233,10 @@ def register():
             f"({_EU}.parseaddr({a[0]}))"
             if a else
             f"False"
+        ))
+
+    register_lib_call("email", "address_list",
+        lambda a: (
+            f"{_EU}.getaddresses([{a[0]}])"
+            if a else "[]"
         ))

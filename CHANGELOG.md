@@ -4,7 +4,80 @@ All notable changes are documented here.
 
 ---
 
-## v2.2.0 (current) — Shortcut Plugin & 5 New Namespaces
+## v2.3.0 (current) — Full Namespace Expansion & cruhon-shortcuts-pro
+
+### Fully expanded 5 stdlib namespaces
+
+All five namespaces added in v2.2 now have comprehensive method coverage:
+
+**`@string.*`** — new char utilities and random generators:
+`ascii_to_int`, `int_to_ascii`, `filter`, `exclude`, `count_in`,
+`maketrans`, `translate`, `random_lower`, `random_upper`,
+`random_digits_str`, `formatter`
+
+**`@struct.*`** — new convenience methods:
+`unpack_list`, `first`, `pad`, `byte_order`, `to_hex`,
+`from_hex_str`, `native`
+
+**`@zlib.*`** — base64 wrappers and utilities:
+`compress_b64`, `decompress_b64`, `compress_str`, `decompress_str`,
+`adler32_hex`, `saved_bytes`, `is_zlib`
+
+**`@calendar.*`** — weekday checks and navigation:
+`is_weekday`, `is_weekend`, `first_weekday_of`, `day_of_year`,
+`week_of_year`, `year_text`, `quarter`, `next_month`, `prev_month`,
+`get_first_weekday`
+
+**`@email.*`** — header getters, setters, and attachment helpers:
+`cc`, `bcc`, `reply_to`, `date_header`, `message_id`, `content_type`,
+`to_bytes`, `html_body`, `attach_text`, `attach_bytes`,
+`all_attachments`, `set_cc`, `set_bcc`, `set_reply_to`, `address_list`
+
+### `cruhon-shortcuts-pro` plugin
+
+A second configurable shortcut plugin (`mods/cruhon-shortcuts-pro/`,
+7 files) with 5 domain groups. Loads alongside `cruhon-shortcuts`
+without conflicts — all global-rewrite names are distinct.
+
+- **math group** — `@clamp`, `@lerp`, `@sign`, `@round_to`, `@percent`,
+  `@frange`, `@log2`, `@log10`, `@gcd`, `@lcm`, `@factorial`, `@hypot`,
+  `@sin`, `@cos`, `@tan`, `@degrees`, `@radians`, `@is_close`, plus
+  `@math.inf`, `@math.e`, `@math.tau`, `@math.nan`, `@math.is_nan`, …
+
+- **lists group** — `@window`, `@transpose`, `@unzip`, `@rotate_list`,
+  `@head_n`, `@tail_n`, `@interleave`, `@dedupe`, `@flat`, `@zip_all`,
+  `@cartesian`, `@chunks`, `@sorted_by`, `@pairs`, `@take_while`,
+  `@drop_while`, plus `collections.sum_of`, `collections.min_by/max_by`,
+  `collections.avg_of`, `collections.enumerate_from`
+
+- **dicts group** — `@pick_keys`, `@omit_keys`, `@map_vals`,
+  `@filter_keys`, `@deep_merge`, `@dict_diff`, `@flat_dict`,
+  `@unflatten_dict`, `@swap_kv`, `@rename_key`, `@key_of`,
+  `@values_where`, `@dict_product`
+
+- **text group** — `@camel_case`, `@snake_case`, `@kebab_case`,
+  `@pascal_case`, `@word_freq`, `@normalize_ws`, `@excerpt`, `@initials`,
+  `@squeeze`, `@ordinal`, `@pluralize`, `@de_accent`, `@wrap_lines`,
+  `@sentence_count`, `@char_freq`, `@longest_word`, `@shortest_word`,
+  plus `text.pad_center`, `text.mirror`
+
+- **logic group** — `@coalesce`, `@first_true`, `@count_if`,
+  `@any_match`, `@all_match`, `@none_match`, `@first_where`,
+  `@last_where`, `@default_if_none`, `@safe_get`, `@unless_empty`,
+  `@one_of`, `@not_in`, `@index_of`, `@find_all`, `@group_by`, `@tally`
+
+### `cruhon-shortcuts` binary group expanded
+
+Added 17 more global aliases and 13 more method aliases covering the
+newly added core methods (`@is_weekday`, `@is_weekend`, `@day_of_year`,
+`@week_of_year`, `@next_month`, `@prev_month`, `@compress_b64`,
+`@compress_str`, `@adler32_hex`, `@ascii_to_int`, `@rnd_lower`, etc.).
+
+### Tests: **1316** (+45 from v2.2.0)
+
+---
+
+## v2.2.0 — Shortcut Plugin & 5 New Namespaces
 
 ### `cruhon-shortcuts` plugin
 

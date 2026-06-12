@@ -102,17 +102,17 @@ One-line access to the most-used Python standard libraries. No `@import` needed.
 | `@operator.*`    | `operator`     | itemgetter, attrgetter, methodcaller, add, sub, mul, eq, lt, contains… |
 | `@pprint.*`      | `pprint`       | print, format, pp, isreadable, isrecursive, saferepr, PrettyPrinter |
 
-### More stdlib wrappers (new in v2.2)
+### More stdlib wrappers (expanded in v2.3)
 
 Backing namespaces for the `cruhon-shortcuts` plugin. No `@import` needed.
 
 | Namespace        | Wraps          | Commands |
 |------------------|----------------|----------|
-| `@string.*`      | `string`       | ascii_letters, ascii_lowercase, digits, punctuation, whitespace, printable, template, substitute, safe_substitute, capwords |
-| `@struct.*`      | `struct`       | pack, unpack, pack_into, unpack_from, iter_unpack, calcsize, compile |
-| `@zlib.*`        | `zlib`         | compress, decompress, decompress_text, crc32, crc32_hex, adler32, compressor, decompressor, ratio |
-| `@calendar.*`    | `calendar`     | is_leap, leap_days, month_range, days_in_month, weekday, month_name, month_abbr, day_name, day_abbr, month_dates, month_text, weekheader, timegm |
-| `@email.*`       | `email`        | message, make, set_content, add_html, set_header, attach_file, parse, parse_bytes, subject, sender, recipients, header, headers, body, is_multipart, parts, as_string, parse_address, format_address, valid_address |
+| `@string.*`      | `string`       | ascii_letters, ascii_lowercase, ascii_uppercase, digits, hexdigits, octdigits, punctuation, whitespace, printable, template, substitute, safe_substitute, formatter, capwords, ascii_to_int, int_to_ascii, filter, exclude, count_in, maketrans, translate, random_lower, random_upper, random_digits_str |
+| `@struct.*`      | `struct`       | pack, unpack, unpack_list, first, pack_into, unpack_from, iter_unpack, calcsize, compile, pad, byte_order, to_hex, from_hex_str, native |
+| `@zlib.*`        | `zlib`         | compress, decompress, decompress_text, compress_b64, decompress_b64, compress_str, decompress_str, crc32, crc32_hex, adler32, adler32_hex, compressor, decompressor, ratio, saved_bytes, is_zlib |
+| `@calendar.*`    | `calendar`     | is_leap, leap_days, month_range, days_in_month, weekday, month_name, month_abbr, day_name, day_abbr, month_dates, year_dates, month_text, year_text, weekheader, is_weekday, is_weekend, first_weekday_of, get_first_weekday, day_of_year, week_of_year, quarter, next_month, prev_month, timegm |
+| `@email.*`       | `email`        | message, make, set_content, add_html, set_header, attach_file, attach_text, attach_bytes, parse, parse_bytes, subject, sender, recipients, cc, bcc, reply_to, date_header, message_id, content_type, header, headers, body, html_body, is_multipart, parts, as_string, to_bytes, all_attachments, set_cc, set_bcc, set_reply_to, parse_address, format_address, valid_address, address_list |
 
 ### Plugin namespaces
 
@@ -128,7 +128,7 @@ a namespace of its own — instead it installs:
 
 - **Global aliases** — `@read` → `@file.read`, `@now` → `@date.now`,
   `@uuid` → `@crypto.uuid`, `@rand` → `@random.randint`, `@mean` →
-  `@statistics.mean`, and hundreds more.
+  `@statistics.mean`, `@compress_b64` → `@zlib.compress_b64`, and hundreds more.
 - **Method aliases** — `@file.cat`, `@file.ls`, `@date.ts`, `@http.fetch`, …
 - **200+ new convenience methods** — `@file.head`, `@file.tail`, `@file.grep`,
   `@date.tomorrow`, `@date.age`, `@random.password`, `@statistics.summary`,
@@ -149,6 +149,31 @@ Everything is toggleable from `mods/cruhon-shortcuts/mod.json`:
 `groups` accepts `"all"` or any subset of: `file`, `http`, `date`, `text`,
 `math`, `crypto`, `collections`, `system`, `data`, `stdlib`, `types`, `io`,
 `binary`. See `mods/cruhon-shortcuts/` for the full per-group command list.
+
+### Extended shortcut plugin (`cruhon-shortcuts-pro`)
+
+A second shortcut plugin (`mods/cruhon-shortcuts-pro/`) with higher-level
+composite operations. Can be loaded alongside `cruhon-shortcuts` — all
+global-rewrite names are distinct. Configuration via `mod.json`:
+
+```json
+{
+  "groups": "all",
+  "disabled": [],
+  "custom": {}
+}
+```
+
+`groups` accepts `"all"` or any subset of: `math`, `lists`, `dicts`, `text`,
+`logic`.
+
+| Group    | Highlights |
+|----------|-----------|
+| `math`   | `@clamp`, `@lerp`, `@sign`, `@percent`, `@frange`, `@gcd`, `@lcm`, `@factorial`, `@sin/cos/tan`, `@degrees`, `@log2/log10`, `@is_close`, `@math.inf/e/tau/nan` |
+| `lists`  | `@window`, `@transpose`, `@unzip`, `@rotate_list`, `@head_n`, `@tail_n`, `@interleave`, `@dedupe`, `@flat`, `@zip_all`, `@cartesian`, `@chunks`, `@sorted_by`, `@pairs`, `@take_while`, `@drop_while` |
+| `dicts`  | `@pick_keys`, `@omit_keys`, `@map_vals`, `@filter_keys`, `@deep_merge`, `@dict_diff`, `@flat_dict`, `@swap_kv`, `@rename_key`, `@key_of`, `@values_where` |
+| `text`   | `@camel_case`, `@snake_case`, `@kebab_case`, `@pascal_case`, `@word_freq`, `@normalize_ws`, `@excerpt`, `@initials`, `@squeeze`, `@ordinal`, `@pluralize`, `@de_accent`, `@wrap_lines` |
+| `logic`  | `@coalesce`, `@first_true`, `@count_if`, `@any_match`, `@all_match`, `@none_match`, `@first_where`, `@last_where`, `@default_if_none`, `@safe_get`, `@group_by`, `@tally` |
 
 ### `@file` quick reference
 

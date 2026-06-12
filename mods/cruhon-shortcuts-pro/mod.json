@@ -1,0 +1,13 @@
+{
+    "name": "cruhon-shortcuts-pro",
+    "version": "1.0.0",
+    "description": "Extended shortcut plugin for Cruhon — higher-level composite operations for math, lists, dicts, text, and logic. Complements cruhon-shortcuts with @clamp, @lerp, @window, @pick_keys, @camel_case, @coalesce, and 100+ more.",
+    "author": "CrucibleLab",
+    "cruhon": ">=2.2.0",
+
+    "groups": "all",
+
+    "disabled": [],
+
+    "custom": {}
+}
