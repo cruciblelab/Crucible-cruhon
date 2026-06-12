@@ -32,6 +32,7 @@ import inspect
 import json
 import os
 import sys
+import traceback as _traceback
 from pathlib import Path
 from typing import Optional
 
@@ -284,14 +285,22 @@ class ModAPI:
         Inject a value into the exec() globals for every script run.
 
         value_or_factory:
-          - A plain value → injected as-is
-          - A callable (no args) → called before each exec(), return value is injected
+          - A plain value → injected as-is (same object every run, persistent)
+          - A callable (no args) → called fresh before EACH exec(), return value injected
+
+        For persistent resources (connection pools, singletons) pass the object directly
+        or use inject_once() which evaluates the factory once at registration time.
 
         Scripts access the injected value by name directly, no __ns__ needed.
 
         Usage:
             def register(api):
+                # Fresh DatabaseConnection on every run:
                 api.inject("db", lambda: DatabaseConnection())
+                # Persistent pool shared across all runs:
+                pool = ConnectionPool(max=10)
+                api.inject("pool", pool)
+                # Constant:
                 api.inject("APP_VERSION", "2.1.0")
 
         Script:
@@ -300,6 +309,25 @@ class ModAPI:
         """
         _INJECT_PROVIDERS[key] = value_or_factory
         _log(f"[{self.mod_name}] Inject registered: {key}")
+
+    def inject_once(self, key: str, factory):
+        """
+        Inject a value evaluated ONCE at registration time (not per exec).
+
+        Calls factory() immediately, stores the result. All script runs share
+        the same object — ideal for connection pools, expensive singletons, etc.
+
+        Usage:
+            def register(api):
+                api.inject_once("db_pool", lambda: DatabasePool(max_connections=10))
+        """
+        try:
+            value = factory()
+        except Exception as e:
+            _log(f"[{self.mod_name}] inject_once factory for '{key}' raised {type(e).__name__}: {e}")
+            value = None
+        _INJECT_PROVIDERS[key] = value
+        _log(f"[{self.mod_name}] inject_once registered: {key}")
 
     def inline_command(self, name: str, handler_fn):
         """
@@ -380,18 +408,52 @@ class ModAPI:
         First mod loaded = outermost wrapper.
         """
         node_class_map = {
-            "print":    "PrintNode",
-            "var":      "VarNode",
-            "if":       "IfNode",
-            "for":      "ForNode",
-            "while":    "WhileNode",
-            "func":     "FuncNode",
-            "class":    "ClassNode",
-            "return":   "ReturnNode",
-            "try":      "TryNode",
-            "import":   "ImportNode",
+            # Core language
+            "print":     "PrintNode",
+            "var":       "VarNode",
+            "const":     "ConstNode",
+            "input":     "InputNode",
+            "if":        "IfNode",
+            "for":       "ForNode",
+            "while":     "WhileNode",
+            "repeat":    "RepeatNode",
+            "func":      "FuncNode",
+            "class":     "ClassNode",
+            "return":    "ReturnNode",
+            "break":     "BreakNode",
+            "continue":  "ContinueNode",
+            "pass":      "PassNode",
+            "try":       "TryNode",
+            "with":      "WithNode",
+            "match":     "MatchNode",
+            "del":       "DelNode",
+            "raise":     "RaiseNode",
+            "assert":    "AssertNode",
+            "import":    "ImportNode",
+            "include":   "IncludeNode",
+            "global":    "GlobalNode",
+            "nonlocal":  "NonlocalNode",
+            "yield":     "YieldNode",
+            "await":     "AwaitNode",
+            "async_for": "AsyncForNode",
+            "async_with":"AsyncWithNode",
+            "raw":       "RawNode",
+            "expr":      "ExprNode",
+            "decorator": "DecorateNode",
+            "foreach":   "ForeachNode",
+            "inc":       "IncNode",
+            "dec":       "DecNode",
+            "swap":      "SwapNode",
+            "env":       "EnvNode",
+            "fetch":     "FetchNode",
+            "list":      "ListNode",
+            "dict":      "DictNode",
         }
-        node_name = node_class_map.get(command, f"{command.title()}Node")
+        # Fallback: convert "some_name" or "some.name" → "SomeNameNode" (CamelCase)
+        node_name = node_class_map.get(
+            command,
+            "".join(w.capitalize() for w in command.replace(".", "_").split("_")) + "Node"
+        )
 
         # Build the current chain entry
         if node_name not in _OVERRIDE_CHAINS:
@@ -439,6 +501,7 @@ class ModAPI:
             wrapped = fn
 
         self._transpiler._custom_visitors[node_name] = wrapped
+        self._transpiler._visitor_owners[node_name] = self.mod_name
 
     def namespace(self, name: str):
         """
@@ -461,11 +524,14 @@ class ModAPI:
             msg = f"[{self.mod_name}] namespace '{name}' already claimed by [{existing}]. Skipping."
             print(f"  \033[33m⚠ {msg}\033[0m")
             _WARNINGS.append(f"⚠ {msg}")
-            # Return the existing namespace — do NOT create or overwrite
+            # Return the existing registered namespace so second mod can still use it
             existing_ns = get_namespace_registry().get(name)
             if existing_ns:
                 return existing_ns
-            return Namespace(name)  # orphaned fallback (registry unchanged)
+            # Registry is out of sync — register a new Namespace so scripts can reach it
+            fallback_ns = Namespace(name)
+            get_namespace_registry().register(name, fallback_ns)
+            return fallback_ns
 
         _CLAIMED_NAMESPACES[name] = self.mod_name
         ns = Namespace(name)
@@ -618,6 +684,71 @@ class ModAPI:
         """Add a lexer post-hook — manipulate token list."""
         self._lexer.add_post_hook(fn)
 
+    # ── Unregister / cleanup ──────────────────────────────────
+
+    def unregister_command(self, name: str):
+        """
+        Remove a previously registered command or override visitor.
+
+        Useful for testing (tear down between test cases) or conditional
+        feature loading/unloading. If the command was never registered, no-op.
+
+        Note: does NOT restore a replaced built-in — to do that, re-register
+        the built-in's visitor manually.
+        """
+        node_name = "".join(w.capitalize() for w in name.replace(".", "_").split("_")) + "Node"
+        self._transpiler._custom_visitors.pop(node_name, None)
+        self._transpiler._visitor_owners.pop(node_name, None)
+        self._transpiler._block_visitors.pop(name, None)
+        self._transpiler._scoped_blocks.discard(name)
+        self._parser._commands.pop(name, None)
+        self._parser._block_commands.pop(name, None)
+        _log(f"[{self.mod_name}] Command unregistered: @{name}")
+
+    def remove_hook(self, event: str, fn):
+        """
+        Remove a previously registered lifecycle hook function.
+
+        Works for all hook events: before_run, after_run, on_error,
+        before_parse, after_parse, before_transpile, after_transpile.
+        No-op if fn was never registered for that event.
+        """
+        if event == "before_parse":
+            if fn in self._lexer._pre_hooks:
+                self._lexer._pre_hooks.remove(fn)
+        elif event == "after_parse":
+            if fn in self._parser._post_hooks:
+                self._parser._post_hooks.remove(fn)
+        elif event == "before_transpile":
+            if fn in self._transpiler._pre_hooks:
+                self._transpiler._pre_hooks.remove(fn)
+        elif event == "after_transpile":
+            if fn in self._transpiler._post_hooks:
+                self._transpiler._post_hooks.remove(fn)
+        elif event in _RUNTIME_HOOKS:
+            hooks = _RUNTIME_HOOKS[event]
+            if fn in hooks:
+                hooks.remove(fn)
+        # Remove from local tracking too
+        if event in self._hooks and fn in self._hooks[event]:
+            self._hooks[event].remove(fn)
+        _log(f"[{self.mod_name}] Hook removed: {event}")
+
+    def remove_inject(self, key: str):
+        """
+        Remove a previously injected value from exec() globals.
+
+        No-op if key was never registered.
+        """
+        _INJECT_PROVIDERS.pop(key, None)
+        _log(f"[{self.mod_name}] Inject removed: {key}")
+
+    def remove_eval_hook(self, fn):
+        """Remove a previously registered eval hook."""
+        if fn in self._transpiler._eval_hooks:
+            self._transpiler._eval_hooks.remove(fn)
+        _log(f"[{self.mod_name}] Eval hook removed")
+
 
 # ─────────────────────────────────────────────────────────────
 # RUNTIME HOOKS
@@ -722,6 +853,7 @@ def load_mod_from_path(mod_path: Path) -> bool:
 
     except Exception as e:
         print(f"  ✗ Failed to load mod {mod_path.name}: {e}")
+        _traceback.print_exc()
         return False
 
 
@@ -748,16 +880,36 @@ def load_pip_mods():
                 module = importlib.import_module(module_name)
                 version = dist.metadata.get("Version", "?")
 
-                # Version compatibility check via dist metadata if present
-                # (pip mods may not have a mod.json; skip if no constraint info)
+                # Version compatibility check: pip mods declare constraint via
+                # module-level CRUHON_REQUIRES = ">=2.0.0" or in dist metadata
+                cruhon_req = getattr(module, "CRUHON_REQUIRES", None)
+                if cruhon_req is None:
+                    # Fall back to PyPI metadata Requires-Dist for cruhon
+                    for req in (dist.metadata.get_all("Requires-Dist") or []):
+                        if req.startswith("cruhon ") or req.startswith("cruhon>=") or req.startswith("cruhon>"):
+                            cruhon_req = req.split("cruhon", 1)[1].strip().lstrip("=").lstrip()
+                            break
+
+                if cruhon_req and not _is_compatible(cruhon_req):
+                    msg = (f"[{name}] requires cruhon {cruhon_req}, "
+                           f"installed is {CRUHON_VERSION}. Skipping.")
+                    print(f"  \033[31m✗ {msg}\033[0m")
+                    _WARNINGS.append(f"✗ {msg}")
+                    continue
+
                 if hasattr(module, "register"):
+                    # Read CRUHON_CONFIG dict from module for api.config() support
+                    pip_manifest = dict(getattr(module, "CRUHON_CONFIG", {}))
+                    pip_manifest.setdefault("name", name)
+                    pip_manifest.setdefault("version", version)
                     api = ModAPI(name)
                     module.register(api)
-                    register_mod({"name": name, "version": version})
-                    _record_loaded(name, version, "pip")
+                    register_mod(pip_manifest)
+                    _record_loaded(name, version, "pip", manifest=pip_manifest)
                     _log(f"[ModLoader] pip mod loaded: {name}")
             except Exception as e:
                 print(f"  ⚠ Failed to load pip mod {name}: {e}")
+                _traceback.print_exc()
 
     except Exception:
         pass  # importlib.metadata unavailable — silently skip

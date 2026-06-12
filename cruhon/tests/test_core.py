@@ -4951,3 +4951,232 @@ class TestPprintLib:
     def test_PrettyPrinter_codegen(self):
         h = get_lib_call("pprint", "PrettyPrinter")
         assert "__import__('pprint').PrettyPrinter()" in h([])
+
+
+# ─────────────────────────────────────────────────────────────
+# MOD LOADER SYSTEM FIXES (10 correctness fixes)
+# ─────────────────────────────────────────────────────────────
+
+from cruhon.core.mod_loader import (
+    ModAPI, _INJECT_PROVIDERS, _RUNTIME_HOOKS, _OVERRIDE_CHAINS,
+    fire_hook, CRUHON_VERSION,
+)
+from cruhon.core.transpiler import get_transpiler as _get_transpiler
+from cruhon.core.parser import get_parser as _get_parser
+
+
+class TestOverrideNodeNameMapping:
+    """Fix 1: async_for/async_with → correct CamelCase node names."""
+
+    def test_async_for_maps_correctly(self):
+        api = ModAPI("test-mod")
+        # Before fix: 'async_for'.title() → 'Async_For' → 'Async_ForNode' (wrong)
+        # After fix: CamelCase → 'AsyncForNode' (correct)
+        visited = []
+        def my_visitor(t, n):
+            visited.append(True)
+            return ""
+        api.override("async_for", my_visitor, warn=False)
+        assert "AsyncForNode" in _get_transpiler()._custom_visitors
+
+    def test_async_with_maps_correctly(self):
+        api = ModAPI("test-mod2")
+        def my_visitor(t, n):
+            return ""
+        api.override("async_with", my_visitor, warn=False)
+        assert "AsyncWithNode" in _get_transpiler()._custom_visitors
+
+    def test_assert_maps_correctly(self):
+        api = ModAPI("test-mod3")
+        def my_visitor(t, n):
+            return ""
+        api.override("assert", my_visitor, warn=False)
+        assert "AssertNode" in _get_transpiler()._custom_visitors
+
+    def test_fallback_camelcase(self):
+        api = ModAPI("test-mod4")
+        def my_visitor(t, n):
+            return ""
+        api.override("multi_word_cmd", my_visitor, warn=False)
+        assert "MultiWordCmdNode" in _get_transpiler()._custom_visitors
+
+    def test_del_maps_correctly(self):
+        api = ModAPI("test-mod5")
+        def my_visitor(t, n):
+            return ""
+        api.override("del", my_visitor, warn=False)
+        assert "DelNode" in _get_transpiler()._custom_visitors
+
+
+class TestVisitorOwnerTracking:
+    """Fix 9: _visitor_owners set for 3-arg override wrappers."""
+
+    def test_3arg_override_sets_owner(self):
+        api = ModAPI("owner-test-mod")
+        def my_3arg(transpiler, node, next_fn):
+            return next_fn()
+        api.override("while", my_3arg, warn=False)
+        assert _get_transpiler()._visitor_owners.get("WhileNode") == "owner-test-mod"
+
+    def test_2arg_override_sets_owner(self):
+        api = ModAPI("owner-test-mod2")
+        def my_2arg(transpiler, node):
+            return ""
+        api.override("repeat", my_2arg, warn=False)
+        assert _get_transpiler()._visitor_owners.get("RepeatNode") == "owner-test-mod2"
+
+
+class TestUnregisterAPI:
+    """Fix 8: api.unregister_command(), remove_hook(), remove_inject()."""
+
+    def test_unregister_command(self):
+        api = ModAPI("unregister-test")
+        def my_cmd(t, n):
+            return ""
+        api.override("yield", my_cmd, warn=False)
+        assert "YieldNode" in _get_transpiler()._custom_visitors
+        api.unregister_command("yield")
+        assert "YieldNode" not in _get_transpiler()._custom_visitors
+
+    def test_remove_inject(self):
+        api = ModAPI("inject-remove-test")
+        api.inject("_test_key_xyz", "test_value")
+        assert "_test_key_xyz" in _INJECT_PROVIDERS
+        api.remove_inject("_test_key_xyz")
+        assert "_test_key_xyz" not in _INJECT_PROVIDERS
+
+    def test_remove_hook(self):
+        api = ModAPI("hook-remove-test")
+        fired = []
+        def my_hook(**kwargs):
+            fired.append(1)
+        api.hook("before_run", my_hook)
+        assert my_hook in _RUNTIME_HOOKS.get("before_run", [])
+        api.remove_hook("before_run", my_hook)
+        assert my_hook not in _RUNTIME_HOOKS.get("before_run", [])
+
+    def test_remove_eval_hook(self):
+        api = ModAPI("eval-hook-remove-test")
+        def my_eval_hook(v, ctx):
+            return None
+        api.eval_hook(my_eval_hook)
+        assert my_eval_hook in _get_transpiler()._eval_hooks
+        api.remove_eval_hook(my_eval_hook)
+        assert my_eval_hook not in _get_transpiler()._eval_hooks
+
+
+class TestInjectOnce:
+    """Fix 5: api.inject_once() evaluates factory once, not per exec."""
+
+    def test_inject_once_stores_value_not_callable(self):
+        api = ModAPI("inject-once-test")
+        call_count = [0]
+        def factory():
+            call_count[0] += 1
+            return {"pool": "singleton"}
+        api.inject_once("_test_pool_xyz", factory)
+        assert call_count[0] == 1
+        # Value stored directly, NOT as callable
+        assert _INJECT_PROVIDERS["_test_pool_xyz"] == {"pool": "singleton"}
+        assert not callable(_INJECT_PROVIDERS["_test_pool_xyz"])
+        api.remove_inject("_test_pool_xyz")
+
+    def test_inject_once_reuses_same_object(self):
+        api = ModAPI("inject-once-test2")
+        obj = object()
+        api.inject_once("_test_obj_xyz", lambda: obj)
+        assert _INJECT_PROVIDERS["_test_obj_xyz"] is obj
+        api.remove_inject("_test_obj_xyz")
+
+
+class TestOnErrorHookFiring:
+    """Fix 4: on_error fires for ParseError/RunError too."""
+    from cruhon.core.runner import run_source as _rs
+    from cruhon.core.parser import ParseError as _PE
+
+    def test_on_error_fires_for_parse_error(self):
+        errors = []
+        def capture(error=None, **kw):
+            errors.append(type(error).__name__)
+        _RUNTIME_HOOKS.setdefault("on_error", []).append(capture)
+        try:
+            from cruhon.core.runner import run_source
+            run_source("@if[")  # malformed, should raise ParseError
+        except Exception:
+            pass
+        finally:
+            if capture in _RUNTIME_HOOKS.get("on_error", []):
+                _RUNTIME_HOOKS["on_error"].remove(capture)
+        assert len(errors) > 0
+
+    def test_on_error_fires_for_run_error(self):
+        errors = []
+        def capture(error=None, **kw):
+            errors.append(type(error).__name__)
+        _RUNTIME_HOOKS.setdefault("on_error", []).append(capture)
+        try:
+            from cruhon.core.runner import run_source
+            run_source("@var[x; undefined_variable_xyz]")
+        except Exception:
+            pass
+        finally:
+            if capture in _RUNTIME_HOOKS.get("on_error", []):
+                _RUNTIME_HOOKS["on_error"].remove(capture)
+        # Runtime NameError fires on_error
+        assert len(errors) > 0
+
+
+class TestAfterRunArgs:
+    """Fix 6: after_run hook receives source= and python_code= kwargs."""
+
+    def test_after_run_receives_source(self):
+        received = {}
+        def capture(**kwargs):
+            received.update(kwargs)
+        _RUNTIME_HOOKS.setdefault("after_run", []).append(capture)
+        try:
+            from cruhon.core.runner import run_source
+            run_source('@var[x; 1]')
+        except Exception:
+            pass
+        finally:
+            if capture in _RUNTIME_HOOKS.get("after_run", []):
+                _RUNTIME_HOOKS["after_run"].remove(capture)
+        assert "source" in received
+        assert "python_code" in received
+        assert "@var[x; 1]" in received["source"]
+
+    def test_after_run_python_code_is_string(self):
+        received = {}
+        def capture(**kwargs):
+            received.update(kwargs)
+        _RUNTIME_HOOKS.setdefault("after_run", []).append(capture)
+        try:
+            from cruhon.core.runner import run_source
+            run_source('@print["hello"]')
+        except Exception:
+            pass
+        finally:
+            if capture in _RUNTIME_HOOKS.get("after_run", []):
+                _RUNTIME_HOOKS["after_run"].remove(capture)
+        assert isinstance(received.get("python_code"), str)
+
+
+class TestVersionCheck:
+    """Fix 1 (version): _is_compatible() covers real version patterns."""
+
+    def test_current_version_compat(self):
+        from cruhon.core.mod_loader import _is_compatible
+        assert _is_compatible(f">={CRUHON_VERSION}")
+
+    def test_old_version_incompatible(self):
+        from cruhon.core.mod_loader import _is_compatible
+        assert not _is_compatible(">=99.0.0")
+
+    def test_range_constraint(self):
+        from cruhon.core.mod_loader import _is_compatible
+        assert _is_compatible(">=1.0.0,<99.0.0")
+
+    def test_equal_constraint(self):
+        from cruhon.core.mod_loader import _is_compatible
+        assert _is_compatible(f"=={CRUHON_VERSION}")

@@ -363,10 +363,11 @@ def run_source(
         if _show:
             _show_python_end()
 
-        fire_hook("after_run")
+        fire_hook("after_run", source=source, python_code=python_code)
         return python_code
 
-    except (ParseError, RunError):
+    except (ParseError, RunError) as e:
+        fire_hook("on_error", error=e)
         raise
 
     except SyntaxError as e:
