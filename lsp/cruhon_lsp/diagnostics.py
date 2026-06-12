@@ -69,9 +69,9 @@ _LINT_MAX_LINE = 120
 _LINT_MAX_NEST = 8
 
 _BLOCK_OPENERS = {
-    "if", "elif", "else", "for", "while", "func", "class", "try", "catch",
-    "finally", "with", "match", "async", "module", "repeat", "foreach",
-    "retry", "timeout", "macro", "template", "raw",
+    "if", "for", "while", "func", "class", "try", "with", "match", "async",
+    "module", "repeat", "foreach", "retry", "timeout", "macro", "template",
+    "decorator", "raw",
 }
 
 

@@ -54,7 +54,9 @@ def _get_ns_completions() -> list[types.CompletionItem]:
 
 def _publish_diagnostics(ls: LanguageServer, uri: str, source: str) -> None:
     diags = validate(source)
-    ls.publish_diagnostics(uri, diags)
+    ls.text_document_publish_diagnostics(
+        types.PublishDiagnosticsParams(uri=uri, diagnostics=diags)
+    )
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
@@ -191,11 +193,6 @@ def definition(
     cursor_line = params.position.line
     cursor_col = params.position.character
     line_text = lines[cursor_line] if cursor_line < len(lines) else ""
-
-    # Find what name is under the cursor
-    word_match = re.search(r"\b(\w+)\b", line_text)
-    if not word_match:
-        return None
 
     # Look for @call[name] → find @macro[name], @pipeline, @template definition
     call_match = re.search(r"@(?:call|apply|render)\s*\[\s*(\w+)", line_text)
