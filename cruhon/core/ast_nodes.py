@@ -395,6 +395,36 @@ class SwapNode(Node):
 
 
 @dataclass
+class RetryNode(Node):
+    """@retry[n] or @retry[n; ExcType] ... @end — retry body up to n times on failure"""
+    times: str = "3"
+    exc_type: Optional[str] = None
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class TimeoutNode(Node):
+    """@timeout[seconds] ... @end — run body with a wall-clock deadline"""
+    seconds: str = "30"
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class MacroDefNode(Node):
+    """@macro[name; param1; ...] ... @end — define a reusable macro block"""
+    name: str = ""
+    params: List[str] = field(default_factory=list)
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class MacroCallNode(Node):
+    """@call[name; arg1; arg2] — invoke a defined macro"""
+    name: str = ""
+    args: List[str] = field(default_factory=list)
+
+
+@dataclass
 class PluginBlockNode(Node):
     """
     Generic block node for plugin-defined block commands.

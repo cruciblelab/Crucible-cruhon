@@ -80,6 +80,10 @@ _LIBS: dict[str, str] = {
     "unicode":     "unicodedata",
     "binascii":    "binascii",
     "shlex":       "shlex",
+    # New in v2.5.0
+    "yaml":        _BUILTIN,     # @yaml.* — PyYAML, requires pip install pyyaml
+    "image":       _BUILTIN,     # @image.* — Pillow, requires pip install pillow
+    "pdf":         _BUILTIN,     # @pdf.* — pdfplumber, requires pip install pdfplumber
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -276,6 +280,10 @@ def _register_stdlib():
     from .libs.unicode_     import register as _r_unicode
     from .libs.binascii_    import register as _r_binascii
     from .libs.shlex_       import register as _r_shlex
+    from .libs.re_          import register as _r_re
+    from .libs.yaml_        import register as _r_yaml
+    from .libs.image_       import register as _r_image
+    from .libs.pdf_         import register as _r_pdf
     _r_file()
     _r_time()
     _r_date()
@@ -325,5 +333,9 @@ def _register_stdlib():
     _r_unicode()
     _r_binascii()
     _r_shlex()
+    _r_re()
+    _r_yaml()
+    _r_image()
+    _r_pdf()
 
 _register_stdlib()

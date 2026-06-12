@@ -133,11 +133,15 @@ class Parser:
             "module":    self._parse_module,
             "foreach":   self._parse_foreach,
             "decorator": self._parse_decorator,
+            "retry":     self._parse_retry,
+            "timeout":   self._parse_timeout,
+            "macro":     self._parse_macro,
         }
         self._commands.update({
             "export": self._parse_export,
             "use":    self._parse_use,
             "from":   self._parse_from,
+            "call":   self._parse_call,
         })
 
     # ── Token navigation ──────────────────────────────────────
@@ -313,7 +317,7 @@ class Parser:
         inline_expr_cmds = {
             "env", "list", "dict", "fetch", "ctx", "lambda", "comp", "pipe",
             "dictcomp", "setcomp", "gencomp", "set", "tuple", "when", "default",
-            "input",
+            "input", "call",
         }
 
         if cmd in inline_expr_cmds:
@@ -488,6 +492,16 @@ class Parser:
                 if p and not (p.startswith('"') or p.startswith("'")):
                     p = f'"{p}"'
                 return f"input({p})"
+
+            elif cmd == "call":
+                # @call[name; arg1; arg2] as inline expression → __macro_name(arg1, arg2)
+                self.advance()  # @call
+                args = self.parse_args()
+                if not args:
+                    raise ParseError("@call requires a macro name", line)
+                macro_name = args[0].strip()
+                call_args = ", ".join(args[1:])
+                return f"__macro_{macro_name}({call_args})"
 
         # Plugin-registered inline commands
         if cmd in self._inline_commands:
@@ -1379,6 +1393,63 @@ class Parser:
         if len(args) < 2:
             raise ParseError("@swap requires [a; b]", line)
         return SwapNode(left=args[0].strip(), right=args[1].strip(), line=line)
+
+    def _parse_retry(self) -> "RetryNode":
+        from .ast_nodes import RetryNode
+        line = self.current.line
+        self.advance()  # @retry
+        args = self.parse_args()
+        times = args[0].strip() if args else "3"
+        exc_type = args[1].strip() if len(args) > 1 else None
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+        body = self._parse_block()
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+        return RetryNode(times=times, exc_type=exc_type, body=body, line=line)
+
+    def _parse_timeout(self) -> "TimeoutNode":
+        from .ast_nodes import TimeoutNode
+        line = self.current.line
+        self.advance()  # @timeout
+        args = self.parse_args()
+        seconds = args[0].strip() if args else "30"
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+        body = self._parse_block()
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+        return TimeoutNode(seconds=seconds, body=body, line=line)
+
+    def _parse_macro(self) -> "MacroDefNode":
+        from .ast_nodes import MacroDefNode
+        line = self.current.line
+        self.advance()  # @macro
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@macro requires at least a name", line)
+        name = args[0].strip()
+        params = [a.strip() for a in args[1:]]
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+        body = self._parse_block()
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+        return MacroDefNode(name=name, params=params, body=body, line=line)
+
+    def _parse_call(self) -> "MacroCallNode":
+        from .ast_nodes import MacroCallNode
+        line = self.current.line
+        self.advance()  # @call
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@call requires a macro name", line)
+        name = args[0].strip()
+        call_args = list(args[1:])
+        return MacroCallNode(name=name, args=call_args, line=line)
 
     def _parse_namespace_call(self) -> Node:
         """

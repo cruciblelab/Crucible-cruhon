@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 
 
-CRUHON_VERSION = "2.4.0"
+CRUHON_VERSION = "2.5.0"
 
 BANNER = f"""
   \033[36m╔═══════════════════════════╗
@@ -399,6 +399,170 @@ def cmd_docs(args):
 _FMT_MID_KEYWORDS = {"else", "elif", "catch", "finally", "case", "default"}
 
 
+def cmd_lint(args):
+    """Static analysis for .clpy files."""
+    from cruhon.core.mod_loader import load_all_mods
+    load_all_mods(Path.cwd())
+
+    paths = args.files if args.files else list(Path.cwd().rglob("*.clpy"))
+    if not paths:
+        print("  No .clpy files found")
+        return
+
+    total = 0
+    for f in [Path(p) for p in paths]:
+        if not f.exists():
+            print(f"  \033[31m✗ Not found: {f}\033[0m")
+            continue
+        issues = _lint_file(f)
+        if issues:
+            for msg in issues:
+                print(msg)
+            total += len(issues)
+        else:
+            print(f"  \033[32m✓\033[0m {f}")
+
+    if total:
+        print(f"\n  \033[33m{total} issue(s) found\033[0m")
+        sys.exit(1)
+    else:
+        print(f"\n  \033[32mAll clean\033[0m")
+
+
+_LINT_BLOCK_OPENERS = {
+    "if", "for", "while", "func", "class", "try", "async", "repeat",
+    "with", "match", "module", "foreach", "decorator", "retry", "timeout",
+    "macro",
+}
+_LINT_MID_KEYWORDS = {"else", "elif", "catch", "finally", "case", "default"}
+
+
+def _lint_file(path: Path) -> list[str]:
+    """Return list of issue strings for path, empty if clean."""
+    from cruhon.core import parse, transpile
+    source = path.read_text("utf-8")
+    issues = []
+
+    try:
+        ast = parse(source)
+        transpile(ast)
+    except Exception as e:
+        issues.append(f"  \033[31m✗\033[0m {path}  {e}")
+        return issues
+
+    lines = source.splitlines()
+    depth = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if len(line.rstrip()) > 120:
+            issues.append(f"  \033[33m⚠\033[0m {path}:{i}  line too long ({len(line.rstrip())} chars, max 120)")
+        if not stripped.startswith("@"):
+            continue
+        cmd = stripped[1:].split("[")[0].split(" ")[0].split(".")[0]
+        if cmd in _LINT_BLOCK_OPENERS:
+            depth += 1
+            if depth > 6:
+                issues.append(f"  \033[33m⚠\033[0m {path}:{i}  nesting depth {depth} — consider refactoring")
+        elif cmd == "end":
+            depth = max(0, depth - 1)
+
+    return issues
+
+
+def cmd_test(args):
+    """Discover and run .test.clpy / test_*.clpy test files."""
+    from cruhon.core.mod_loader import load_all_mods
+    from cruhon.core.runner import run_source
+
+    search_dir = Path(getattr(args, "path", None) or ".").resolve()
+    load_all_mods(search_dir)
+
+    patterns = ["*.test.clpy", "test_*.clpy", "*_test.clpy"]
+    found = []
+    for pat in patterns:
+        found.extend(search_dir.rglob(pat))
+    test_files = sorted(set(found))
+
+    if not test_files:
+        print(f"  No test files found in {search_dir}")
+        print("  Name test files: *.test.clpy  or  test_*.clpy  or  *_test.clpy")
+        return
+
+    verbose = getattr(args, "verbose", False)
+    passed, failed = 0, []
+
+    print(f"\n  \033[36mRunning {len(test_files)} test file(s)\033[0m\n")
+
+    for f in test_files:
+        try:
+            rel = f.relative_to(search_dir)
+        except ValueError:
+            rel = f
+        try:
+            run_source(f.read_text("utf-8"), filename=str(f), base_dir=f.parent)
+            passed += 1
+            print(f"  \033[32m✓\033[0m {rel}")
+        except Exception as e:
+            failed.append((str(rel), str(e)))
+            print(f"  \033[31m✗\033[0m {rel}")
+            if verbose:
+                print(f"    \033[90m{e}\033[0m")
+
+    bar = "─" * 40
+    print(f"\n  {bar}")
+    print(f"  Passed: \033[32m{passed}\033[0m  Failed: \033[31m{len(failed)}\033[0m  Total: {passed + len(failed)}")
+
+    if failed:
+        if not verbose:
+            print(f"\n  Failures:")
+            for name, err in failed:
+                print(f"    \033[31m✗\033[0m {name}")
+                print(f"      \033[90m{err}\033[0m")
+        sys.exit(1)
+
+
+def cmd_bundle(args):
+    """Bundle a .clpy file into a standalone Python script."""
+    from cruhon.core import parse, transpile
+    from cruhon.core.runner import resolve_includes, resolve_modules, _is_async_code
+    from cruhon.core.mod_loader import load_all_mods
+
+    path = Path(args.file)
+    if not path.exists():
+        print(f"  \033[31m✗ File not found: {args.file}\033[0m")
+        sys.exit(1)
+
+    load_all_mods(path.parent)
+    source = path.read_text("utf-8")
+
+    try:
+        ast = parse(source)
+        ast = resolve_includes(ast, path.parent, {path.resolve()})
+        ast = resolve_modules(ast, path.parent)
+        python_code = transpile(ast)
+    except Exception as e:
+        _print_error(e, fallback_file=str(path))
+        sys.exit(1)
+
+    if _is_async_code(python_code):
+        python_code += "\nimport asyncio\nasyncio.run(main())"
+
+    out_path = Path(args.output) if getattr(args, "output", None) else path.with_suffix(".bundle.py")
+
+    header = (
+        f"# Generated by cruhon bundle v{CRUHON_VERSION} from {path.name}\n"
+        "# Standalone Python script — run with: python <this file>\n"
+        "# Python 3.10+ required.\n\n"
+        "__ctx__ = {}\n"
+        "__ctx_stack__ = []\n"
+        "__ph__ = lambda *_a, **_k: None\n\n"
+    )
+
+    out_path.write_text(header + python_code, encoding="utf-8")
+    print(f"  \033[32m✓ Bundled: {out_path}\033[0m")
+    print(f"  \033[90mRun with: python {out_path}\033[0m")
+
+
 def cmd_fmt(args):
     from cruhon.core.parser import get_parser
     from cruhon.core.lexer import get_lexer
@@ -642,6 +806,23 @@ def main():
     # libs
     p_libs = sub.add_parser("libs", help="List supported libraries")
     p_libs.set_defaults(fn=cmd_libs)
+
+    # lint
+    p_lint = sub.add_parser("lint", help="Static analysis for .clpy files")
+    p_lint.add_argument("files", nargs="*", help=".clpy file(s) to lint (default: all in cwd)")
+    p_lint.set_defaults(fn=cmd_lint)
+
+    # test
+    p_test = sub.add_parser("test", help="Discover and run .test.clpy test files")
+    p_test.add_argument("path", nargs="?", default=".", help="Directory to search (default: .)")
+    p_test.add_argument("-v", "--verbose", action="store_true", help="Show error details inline")
+    p_test.set_defaults(fn=cmd_test)
+
+    # bundle
+    p_bundle = sub.add_parser("bundle", help="Bundle .clpy to a standalone Python script")
+    p_bundle.add_argument("file", help=".clpy file to bundle")
+    p_bundle.add_argument("-o", "--output", help="Output .bundle.py file path")
+    p_bundle.set_defaults(fn=cmd_bundle)
 
     # new
     p_new = sub.add_parser("new", help="Create a new Cruhon project or plugin scaffold")

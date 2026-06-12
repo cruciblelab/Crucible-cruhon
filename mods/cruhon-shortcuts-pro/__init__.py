@@ -42,7 +42,7 @@ New @text.* methods:
 
 Configuration (mod.json)
 ─────────────────────────
-groups      "all"  or  ["math", "lists", "dicts", "text", "logic"]
+groups      "all"  or  ["math", "lists", "dicts", "text", "logic", "regex", "http", "file"]
 
 disabled    []
             Specific global rewrites to suppress.
@@ -64,6 +64,9 @@ _GROUP_MODULES: dict[str, str] = {
     "dicts": "pro_dicts",
     "text":  "pro_text",
     "logic": "pro_logic",
+    "regex": "pro_regex",
+    "http":  "pro_http",
+    "file":  "pro_file",
 }
 
 

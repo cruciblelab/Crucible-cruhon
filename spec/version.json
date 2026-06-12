@@ -1,5 +1,5 @@
 {
-  "current": "2.4.0",
+  "current": "2.5.0",
   "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
@@ -55,6 +55,11 @@
       "version": "2.3.0",
       "status": "released",
       "summary": "v2.3.0: Full expansion of the 5 v2.2 stdlib namespaces + second shortcut plugin. @string.*: char utilities (ascii_to_int, filter, exclude, count_in, translate) + random string generators (random_lower/upper/digits_str). @struct.*: unpack_list, first, pad, byte_order, to_hex, from_hex_str, native. @zlib.*: base64 wrappers (compress_b64/str, decompress_b64/str), adler32_hex, saved_bytes, is_zlib. @calendar.*: is_weekday/weekend, first_weekday_of, day_of_year, week_of_year, year_text, quarter, next_month, prev_month. @email.*: cc/bcc/reply_to/content_type getters, to_bytes, html_body, attach_text/bytes, all_attachments, set_cc/bcc/reply_to, address_list. New cruhon-shortcuts-pro plugin (mods/cruhon-shortcuts-pro, 5 groups, 120+ operations): @math.* (clamp/lerp/sign/gcd/lcm/sin/cos/tan/degrees/…), @collections.* lists (window/transpose/unzip/rotate/partition/chunks/sorted_by/…), @collections.* dicts (pick_keys/omit_keys/deep_merge/dict_diff/flatten_nested/…), @collections.* logic (coalesce/first_where/count_if/group_by/tally/…), @text.* (camel_case/snake_case/kebab_case/word_freq/ordinal/de_accent/…). 1316-test suite."
+    },
+    {
+      "version": "2.5.0",
+      "status": "released",
+      "summary": "v2.5.0: Language — @retry[n; ExcType], @timeout[s], @macro/@call (named reusable blocks). CLI — cruhon lint, cruhon test, cruhon bundle. Stdlib — @re.* (14 methods, inline __import__), @yaml.* (PyYAML, 10 methods), @image.* (Pillow, 18 methods), @pdf.* (pdfplumber, 10 methods). cruhon-shortcuts-pro: 3 new groups — regex (re_match/find/sub/…), http (retry_get/bearer/json_post/…), file (read_file/write_file/find/joinpath/…). Match/case guard expressions confirmed working. 1442-test suite."
     },
     {
       "version": "2.4.0",

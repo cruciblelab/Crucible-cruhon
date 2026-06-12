@@ -598,6 +598,63 @@ class Transpiler:
     def visit_SwapNode(self, node) -> str:
         return self._line(f"{node.left}, {node.right} = {node.right}, {node.left}", node.line)
 
+    def visit_RetryNode(self, node) -> str:
+        idx = f"__retry_i_{node.line}"
+        mx = f"__retry_n_{node.line}"
+        exc = node.exc_type or "Exception"
+        lines = [
+            self._line(f"{mx} = int({node.times})", node.line),
+            self._line(f"for {idx} in range({mx}):"),
+        ]
+        self._indent += 1
+        lines.append(self._line("try:"))
+        lines.append(self._block(node.body))
+        self._indent += 1
+        lines.append(self._line("break"))
+        self._indent -= 1
+        lines.append(self._line(f"except {exc}:"))
+        self._indent += 1
+        lines.append(self._line(f"if {idx} >= {mx} - 1:"))
+        self._indent += 1
+        lines.append(self._line("raise"))
+        self._indent -= 2
+        self._indent -= 1
+        return "\n".join(lines)
+
+    def visit_TimeoutNode(self, node) -> str:
+        fn = f"__timeout_fn_{node.line}"
+        cf = f"__cf_{node.line}"
+        pool = f"__pool_{node.line}"
+        ft = f"__ft_{node.line}"
+        s = node.seconds
+        lines = [self._line(f"def {fn}():", node.line)]
+        lines.append(self._block(node.body))
+        lines.append(self._line(f"import concurrent.futures as {cf}"))
+        lines.append(self._line(f"with {cf}.ThreadPoolExecutor(max_workers=1) as {pool}:"))
+        self._indent += 1
+        lines.append(self._line(f"{ft} = {pool}.submit({fn})"))
+        lines.append(self._line("try:"))
+        self._indent += 1
+        lines.append(self._line(f"{ft}.result(timeout={s})"))
+        self._indent -= 1
+        lines.append(self._line(f"except {cf}.TimeoutError:"))
+        self._indent += 1
+        lines.append(self._line(
+            f"raise TimeoutError('operation timed out after ' + str({s}) + 's')"
+        ))
+        self._indent -= 2
+        return "\n".join(lines)
+
+    def visit_MacroDefNode(self, node) -> str:
+        params_str = ", ".join(node.params) if node.params else ""
+        lines = [self._line(f"def __macro_{node.name}({params_str}):", node.line)]
+        lines.append(self._block(node.body))
+        return "\n".join(lines)
+
+    def visit_MacroCallNode(self, node) -> str:
+        args_str = ", ".join(node.args)
+        return self._line(f"__macro_{node.name}({args_str})", node.line)
+
     def visit_ExprNode(self, node: ExprNode) -> str:
         return self._line(node.expr, node.line)
 

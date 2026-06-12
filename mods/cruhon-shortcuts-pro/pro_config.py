@@ -17,7 +17,7 @@ custom      {}
 """
 from __future__ import annotations
 
-ALL_GROUPS: list[str] = ["math", "lists", "dicts", "text", "logic"]
+ALL_GROUPS: list[str] = ["math", "lists", "dicts", "text", "logic", "regex", "http", "file"]
 
 
 class ProConfig:
