@@ -75,6 +75,33 @@ simpler surface. You do **not** need `@import` for them.
 | `@mail.*`   | `smtplib` / `imaplib` / `email`         | send, send_html, imap_connect, imap_search, imap_fetch… |
 | `@csv.*`    | `csv`                                   | read, write, filter, to_json… |
 
+### Python stdlib wrappers (new in v2.1)
+
+One-line access to the most-used Python standard libraries. No `@import` needed.
+
+| Namespace        | Wraps          | Commands |
+|------------------|----------------|----------|
+| `@random.*`      | `random`       | random, randint, randrange, uniform, choice, choices, sample, shuffle, seed, gauss… |
+| `@collections.*` | `collections`  | Counter, defaultdict, deque, namedtuple, OrderedDict, ChainMap… |
+| `@itertools.*`   | `itertools`    | chain, cycle, product, permutations, combinations, groupby, accumulate, islice, flatten, pairwise… |
+| `@functools.*`   | `functools`    | reduce, partial, lru_cache, cache, cached_property, wraps, total_ordering, singledispatch… |
+| `@sys.*`         | `sys`          | argv, exit, path, version, platform, getsizeof, maxsize, stdin/out/err… |
+| `@io.*`          | `io`           | StringIO, BytesIO, read, write, getvalue, seek, tell, open… |
+| `@copy.*`        | `copy`         | copy, deepcopy, replace |
+| `@base64.*`      | `base64`       | encode, decode, urlsafe_encode, urlsafe_decode, b32/b16… |
+| `@url.*`         | `urllib.parse` | parse, join, quote, unquote, encode, parse_qs, scheme, netloc, path, query… |
+| `@statistics.*`  | `statistics`   | mean, fmean, median, mode, multimode, quantiles, stdev, variance, correlation… |
+| `@contextlib.*`  | `contextlib`   | contextmanager, suppress, nullcontext, redirect_stdout, closing, ExitStack… |
+| `@enum.*`        | `enum`         | Enum, IntEnum, StrEnum, Flag, auto, create, unique, names, values… |
+| `@dataclasses.*` | `dataclasses`  | dataclass, field, asdict, astuple, fields, replace, is_dataclass, make_dataclass… |
+| `@typing.*`      | `typing`       | Optional, Union, List, Dict, Tuple, Any, Callable, cast, TypeVar, Literal… |
+| `@threading.*`   | `threading`    | Thread, Lock, RLock, Event, Semaphore, Condition, Barrier, Timer, current_thread… |
+| `@queue.*`       | `queue`        | Queue, LifoQueue, PriorityQueue, SimpleQueue, put, get, empty, full, qsize… |
+| `@heapq.*`       | `heapq`        | heappush, heappop, heapify, heappushpop, heapreplace, nlargest, nsmallest, merge |
+| `@bisect.*`      | `bisect`       | bisect_left, bisect_right, bisect, insort_left, insort_right, insort |
+| `@operator.*`    | `operator`     | itemgetter, attrgetter, methodcaller, add, sub, mul, eq, lt, contains… |
+| `@pprint.*`      | `pprint`       | print, format, pp, isreadable, isrecursive, saferepr, PrettyPrinter |
+
 ### Plugin namespaces
 
 | Namespace   | Type    | Commands |
@@ -137,3 +164,10 @@ Adding a third-party library wrapper is straightforward:
 4. Open a PR
 
 Libraries can also be added as community mods — see `mods/README.md`
+
+---
+
+## Community
+
+- **Discord:** https://discord.gg/SPf5VZ6QPG
+- **Email:** cruciblelab@hotmail.com

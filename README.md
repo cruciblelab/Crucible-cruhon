@@ -461,7 +461,7 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries (13 namespaces, 500+ commands)
+## Standard Libraries (33 namespaces, 700+ commands)
 
 See [`library.md`](library.md) for the complete reference.
 
@@ -608,7 +608,53 @@ To write your application log straight to a file with one line:
 @var[rows; @csv.read["data.csv"]]
 ```
 
-See [`library.md`](library.md) for full reference on all 500+ commands.
+### Python stdlib wrappers (20 namespaces, new in v2.1)
+
+Direct, one-line access to the most-used Python standard libraries:
+
+```clpy
+# Randomness & sampling
+@var[n; @random.randint[1; 100]]
+@var[pick; @random.choice[items]]
+@random.shuffle[deck]
+
+# Collections & iterators
+@var[counts; @collections.Counter["aabbc"]]
+@var[q; @collections.deque[[1, 2, 3]]]
+@var[combos; @itertools.combinations[items; 2]]
+@var[flat; @itertools.flatten[nested]]
+
+# Functional tools
+@var[total; @functools.reduce[lambda a, b: a + b; nums]]
+@var[add2; @functools.partial[add; 2]]
+
+# Statistics
+@var[avg; @statistics.mean[data]]
+@var[mid; @statistics.median[data]]
+@var[sd; @statistics.stdev[data]]
+
+# Encoding & URLs
+@var[enc; @base64.encode["hello"]]
+@var[safe; @url.quote["a b c"]]
+@var[qs; @url.encode[{"q": "cats"}]]
+
+# Heaps, bisect, operator
+@heapq.heapify[lst]
+@var[lo; @bisect.bisect_left[sorted_lst; 5]]
+@var[by_age; @operator.itemgetter[1]]
+
+# System, IO, copy, pretty-print
+@var[args; @sys.argv[]]
+@var[buf; @io.StringIO[]]
+@var[clone; @copy.deepcopy[obj]]
+@var[pretty; @pprint.format[data]]
+```
+
+Full set: `@random` `@collections` `@itertools` `@functools` `@sys` `@io`
+`@copy` `@base64` `@url` `@statistics` `@contextlib` `@enum` `@dataclasses`
+`@typing` `@threading` `@queue` `@heapq` `@bisect` `@operator` `@pprint`.
+
+See [`library.md`](library.md) for the full reference on all 700+ commands.
 
 ---
 
@@ -788,8 +834,8 @@ api.override("print", silent_print)
 Inject a value into the exec() globals for every script run. Scripts access
 it by name directly — no `__ns__` or import needed.
 
-If the value is a callable (no args), it is called before each exec() to get
-the value. Otherwise the value is used as-is.
+If the value is a callable (no args), it is called **before each exec()** to
+get the value. Otherwise the value is used as-is.
 
 ```python
 import sqlite3
@@ -817,6 +863,42 @@ Script:
 @if[cfg.debug]
     @print[Debug mode is on]
 @end
+```
+
+---
+
+### `api.inject_once(key, factory)`
+
+Like `api.inject()` with a factory, but the factory runs **once at
+registration time** and the resulting object is shared across all script
+runs. Use this for connection pools, singletons, or any expensive resource
+that must persist between runs.
+
+```python
+def register(api):
+    # One pool, reused by every run (NOT re-created each time)
+    api.inject_once("pool", lambda: ConnectionPool(max_connections=10))
+```
+
+---
+
+### Cleanup: `api.unregister_command` / `remove_hook` / `remove_inject` / `remove_eval_hook`
+
+Every registration can be undone — useful for tests, conditional loading, or
+plugins that reconfigure themselves at runtime.
+
+```python
+def register(api):
+    api.override("print", my_print)
+    api.hook("before_run", warm_cache)
+    api.inject("db_pool", make_pool())
+    api.eval_hook(dollar_env)
+
+def teardown(api):
+    api.unregister_command("print")     # restore default visitor
+    api.remove_hook("before_run", warm_cache)
+    api.remove_inject("db_pool")
+    api.remove_eval_hook(dollar_env)
 ```
 
 ---
@@ -969,17 +1051,17 @@ Hook into the full pipeline lifecycle.
 | Event | Signature | When |
 |---|---|---|
 | `before_run` | `fn(source=str)` | Before parsing |
-| `after_run` | `fn()` | After exec finishes |
+| `after_run` | `fn(source=str, python_code=str)` | After exec finishes (success) |
 | `before_parse` | `fn(source) -> source` | Lexer pre-hook — modify source text |
 | `after_parse` | `fn(ast) -> ast` | Parser post-hook — modify AST |
 | `before_transpile` | `fn(ast) -> ast` | Transpiler pre-hook |
 | `after_transpile` | `fn(code) -> code` | Modify generated Python code |
-| `on_error` | `fn(error=exc)` | When any error occurs |
+| `on_error` | `fn(error=exc)` | On **any** error — including `ParseError` and `RunError` |
 
 ```python
 def register(api):
     api.hook("before_run",   lambda source: print("[run start]"))
-    api.hook("after_run",    lambda: print("[run end]"))
+    api.hook("after_run",    lambda source, python_code: print("[run end]"))
     api.hook("on_error",     lambda error: print(f"[error] {error}"))
     api.hook("after_transpile", lambda code: code.replace("pass", "pass  # noop"))
 ```
@@ -1258,7 +1340,7 @@ cruhon run cruhon/examples/hello.clpy
 
 ## Contact
 
-- **Discord:** [discord.gg/fQTEY2kF](https://discord.gg/fQTEY2kF)
+- **Discord:** [discord.gg/SPf5VZ6QPG](https://discord.gg/SPf5VZ6QPG)
 - **Email:** [cruciblelab@hotmail.com](mailto:cruciblelab@hotmail.com)
 - **GitHub:** [github.com/cruciblelab](https://github.com/cruciblelab)
 
