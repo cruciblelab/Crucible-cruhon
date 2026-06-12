@@ -1,0 +1,64 @@
+{
+  "name": "vscode-cruhon",
+  "displayName": "Cruhon Language Support",
+  "description": "Syntax highlighting, autocomplete, diagnostics and hover docs for .clpy files",
+  "version": "2.6.0",
+  "publisher": "cruciblelab",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages", "Linters"],
+  "keywords": ["cruhon", "clpy", "scripting", "dsl"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "cruhon",
+        "aliases": ["Cruhon", "clpy"],
+        "extensions": [".clpy"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cruhon",
+        "scopeName": "source.cruhon",
+        "path": "./syntaxes/cruhon.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Cruhon",
+      "properties": {
+        "cruhon.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Cruhon Language Server (requires cruhon_lsp Python package)."
+        },
+        "cruhon.lsp.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to the Python interpreter that has cruhon_lsp installed."
+        },
+        "cruhon.lsp.tcpMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Connect to an existing TCP server instead of spawning a new process."
+        },
+        "cruhon.lsp.tcpPort": {
+          "type": "number",
+          "default": 2087,
+          "description": "TCP port when cruhon.lsp.tcpMode is enabled."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "scripts": {
+    "compile": "echo 'No compilation needed for pure-JS extension'",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^2.24.0"
+  }
+}

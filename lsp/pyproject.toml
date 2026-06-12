@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cruhon-lsp"
+version = "2.6.0"
+description = "Language Server Protocol support for Cruhon (.clpy) files"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "CrucibleLab", email = "cruciblelab@hotmail.com" }]
+keywords = ["cruhon", "lsp", "language-server", "clpy"]
+requires-python = ">=3.10"
+dependencies = [
+    "pygls>=2.0",
+    "lsprotocol>=2024.0",
+]
+
+[project.optional-dependencies]
+cruhon = ["cruhon>=2.6.0"]
+
+[project.scripts]
+cruhon-lsp = "cruhon_lsp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cruhon_lsp*"]

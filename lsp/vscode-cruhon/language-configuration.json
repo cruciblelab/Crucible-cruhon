@@ -1,0 +1,29 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [
+    ["[", "]"],
+    ["(", ")"],
+    ["{", "}"]
+  ],
+  "autoClosingPairs": [
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "'", "close": "'", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["[", "]"],
+    ["(", ")"],
+    ["{", "}"],
+    ["\"", "\""],
+    ["'", "'"]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "@(?:if|elif|else|for|while|func|class|try|catch|finally|with|match|case|default|async|module|repeat|foreach|retry|timeout|macro|template|decorator)\\b.*",
+    "decreaseIndentPattern": "^\\s*@end\\b"
+  },
+  "wordPattern": "@?[\\w.]+"
+}

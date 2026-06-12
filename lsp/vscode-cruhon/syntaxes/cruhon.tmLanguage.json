@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cruhon",
+  "scopeName": "source.cruhon",
+  "fileTypes": ["clpy"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string_double" },
+    { "include": "#string_single" },
+    { "include": "#fstring" },
+    { "include": "#raw_block" },
+    { "include": "#block_command" },
+    { "include": "#namespace_call" },
+    { "include": "#inline_command" },
+    { "include": "#number" },
+    { "include": "#boolean_none" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.hash.cruhon",
+      "match": "#.*$"
+    },
+    "string_double": {
+      "name": "string.quoted.double.cruhon",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.cruhon", "match": "\\\\." }
+      ]
+    },
+    "string_single": {
+      "name": "string.quoted.single.cruhon",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        { "name": "constant.character.escape.cruhon", "match": "\\\\." }
+      ]
+    },
+    "fstring": {
+      "name": "string.interpolated.cruhon",
+      "begin": "f\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "meta.embedded.cruhon",
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [{ "include": "$self" }]
+        },
+        { "name": "constant.character.escape.cruhon", "match": "\\\\." }
+      ]
+    },
+    "raw_block": {
+      "name": "meta.embedded.block.python.cruhon",
+      "begin": "@raw\\b",
+      "end": "@end\\b",
+      "beginCaptures": {
+        "0": { "name": "keyword.control.cruhon" }
+      },
+      "endCaptures": {
+        "0": { "name": "keyword.control.cruhon" }
+      },
+      "contentName": "source.python"
+    },
+    "block_command": {
+      "patterns": [
+        {
+          "name": "keyword.control.cruhon",
+          "match": "@(?:if|elif|else|for|while|func|class|try|catch|finally|with|match|case|default|async|module|repeat|foreach|retry|timeout|macro|template|end|decorator)\\b"
+        },
+        {
+          "name": "keyword.other.cruhon",
+          "match": "@(?:return|break|continue|pass|yield|raise|del|global|nonlocal|export|use|from|import|assert|raw|await)\\b"
+        }
+      ]
+    },
+    "namespace_call": {
+      "name": "meta.namespace-call.cruhon",
+      "match": "(@)(\\w+)(\\.)(\\w+)",
+      "captures": {
+        "1": { "name": "punctuation.definition.cruhon" },
+        "2": { "name": "entity.name.namespace.cruhon" },
+        "3": { "name": "punctuation.accessor.cruhon" },
+        "4": { "name": "entity.name.function.cruhon" }
+      }
+    },
+    "inline_command": {
+      "patterns": [
+        {
+          "name": "support.function.cruhon",
+          "match": "@(?:var|const|let|inc|dec|swap|print|input|call|apply|render|spread|unpack|pipeline|assert|env|ctx|fetch|list|dict|set|tuple|comp|dictcomp|setcomp|gencomp|pipe|when|lambda)\\b"
+        }
+      ]
+    },
+    "number": {
+      "name": "constant.numeric.cruhon",
+      "match": "\\b(?:0[xXoObB][0-9a-fA-F_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d+)?)\\b"
+    },
+    "boolean_none": {
+      "name": "constant.language.cruhon",
+      "match": "\\b(?:True|False|None)\\b"
+    },
+    "operator": {
+      "name": "keyword.operator.cruhon",
+      "match": "\\b(?:and|or|not|in|is|if|else|for|lambda)\\b|[+\\-*/%<>=!&|^~]+"
+    }
+  }
+}
