@@ -4,7 +4,64 @@ All notable changes are documented here.
 
 ---
 
-## v2.0.0 (current) — Standard Library Completion
+## v2.1.0 (current) — Diagnostics, More Stdlib, Plugin Freedom
+
+### Rich, readable diagnostics
+
+Cruhon now reports errors more clearly than Python. Every error shows the
+error type, the Cruhon line it maps to, a source excerpt with surrounding
+context, a caret (`^^^`) under the offending token, a plain-language hint,
+and a "did you mean …?" spelling suggestion.
+
+- New module `cruhon/core/diagnostics.py` — single source of truth for error
+  rendering (used by the lexer, parser, transpiler, runner, and CLI).
+- `_diagnose()` covers many runtime error types (NameError, TypeError,
+  AttributeError, KeyError, IndexError, ZeroDivisionError, ValueError,
+  FileNotFoundError, PermissionError, ModuleNotFoundError, RecursionError,
+  AssertionError) with readable, actionable hints.
+- `cruhon check` and `cruhon run` print rich, colored error excerpts.
+  Color auto-disables for pipes, files, and `NO_COLOR`.
+
+### Diagnostic logging to a file (opt-in, no code changes)
+
+Route Cruhon's own diagnostics to a log file via environment variables or a
+CLI flag — no script changes required:
+
+- `CRUHON_LOG=cruhon.log` (or `CRUHON_LOG=1` → `./cruhon.log`)
+- `CRUHON_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR` (default `INFO`)
+- `cruhon run file.clpy --log cruhon.log --log-level DEBUG`
+
+At `DEBUG` the log captures the source, the generated Python, run timings,
+and the full diagnostic plus Python traceback for every run. This is separate
+from the `@log.*` library, which is for a *script's own* application logging.
+
+### Standard library: 20 new namespaces
+
+`@random` `@collections` `@itertools` `@functools` `@sys` `@io` `@copy`
+`@base64` `@url` `@statistics` `@contextlib` `@enum` `@dataclasses`
+`@typing` `@threading` `@queue` `@heapq` `@bisect` `@operator` `@pprint`.
+
+### Plugin / mod system freedom and correctness
+
+- `api.override()` now maps all 40+ node types correctly (CamelCase fallback
+  fixed — `async_for` → `AsyncForNode`, previously a silent no-op).
+- `api.inject_once()` — evaluate a factory once at registration for
+  connection pools / singletons (vs. per-run `api.inject()`).
+- `api.unregister_command()`, `remove_hook()`, `remove_inject()`,
+  `remove_eval_hook()` — clean teardown for testing and conditional loading.
+- `on_error` hook now fires for `ParseError` / `RunError` too.
+- `after_run` hook now receives `source=` and `python_code=`.
+- Pip mods: version compatibility check (`CRUHON_REQUIRES` / `Requires-Dist`)
+  and `api.config()` support via a `CRUHON_CONFIG` dict.
+- Full tracebacks printed when a mod's `register()` fails.
+
+### Tests
+
+Suite grows to **1247** passing (was 1083 at the start of the v2.1 cycle).
+
+---
+
+## v2.0.0 — Standard Library Completion
 
 ### Standard Library: 13 namespaces, 500+ commands
 

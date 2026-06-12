@@ -1,6 +1,6 @@
 # Cruhon Engine Architecture
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Status:** Stable
 
 ---
@@ -113,6 +113,29 @@ Responsibilities:
 - Auto-inject imports (`os`, `requests`, store helpers)
 - Format `--show-python` output
 - Translate Python exceptions to Cruhon line numbers
+
+---
+
+## Diagnostics Machine (introduced v2.1)
+
+Single source of truth for error rendering.  
+File: `core/diagnostics.py`
+
+Used by the lexer, parser, transpiler, runner, and CLI so every error is
+rendered the same way: error type, mapped Cruhon line, source excerpt with a
+caret, a plain-language hint, and a "did you mean …?" suggestion.
+
+- `render_report(...)` / `render_exception(...)` — the master renderers.
+- `source_excerpt(...)` — context lines + caret. `suggest(...)` — difflib
+  spelling suggestions from identifiers mined out of the source.
+- `DiagnosticLog` — opt-in, append-only file logging of the engine's own
+  diagnostics. Enabled by `CRUHON_LOG` / `CRUHON_LOG_LEVEL` or the
+  `cruhon run --log` flag. Never raises; inert when unset. Separate from the
+  `@log.*` library (which is a script's own application logging).
+
+The runner attaches structured fields (`source`, `filename`, `cruhon_line`,
+`hint`, `suggestion`, `error_type`) to in-flight exceptions via
+`_attach_context()`, so any consumer can re-render them richly.
 
 ---
 

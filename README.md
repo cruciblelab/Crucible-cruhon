@@ -61,6 +61,7 @@ cruhon run hello.clpy
 | `cruhon run file.clpy` | Run a script |
 | `cruhon run file.clpy --show-python` | Show generated Python before running |
 | `cruhon run file.clpy --watch` | Re-run automatically when `.clpy` files change |
+| `cruhon run file.clpy --log cruhon.log [--log-level DEBUG]` | Write Cruhon's diagnostics to a log file |
 | `cruhon repl` | Start an interactive session (`:help`, `:vars`, `:clear`, `:quit`) |
 | `cruhon docs` | List plugins that ship a command reference |
 | `cruhon docs discord` | Show a plugin's full command reference |
@@ -354,6 +355,54 @@ Expressions can span multiple lines inside parentheses, brackets, or braces:
 
 ---
 
+## Errors & Diagnostics
+
+When something goes wrong, Cruhon shows **more** than Python — not a flat
+traceback, but the exact line, a caret under the problem, a plain-language
+hint, and a spelling suggestion:
+
+```
+✗ NameError  greet.clpy:3
+
+  name 'price' is not defined
+
+     1 │ @var[name; "World"]
+     2 │ @print[Hello]
+   → 3 │ @var[total; price + tax]
+
+  Hint: 'price' is not defined as a variable.
+        If you meant text, wrap it in quotes: "price".
+```
+
+`cruhon check file.clpy` shows the same rich excerpt for syntax errors,
+without running the script. Color auto-disables for pipes, files, and when
+`NO_COLOR` is set.
+
+### Logging Cruhon's diagnostics to a file (no code changes)
+
+Any user can route Cruhon's own diagnostics to a log file — purely via
+environment variables or a CLI flag, no script edits required:
+
+```bash
+# Environment variables
+CRUHON_LOG=cruhon.log cruhon run app.clpy          # write to cruhon.log
+CRUHON_LOG=1 cruhon run app.clpy                    # write to ./cruhon.log
+CRUHON_LOG_LEVEL=DEBUG CRUHON_LOG=cruhon.log cruhon run app.clpy
+
+# Or with CLI flags
+cruhon run app.clpy --log cruhon.log --log-level DEBUG
+```
+
+Levels: `ERROR`, `WARNING`, `INFO` (default), `DEBUG`. At `DEBUG` the log also
+captures the source, the generated Python, run timings, and the full
+diagnostic plus Python traceback for every run.
+
+> This is Cruhon's **engine** diagnostics. For your **script's own**
+> application logging (to any file you choose), use the `@log.*` library —
+> e.g. `@log.setup["DEBUG"; "app.log"]`.
+
+---
+
 ## Value Semantics
 
 Cruhon has two evaluation contexts:
@@ -483,6 +532,8 @@ See [`library.md`](library.md) for the complete reference.
 
 ### Log (`@log.*`) — structured logging with file handlers, levels, formatters
 
+This is for **your script's own** application logging:
+
 ```clpy
 @log.setup["INFO"]
 @log.info["Application started"]
@@ -491,6 +542,13 @@ See [`library.md`](library.md) for the complete reference.
 @log.to_file["app.log"]
 @var[logger; @log.get["myapp"]]
 logger.debug("detail")
+```
+
+To write your application log straight to a file with one line:
+
+```clpy
+@log.setup["DEBUG"; "app.log"]     # level + file in one call
+@log.info["written to app.log"]
 ```
 
 ### Config (`@config.*`) — JSON, TOML, INI, env

@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 
 
-CRUHON_VERSION = "2.0.0"
+CRUHON_VERSION = "2.1.0"
 
 BANNER = f"""
   \033[36m╔═══════════════════════════╗
@@ -31,8 +31,24 @@ BANNER = f"""
 """
 
 
+def _print_error(e, fallback_file=None):
+    """Render an exception richly when it carries source context, else plainly."""
+    from cruhon.core import diagnostics as _diag
+    source = getattr(e, "source", None)
+    filename = getattr(e, "filename", None) or fallback_file or "<clpy>"
+    if source:
+        print("\n" + _diag.render_exception(e, source=source, filename=filename))
+    else:
+        print(f"\n  \033[31m✗ {e}\033[0m")
+
+
 def cmd_run(args):
     from cruhon.core import run_file
+    from cruhon.core.diagnostics import get_diagnostic_log
+
+    # CLI flag is the zero-env way to enable diagnostic logging.
+    if getattr(args, "log", None):
+        get_diagnostic_log().configure(args.log, args.log_level or "INFO")
 
     def _run_once():
         try:
@@ -43,7 +59,7 @@ def cmd_run(args):
             )
             return True
         except Exception as e:
-            print(f"\n  \033[31m✗ {e}\033[0m")
+            _print_error(e, fallback_file=args.file)
             return False
 
     if getattr(args, "watch", False):
@@ -89,18 +105,18 @@ def cmd_build(args):
         out = build_file(args.file, output=args.output)
         print(f"  \033[32m✓ Built: {out}\033[0m")
     except Exception as e:
-        print(f"\n  \033[31m✗ {e}\033[0m")
+        _print_error(e, fallback_file=args.file)
         sys.exit(1)
 
 
 def cmd_check(args):
     from cruhon.core import check_file
-    errors = check_file(args.file)
+    errors = check_file(args.file, rich=True)
     if not errors:
         print(f"  \033[32m✓ {args.file} — No errors\033[0m")
     else:
         for err in errors:
-            print(f"  \033[31m✗ {err}\033[0m")
+            print(f"\n{err}")
         sys.exit(1)
 
 
@@ -582,6 +598,12 @@ def main():
                        help="Show generated Python before running")
     p_run.add_argument("--watch", action="store_true",
                        help="Re-run automatically when .clpy files change")
+    p_run.add_argument("--log", metavar="FILE", default=None,
+                       help="Write Cruhon's diagnostics to a log file "
+                            "(same as setting CRUHON_LOG)")
+    p_run.add_argument("--log-level", default=None,
+                       choices=["ERROR", "WARNING", "INFO", "DEBUG"],
+                       help="Diagnostic log verbosity (default INFO)")
     p_run.set_defaults(fn=cmd_run)
 
     # repl

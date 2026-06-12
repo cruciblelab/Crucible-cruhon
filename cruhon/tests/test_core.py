@@ -5180,3 +5180,209 @@ class TestVersionCheck:
     def test_equal_constraint(self):
         from cruhon.core.mod_loader import _is_compatible
         assert _is_compatible(f"=={CRUHON_VERSION}")
+
+
+# ─────────────────────────────────────────────────────────────
+# DIAGNOSTICS — rich, readable error reporting
+# ─────────────────────────────────────────────────────────────
+
+from cruhon.core import diagnostics as _d
+
+
+class TestSourceExcerpt:
+    def test_excerpt_marks_target_line(self):
+        src = "@var[a; 1]\n@var[b; 2]\n@var[c; 3]"
+        out = _d.source_excerpt(src, 2, colored=False)
+        assert "→" in out
+        assert "@var[b; 2]" in out
+        # context lines present
+        assert "@var[a; 1]" in out
+        assert "@var[c; 3]" in out
+
+    def test_excerpt_caret_under_column(self):
+        src = "@var[total; price + tax]"
+        out = _d.source_excerpt(src, 1, col=12, span=5, colored=False)
+        lines = out.splitlines()
+        # last line should be the caret row
+        assert "^^^^^" in lines[-1]
+
+    def test_excerpt_out_of_range_returns_empty(self):
+        assert _d.source_excerpt("one line", 99, colored=False) == ""
+
+    def test_excerpt_empty_source(self):
+        assert _d.source_excerpt("", 1, colored=False) == ""
+
+
+class TestSuggest:
+    def test_suggest_close_name(self):
+        assert _d.suggest("mesage", ["message", "count", "total"]) == "message"
+
+    def test_suggest_no_match_returns_none(self):
+        assert _d.suggest("xyz", ["completely", "different"]) is None
+
+    def test_suggest_ignores_self(self):
+        assert _d.suggest("name", ["name"]) is None
+
+    def test_collect_identifiers_excludes_builtins(self):
+        names = _d.collect_identifiers('@print[hello]\n@var[total; 1]')
+        assert "total" in names
+        assert "print" not in names  # builtin excluded
+
+    def test_collect_identifiers_excludes_allcaps(self):
+        names = _d.collect_identifiers('@var[VERSION; "1.0"]\n@var[count; 1]')
+        assert "count" in names
+        assert "VERSION" not in names
+
+
+class TestColorControl:
+    def test_color_disabled_with_no_color_env(self, monkeypatch):
+        monkeypatch.setenv("NO_COLOR", "1")
+        assert _d.color_enabled() is False
+
+    def test_c_noop_when_disabled(self):
+        assert _d.c("text", "red", enabled=False) == "text"
+
+    def test_c_wraps_when_enabled(self):
+        assert _d.c("text", "red", enabled=True) != "text"
+        assert "text" in _d.c("text", "red", enabled=True)
+
+
+class TestRenderReport:
+    def test_report_has_type_and_location(self):
+        r = _d.render_report(error_type="NameError", message="boom",
+                             filename="x.clpy", line=3, colored=False)
+        assert "NameError" in r
+        assert "x.clpy:3" in r
+        assert "boom" in r
+
+    def test_report_includes_excerpt(self):
+        src = "@var[a; 1]\n@print[undefined_thing]"
+        r = _d.render_report(error_type="NameError", message="x",
+                             filename="x.clpy", line=2, source=src, colored=False)
+        assert "@print[undefined_thing]" in r
+
+    def test_report_includes_suggestion_and_hint(self):
+        r = _d.render_report(error_type="NameError", message="x",
+                             filename="x.clpy", line=1,
+                             suggestion="count", hint="use a number",
+                             colored=False)
+        assert "Did you mean 'count'?" in r
+        assert "Hint: use a number" in r
+
+    def test_render_exception_uses_attached_fields(self):
+        e = RunError("kaboom")
+        e.error_type = "ValueError"
+        e.clean_message = "bad value"
+        e.cruhon_line = 5
+        e.hint = "fix it"
+        r = _d.render_exception(e, filename="f.clpy", colored=False)
+        assert "ValueError" in r
+        assert "bad value" in r
+        assert "f.clpy:5" in r
+        assert "Hint: fix it" in r
+
+
+class TestDiagnosticLog:
+    def test_disabled_by_default(self):
+        log = _d.DiagnosticLog()
+        assert log.enabled is False
+
+    def test_configure_enables(self, tmp_path):
+        log = _d.DiagnosticLog()
+        p = tmp_path / "out.log"
+        log.configure(str(p), "DEBUG")
+        assert log.enabled is True
+
+    def test_writes_events_to_file(self, tmp_path):
+        log = _d.DiagnosticLog()
+        p = tmp_path / "out.log"
+        log.configure(str(p), "INFO")
+        log.event("hello world")
+        content = p.read_text()
+        assert "hello world" in content
+        assert "[INFO]" in content
+
+    def test_level_filtering(self, tmp_path):
+        log = _d.DiagnosticLog()
+        p = tmp_path / "out.log"
+        log.configure(str(p), "ERROR")  # only ERROR and above
+        log.event("info msg", level="INFO")
+        log.event("error msg", level="ERROR")
+        content = p.read_text()
+        assert "error msg" in content
+        assert "info msg" not in content
+
+    def test_never_raises_on_bad_path(self):
+        log = _d.DiagnosticLog()
+        log.configure("/nonexistent_dir_xyz/sub/out.log", "INFO")
+        # Should silently swallow the write failure
+        log.event("test")  # no exception
+
+    def test_run_error_writes_report(self, tmp_path):
+        log = _d.DiagnosticLog()
+        p = tmp_path / "out.log"
+        log.configure(str(p), "ERROR")
+        log.run_error("test.clpy", "✗ NameError\n  boom", "py traceback here")
+        content = p.read_text()
+        assert "run failed: test.clpy" in content
+        assert "NameError" in content
+
+
+class TestRuntimeDiagnoseHints:
+    """_diagnose covers many runtime error types with readable hints."""
+
+    def _hint(self, source):
+        from cruhon.core.runner import run_source, RunError
+        try:
+            run_source(source)
+        except RunError as e:
+            return str(e), e
+        return "", None
+
+    def test_nameerror_hint_and_context(self):
+        msg, e = self._hint("@var[x; undefined_xyz]")
+        assert "undefined_xyz" in msg
+        assert getattr(e, "source", None) is not None
+        assert e.error_type == "NameError"
+
+    def test_zerodivision_hint(self):
+        msg, e = self._hint("@var[x; 1 / 0]")
+        assert "zero" in msg.lower()
+
+    def test_index_hint(self):
+        msg, e = self._hint('@var[lst; [1, 2]]\n@var[x; lst[10]]')
+        assert "index" in msg.lower() or "range" in msg.lower()
+
+    def test_attached_line_number(self):
+        msg, e = self._hint("@var[a; 1]\n@var[b; undefined_zzz]")
+        assert "line 2" in msg
+
+    def test_nameerror_suggestion(self):
+        # 'totl' is close to 'total' which is defined → suggestion offered
+        msg, e = self._hint("@var[total; 5]\n@var[x; totl]")
+        assert getattr(e, "suggestion", None) == "total"
+
+
+class TestRunSourceErrorContext:
+    """run_source attaches structured fields for rich CLI rendering."""
+
+    def test_compile_error_carries_source(self):
+        from cruhon.core.runner import run_source
+        from cruhon.core.parser import ParseError
+        try:
+            run_source("@frobnicate[x]")
+        except ParseError as e:
+            assert getattr(e, "source", None) is not None
+            assert getattr(e, "error_type", None) == "ParseError"
+        else:
+            assert False, "expected ParseError"
+
+    def test_runtime_error_render_roundtrip(self):
+        from cruhon.core.runner import run_source, RunError
+        try:
+            run_source("@var[x; undefined_abc]")
+        except RunError as e:
+            report = _d.render_exception(e, source=getattr(e, "source", None),
+                                         filename="t.clpy", colored=False)
+            assert "NameError" in report
+            assert "undefined_abc" in report

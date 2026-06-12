@@ -12,18 +12,72 @@ Handles:
 """
 
 from __future__ import annotations
+import time
 import traceback
 from pathlib import Path
 from typing import Optional
 
 from .parser import parse, ParseError
-from .transpiler import transpile, get_transpiler
+from .lexer import LexerError
+from .transpiler import transpile, get_transpiler, TranspileError
 from .mod_loader import fire_hook, load_all_mods, get_inject_globals
 from .ast_nodes import IncludeNode, ProgramNode, UseNode, ModuleNode
+from . import diagnostics as _diag
 
 
 class RunError(Exception):
     pass
+
+
+# Compile-time errors carry a `.line`; runtime wraps land in RunError.
+_COMPILE_ERRORS = (LexerError, ParseError, TranspileError)
+
+
+def _attach_context(exc: Exception, *, source: str = None, filename: str = None,
+                    error_type: str = None, clean_message: str = None,
+                    line=None, col=None, hint: str = None, suggestion: str = None):
+    """Attach structured fields so diagnostics.render_exception can format it.
+
+    Never raises — best-effort enrichment of an in-flight exception.
+    """
+    try:
+        if source is not None:
+            exc.source = source
+        if filename is not None:
+            exc.filename = filename
+        if error_type is not None:
+            exc.error_type = error_type
+        if clean_message is not None:
+            exc.clean_message = clean_message
+        if line is not None:
+            exc.cruhon_line = line
+        if col is not None:
+            exc.col = col
+        if hint:
+            exc.hint = hint
+        if suggestion:
+            exc.suggestion = suggestion
+    except Exception:
+        pass
+
+
+def _strip_error_prefix(msg: str) -> str:
+    """Remove a leading "[XError] Line N — " prefix for cleaner display."""
+    import re
+    m = re.match(r"^\[\w+Error\] Line \d+(?::\d+)? — (.*)$", msg, re.S)
+    return m.group(1) if m else msg
+
+
+def _log_error(dlog, filename: str, exc: Exception, source: str, py_tb: str = ""):
+    """Write a rich, uncolored diagnostic report to the diagnostic log file."""
+    try:
+        if not dlog.enabled:
+            return
+        report = _diag.render_exception(exc, source=source, filename=filename,
+                                        colored=False)
+        dlog.run_error(filename, report, py_tb)
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────
@@ -199,47 +253,101 @@ def resolve_modules(
 def _build_hint(exc: Exception, python_code: str, python_line: int) -> str:
     """
     Return a human-friendly hint for common runtime errors.
-    Returns empty string if no hint applies.
+    Returns empty string if no hint applies. Kept as a thin wrapper over
+    _diagnose() so existing callers/tests see the same hint text.
+    """
+    hint, _suggestion = _diagnose(exc, python_code, python_line, source=None)
+    return hint
+
+
+def _diagnose(exc: Exception, python_code: str, python_line: int,
+              source: Optional[str] = None) -> tuple[str, Optional[str]]:
+    """
+    Inspect a runtime exception and return (hint, suggestion).
+
+    hint       — a plain-language explanation, "" if none applies
+    suggestion — a "did you mean 'x'?" candidate, or None
+
+    `source` (the original .clpy text) is used to mine candidate names for
+    spelling suggestions; passing None disables suggestions.
     """
     import re
 
     if isinstance(exc, NameError):
-        # Extract the undefined name from the error message
         m = re.search(r"name '([^']+)' is not defined", str(exc))
         if m:
             name = m.group(1)
-            # Find the source line in generated Python
-            lines = python_code.splitlines()
-            src_line = lines[python_line - 1] if 0 < python_line <= len(lines) else ""
-
-            # If the name appears unquoted as a value (right of = or in a call)
-            # and looks like the user forgot quotes, suggest quoting.
-            if re.search(rf'\b{re.escape(name)}\b', src_line):
-                # Looks like a plain word value — suggest quoting
-                return (
-                    f"'{name}' is not defined as a variable. "
-                    f"If you meant a string, add quotes: \"{name}\""
-                )
+            # Spelling suggestion from names that appear in the source.
+            suggestion = None
+            if source:
+                suggestion = _diag.suggest(name, _diag.collect_identifiers(source))
+            hint = (
+                f"'{name}' is not defined as a variable. "
+                f"If you meant text, wrap it in quotes: \"{name}\"."
+            )
+            return hint, suggestion
 
     if isinstance(exc, TypeError):
-        if "argument" in str(exc).lower() or "positional" in str(exc).lower():
-            return "Check the number of arguments passed to the function."
+        low = str(exc).lower()
+        if "argument" in low or "positional" in low:
+            return ("The function got the wrong number of arguments — "
+                    "check how many values you passed."), None
+        if "not callable" in low:
+            return ("You tried to call something that is not a function. "
+                    "Remove the parentheses or check the name."), None
+        if ("unsupported operand" in low or "not supported between" in low
+                or "concatenate" in low or "can't multiply" in low):
+            return ("You mixed incompatible types (e.g. text + number). "
+                    "Convert one side first, e.g. str(...) or int(...)."), None
+        return "Check that the value types on this line match.", None
 
     if isinstance(exc, AttributeError):
         m = re.search(r"'([^']+)' object has no attribute '([^']+)'", str(exc))
         if m:
-            return f"'{m.group(1)}' has no method or property '{m.group(2)}'."
+            obj_type, attr = m.group(1), m.group(2)
+            suggestion = None
+            if source:
+                suggestion = _diag.suggest(attr, _diag.collect_identifiers(source))
+            return (f"A value of type '{obj_type}' has no method or property "
+                    f"'{attr}'."), suggestion
 
     if isinstance(exc, KeyError):
-        return f"Key {exc} not found. Check the key name or use a default value."
+        return (f"Key {exc} was not found in the dictionary. Check the key "
+                f"name, or read it safely with a default value."), None
 
     if isinstance(exc, IndexError):
-        return "List index out of range. Check that the list has enough items."
+        return ("List index out of range — the position you asked for is past "
+                "the end of the list. Check the list has enough items."), None
 
     if isinstance(exc, ZeroDivisionError):
-        return "Division by zero. Add a check before dividing."
+        return ("Division by zero is not allowed. Add a check that the "
+                "divisor is not zero before dividing."), None
 
-    return ""
+    if isinstance(exc, ValueError):
+        return ("The value has the right type but an unacceptable content — "
+                "e.g. int(\"abc\"). Check the value before converting."), None
+
+    if isinstance(exc, (FileNotFoundError,)):
+        return ("The file could not be found. Check the path and that the "
+                "file exists relative to where you run the script."), None
+
+    if isinstance(exc, PermissionError):
+        return "Permission denied — the OS blocked access to that file or resource.", None
+
+    if isinstance(exc, ModuleNotFoundError):
+        m = re.search(r"No module named '([^']+)'", str(exc))
+        if m:
+            return (f"The module '{m.group(1)}' is not installed. Install it "
+                    f"with pip, or check the @import name."), None
+
+    if isinstance(exc, RecursionError):
+        return ("Maximum recursion depth exceeded — a function is calling "
+                "itself without a stopping condition (base case)."), None
+
+    if isinstance(exc, AssertionError):
+        return "An @assert check failed — the condition was not true.", None
+
+    return "", None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -286,12 +394,18 @@ def run_source(
         base_dir = Path.cwd()
 
     transpiler = get_transpiler()
+    dlog = _diag.get_diagnostic_log()
+    _t0 = time.perf_counter()
+    python_code = ""  # defined early so error handlers can reference it
+
+    dlog.run_start(filename, source)
 
     try:
         fire_hook("before_run", source=source)
 
         # Parse
         ast = parse(source)
+        dlog.event("parse ok", level="DEBUG")
 
         # Snapshot inline-command flags before sub-parses reset them.
         # resolve_includes/resolve_modules call parse() on sub-files, clobbering
@@ -315,6 +429,7 @@ def run_source(
 
         # Transpile
         python_code = transpile(ast)
+        dlog.event("transpile ok", level="DEBUG")
 
         if _show:
             _show_python_output(python_code)
@@ -364,15 +479,45 @@ def run_source(
             _show_python_end()
 
         fire_hook("after_run", source=source, python_code=python_code)
+        dlog.run_ok(filename, python_code, (time.perf_counter() - _t0) * 1000.0)
         return python_code
 
-    except (ParseError, RunError) as e:
+    except _COMPILE_ERRORS as e:
+        # Lexer / Parser / Transpiler errors already carry a clean message and
+        # a `.line`. Enrich with source context for rich display, but DO NOT
+        # change the message string (keeps the [XError] Line N prefix stable).
+        _attach_context(
+            e, source=source, filename=filename,
+            error_type=type(e).__name__,
+            clean_message=_strip_error_prefix(str(e)),
+            line=getattr(e, "line", None),
+            col=getattr(e, "col", None),
+        )
         fire_hook("on_error", error=e)
+        _log_error(dlog, filename, e, source)
+        raise
+
+    except RunError as e:
+        # Internal RunError (circular include, missing file, …) — attach source
+        # so the CLI can still show a friendly excerpt where a line is known.
+        _attach_context(e, source=source, filename=filename,
+                        error_type="RunError")
+        fire_hook("on_error", error=e)
+        _log_error(dlog, filename, e, source)
         raise
 
     except SyntaxError as e:
         fire_hook("on_error", error=e)
-        raise RunError(f"Syntax error in generated code: {e}") from e
+        cruhon_line = transpiler._line_map.get(getattr(e, "lineno", 0) or 0, None)
+        err = RunError(f"Syntax error in generated code: {e}")
+        _attach_context(err, source=source, filename=filename,
+                        error_type="SyntaxError",
+                        clean_message=f"Syntax error in generated code: {e}",
+                        line=cruhon_line,
+                        hint="This is usually a Cruhon transpiler edge case — "
+                             "run with --show-python to inspect the output.")
+        _log_error(dlog, filename, err, source)
+        raise err from e
 
     except Exception as e:
         fire_hook("on_error", error=e)
@@ -381,11 +526,25 @@ def run_source(
             tb = traceback.extract_tb(e.__traceback__)
             python_line = tb[-1].lineno if tb else 0
             cruhon_line = transpiler._line_map.get(python_line, "?")
-            hint = _build_hint(e, python_code, python_line)
+            hint, suggestion = _diagnose(e, python_code, python_line, source=source)
+
             msg = f"{type(e).__name__}: {e}\n  → at line {cruhon_line} in {filename}"
+            if suggestion:
+                msg += f"\n  Did you mean '{suggestion}'?"
             if hint:
                 msg += f"\n  Hint: {hint}"
-            raise RunError(msg) from e
+
+            err = RunError(msg)
+            _attach_context(
+                err, source=source, filename=filename,
+                error_type=type(e).__name__,
+                clean_message=str(e),
+                line=cruhon_line if isinstance(cruhon_line, int) else None,
+                hint=hint, suggestion=suggestion,
+            )
+            _log_error(dlog, filename, err, source,
+                       py_tb="".join(traceback.format_exception(type(e), e, e.__traceback__)))
+            raise err from e
         except RunError:
             raise
         except Exception:
@@ -431,10 +590,18 @@ def build_file(path: str | Path, output: Optional[str | Path] = None) -> Path:
     source = path.read_text(encoding="utf-8")
     load_all_mods(path.parent)
 
-    ast = parse(source)
-    ast = resolve_includes(ast, path.parent, {path.resolve()})
-    ast = resolve_modules(ast, path.parent)
-    python_code = transpile(ast)
+    try:
+        ast = parse(source)
+        ast = resolve_includes(ast, path.parent, {path.resolve()})
+        ast = resolve_modules(ast, path.parent)
+        python_code = transpile(ast)
+    except _COMPILE_ERRORS as e:
+        _attach_context(e, source=source, filename=str(path),
+                        error_type=type(e).__name__,
+                        clean_message=_strip_error_prefix(str(e)),
+                        line=getattr(e, "line", None),
+                        col=getattr(e, "col", None))
+        raise
 
     out_path = Path(output) if output else path.with_suffix(".py")
     out_path.write_text(python_code, encoding="utf-8")
@@ -442,8 +609,14 @@ def build_file(path: str | Path, output: Optional[str | Path] = None) -> Path:
     return out_path
 
 
-def check_file(path: str | Path) -> list[str]:
-    """Check a .clpy file for syntax errors. Returns [] if clean."""
+def check_file(path: str | Path, rich: bool = False) -> list[str]:
+    """
+    Check a .clpy file for syntax errors. Returns [] if clean.
+
+    rich=True returns a full diagnostic excerpt per error (source line +
+    caret); rich=False (default) returns the compact message — kept stable
+    so existing callers/tests are unaffected.
+    """
     path = Path(path)
 
     if not path.exists():
@@ -458,6 +631,15 @@ def check_file(path: str | Path) -> list[str]:
         ast = resolve_modules(ast, path.parent)
         transpile(ast)
     except Exception as e:
-        errors.append(str(e))
+        if rich:
+            _attach_context(e, source=source, filename=str(path),
+                            error_type=type(e).__name__,
+                            clean_message=_strip_error_prefix(str(e)),
+                            line=getattr(e, "line", None),
+                            col=getattr(e, "col", None))
+            errors.append(_diag.render_exception(e, source=source,
+                                                 filename=str(path)))
+        else:
+            errors.append(str(e))
 
     return errors

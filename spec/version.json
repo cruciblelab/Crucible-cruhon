@@ -1,5 +1,5 @@
 {
-  "current": "2.0.0",
+  "current": "2.1.0",
   "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
@@ -40,6 +40,11 @@
       "version": "2.0.0",
       "status": "released",
       "summary": "v2.0.0: Full Python parity audit. CLI: cruhon repl, docs, fmt, run --watch. Language: for/while else, @comp types (dict/set/gen), @decorator, multi-catch, multi-with, @import alias. Bug fixes: f-string double-wrapping, STRING re-quoting, @print multi-arg + sep/end, @assert optional message, @raise from=. @input usable inline. Version sync."
+    },
+    {
+      "version": "2.1.0",
+      "status": "released",
+      "summary": "v2.1.0: Rich diagnostics (core/diagnostics.py) — source excerpt + caret + hint + did-you-mean, more readable than Python. Opt-in diagnostic logging to file via CRUHON_LOG / --log. 20 new stdlib namespaces (@random @collections @itertools @functools @sys @io @copy @base64 @url @statistics @contextlib @enum @dataclasses @typing @threading @queue @heapq @bisect @operator @pprint). Plugin freedom: api.inject_once, unregister_command/remove_hook/remove_inject/remove_eval_hook, override node-name map fixed for all 40+ nodes, on_error fires for Parse/RunError, after_run gets source/python_code, pip mod version + config support. 1247-test suite."
     }
   ],
   "frozen_at": null,
