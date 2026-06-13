@@ -4,7 +4,68 @@ All notable changes are documented here.
 
 ---
 
-## v2.6.0 (current) — Templates, Pipelines, Spread/Unpack, LSP
+## v2.7.0 (current) — Type Annotations, Transpile Cache, REPL Polish
+
+### Type system
+
+Type annotations are now first-class in the language — no `@raw` required.
+
+| Syntax | Emits |
+|---|---|
+| `@var[x: int; 42]` | `x: int = 42` |
+| `@var[x: int]` | `x: int` (annotation-only) |
+| `@const[LIMIT: int; 100]` | `LIMIT: int = 100  # const` |
+| `@func[f; a: int; b: str; return=bool]` | `def f(a: int, b: str) -> bool:` |
+| `@type[Vector; list[float]]` | `Vector = list[float]  # type alias` |
+| `@dataclass[Point] ... @end` | `@dataclass` decorated class block |
+
+```clpy
+@var[score: float; 0.0]
+@const[MAX: int; 100]
+@type[Matrix; list[list[float]]]
+
+@dataclass[Point]
+    x: float = 0.0
+    y: float = 0.0
+@end
+
+@func[distance; p: Point; q: Point; return=float]
+    @return[((p.x - q.x)**2 + (p.y - q.y)**2) ** 0.5]
+@end
+```
+
+### Transpile cache
+
+Cruhon now skips re-parsing and re-transpiling files that have not changed.
+The cache is written to `.cruhon_cache/` next to your project root, mirrors
+the source directory structure, and is automatically invalidated when the
+source, any `@include`/`@use` dependency, the Cruhon version, or the Python
+version changes.
+
+- **Binary format** — cache files are not readable Python source (marshal'd code objects with a `CRUHON\x00CACHE\x00V1` magic header)
+- **Atomic writes** — temp-file + `os.replace` prevents torn reads on interruption
+- **`cruhon cache`** — show stats (file count, total bytes, cache dir)
+- **`cruhon cache --clear`** — delete all cache files
+- **`--no-cache`** / `run_file(no_cache=True)` — bypass for one run without deleting the cache
+
+### REPL improvements
+
+- **Persistent history** — `~/.cruhon_history` survives across sessions (readline)
+- **Tab completion** — completes `@commands` and `:meta-commands`
+- **`:history [n]`** — show the last n REPL inputs (default 20)
+- **`:load <file.clpy>`** — run a `.clpy` file directly from the REPL
+- **`:type <expr>`** — show the Python type of a value
+
+### Bug fixes
+
+- **Multiple inheritance** — `@class[Dog; Animal; Serializable]` now correctly emits `class Dog(Animal, Serializable):`. Previously only the first parent was used.
+- **`try`/`except`/`else`** — `@else` between `@catch` and `@finally` is now parsed and emitted. The `else` branch runs only when no exception was raised.
+
+### Tests: **1556** (+82 from v2.6.0)
+
+---
+
+## v2.6.0 — Templates, Pipelines, Spread/Unpack, LSP
 
 ### 6 new language commands
 
