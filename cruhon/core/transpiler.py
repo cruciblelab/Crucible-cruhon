@@ -828,6 +828,9 @@ class Transpiler:
                 except_line = "except:"
             lines.append(self._line(except_line))
             lines.append(self._block(cbody))
+        if getattr(node, "else_body", None):
+            lines.append(self._line("else:"))
+            lines.append(self._block(node.else_body))
         if node.finally_body:
             lines.append(self._line("finally:"))
             lines.append(self._block(node.finally_body))

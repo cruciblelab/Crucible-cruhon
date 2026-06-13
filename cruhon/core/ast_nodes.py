@@ -228,10 +228,11 @@ class ClassNode(Node):
 
 @dataclass
 class TryNode(Node):
-    """@try ... @catch[ExcType; e] ... @catch[Other] ... @finally ... @end"""
+    """@try ... @catch[ExcType; e] ... @else ... @finally ... @end"""
     body: List[Node] = field(default_factory=list)
     # catch_clauses: list of (exc_type: str|None, var: str, body: List[Node])
     catch_clauses: List[tuple] = field(default_factory=list)
+    else_body: List[Node] = field(default_factory=list)
     finally_body: List[Node] = field(default_factory=list)
     # Legacy single-catch fields kept for back-compat (populated from catch_clauses[0])
     catch_var: str = "e"

@@ -1100,7 +1100,7 @@ class Parser:
             raise ParseError("@class requires a name", line)
 
         name = args[0]
-        parent = args[1] if len(args) > 1 else None
+        parent = ", ".join(a.strip() for a in args[1:]) if len(args) > 1 else None
         decs = self._pending_decorators[:]
         self._pending_decorators.clear()
 
@@ -1172,6 +1172,14 @@ class Parser:
             cb = self._parse_block()
             catch_clauses.append((exc_type, var, cb))
 
+        else_body: list = []
+        if self.current.type == "AT_CMD" and self.current.value == "else":
+            self.advance()
+            self.skip_newlines()
+            if self.current.type == "INDENT":
+                self.advance()
+            else_body = self._parse_block()
+
         if self.current.type == "AT_CMD" and self.current.value == "finally":
             self.advance()
             self.skip_newlines()
@@ -1187,6 +1195,7 @@ class Parser:
         return TryNode(
             body=body,
             catch_clauses=catch_clauses,
+            else_body=else_body,
             catch_var=first[1],
             catch_type=first[0],
             catch_body=first[2],
