@@ -63,12 +63,48 @@ SQLite3 wrappers for Cruhon — @sqlite.*
   @sqlite.last_id[conn]                   → last insert rowid
   @sqlite.changes[conn]                   → rows changed by last statement
 
+━━━ SHORT-HAND QUERIES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @sqlite.all_rows[conn; table]           → SELECT * FROM table
+  @sqlite.find[conn; table; col; val]     → rows WHERE col = val
+  @sqlite.find_one[conn; table; col; val] → single row or None
+  @sqlite.exists[conn; sql]              → bool
+  @sqlite.exists[conn; sql; params]
+  @sqlite.to_dicts[conn; sql]            → auto fetchall as list of dicts
+  @sqlite.to_dicts[conn; sql; params]
+  @sqlite.search[conn; table; col; term] → rows WHERE col LIKE %term%
+  @sqlite.delete_many[conn; table; col; vals] — DELETE WHERE col IN (...)
+
+━━━ AGGREGATES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @sqlite.sum[conn; table; col]          → SUM(col)
+  @sqlite.avg[conn; table; col]          → AVG(col)
+  @sqlite.min_val[conn; table; col]      → MIN(col)
+  @sqlite.max_val[conn; table; col]      → MAX(col)
+
+━━━ SAVEPOINTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @sqlite.savepoint[conn; name]          — SAVEPOINT name
+  @sqlite.release[conn; name]            — RELEASE SAVEPOINT name
+  @sqlite.rollback_to[conn; name]        — ROLLBACK TO SAVEPOINT name
+
+━━━ CONFIGURATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @sqlite.wal_mode[conn]                 — enable WAL journal mode
+  @sqlite.foreign_keys[conn]             — enable foreign key enforcement
+  @sqlite.user_version[conn]            → int  (schema version)
+  @sqlite.user_version[conn; n]         — set schema version
+
+━━━ IMPORT / EXPORT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @sqlite.export_csv[conn; table; path]  — write table rows to CSV file
+  @sqlite.import_csv[conn; table; path]  — INSERT rows from CSV file
+  @sqlite.export_json[conn; table; path] — write table rows to JSON file
+
 ━━━ MAINTENANCE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @sqlite.vacuum[conn]
   @sqlite.backup[conn; dest_path]
   @sqlite.integrity_check[conn]           → "ok" or error string
   @sqlite.pragma[conn; key]              → pragma value
   @sqlite.pragma[conn; key; value]       — set pragma
+  @sqlite.views[conn]                    → list of view names
+  @sqlite.page_count[conn]              → number of pages
+  @sqlite.page_size[conn]               → page size in bytes
 """
 from ..registry import register_lib, register_lib_call
 
@@ -287,3 +323,116 @@ def register():
             if len(a) > 2 else
             f"(lambda _c, _k: _c.execute('PRAGMA ' + _k).fetchone()[0])({a[0]}, {a[1]})"
         ))
+
+    # ── Short-hand queries ────────────────────────────────────
+    register_lib_call("sqlite", "all_rows",
+        lambda a: f"(lambda _c, _t: _c.execute('SELECT * FROM ' + _t).fetchall())({a[0]}, {a[1]})")
+
+    register_lib_call("sqlite", "find",
+        lambda a: (
+            f"(lambda _c, _t, _col, _val: _c.execute('SELECT * FROM ' + _t + ' WHERE ' + _col + ' = ?', [_val]).fetchall())({a[0]}, {a[1]}, {a[2]}, {a[3]})"
+        ))
+
+    register_lib_call("sqlite", "find_one",
+        lambda a: (
+            f"(lambda _c, _t, _col, _val: _c.execute('SELECT * FROM ' + _t + ' WHERE ' + _col + ' = ?', [_val]).fetchone())({a[0]}, {a[1]}, {a[2]}, {a[3]})"
+        ))
+
+    register_lib_call("sqlite", "exists",
+        lambda a: (
+            f"(lambda _c, _s, _p: bool(_c.execute(_s, _p).fetchone()))({a[0]}, {a[1]}, {a[2]})"
+            if len(a) > 2 else
+            f"(lambda _c, _s: bool(_c.execute(_s).fetchone()))({a[0]}, {a[1]})"
+        ))
+
+    register_lib_call("sqlite", "to_dicts",
+        lambda a: (
+            f"(lambda _c, _s, _p: [dict(_r) for _r in (lambda _cc: (setattr(_cc, 'row_factory', __import__('sqlite3').Row), _cc)[-1])(_c).execute(_s, _p).fetchall()])({a[0]}, {a[1]}, {a[2]})"
+            if len(a) > 2 else
+            f"(lambda _c, _s: [dict(_r) for _r in (lambda _cc: (setattr(_cc, 'row_factory', __import__('sqlite3').Row), _cc)[-1])(_c).execute(_s).fetchall()])({a[0]}, {a[1]})"
+        ))
+
+    register_lib_call("sqlite", "search",
+        lambda a: (
+            f"(lambda _c, _t, _col, _term: _c.execute('SELECT * FROM ' + _t + ' WHERE ' + _col + ' LIKE ?', ['%' + str(_term) + '%']).fetchall())({a[0]}, {a[1]}, {a[2]}, {a[3]})"
+        ))
+
+    register_lib_call("sqlite", "delete_many",
+        lambda a: (
+            f"(lambda _c, _t, _col, _vals: _c.execute('DELETE FROM ' + _t + ' WHERE ' + _col + ' IN (' + ','.join(['?']*len(_vals)) + ')', list(_vals)))({a[0]}, {a[1]}, {a[2]}, {a[3]})"
+        ))
+
+    # ── Aggregates ────────────────────────────────────────────
+    register_lib_call("sqlite", "sum",
+        lambda a: f"(lambda _c, _t, _col: _c.execute('SELECT SUM(' + _col + ') FROM ' + _t).fetchone()[0])({a[0]}, {a[1]}, {a[2]})")
+
+    register_lib_call("sqlite", "avg",
+        lambda a: f"(lambda _c, _t, _col: _c.execute('SELECT AVG(' + _col + ') FROM ' + _t).fetchone()[0])({a[0]}, {a[1]}, {a[2]})")
+
+    register_lib_call("sqlite", "min_val",
+        lambda a: f"(lambda _c, _t, _col: _c.execute('SELECT MIN(' + _col + ') FROM ' + _t).fetchone()[0])({a[0]}, {a[1]}, {a[2]})")
+
+    register_lib_call("sqlite", "max_val",
+        lambda a: f"(lambda _c, _t, _col: _c.execute('SELECT MAX(' + _col + ') FROM ' + _t).fetchone()[0])({a[0]}, {a[1]}, {a[2]})")
+
+    # ── Savepoints ────────────────────────────────────────────
+    register_lib_call("sqlite", "savepoint",
+        lambda a: f"(lambda _c, _n: _c.execute('SAVEPOINT ' + _n))({a[0]}, {a[1]})")
+
+    register_lib_call("sqlite", "release",
+        lambda a: f"(lambda _c, _n: _c.execute('RELEASE SAVEPOINT ' + _n))({a[0]}, {a[1]})")
+
+    register_lib_call("sqlite", "rollback_to",
+        lambda a: f"(lambda _c, _n: _c.execute('ROLLBACK TO SAVEPOINT ' + _n))({a[0]}, {a[1]})")
+
+    # ── Configuration ─────────────────────────────────────────
+    register_lib_call("sqlite", "wal_mode",
+        lambda a: f"(lambda _c: _c.execute('PRAGMA journal_mode=WAL').fetchone()[0])({a[0]})")
+
+    register_lib_call("sqlite", "foreign_keys",
+        lambda a: f"(lambda _c: _c.execute('PRAGMA foreign_keys=ON'))({a[0]})")
+
+    register_lib_call("sqlite", "user_version",
+        lambda a: (
+            f"(lambda _c, _v: _c.execute('PRAGMA user_version=' + str(int(_v))))({a[0]}, {a[1]})"
+            if len(a) > 1 else
+            f"(lambda _c: _c.execute('PRAGMA user_version').fetchone()[0])({a[0]})"
+        ))
+
+    # ── Import / Export ───────────────────────────────────────
+    register_lib_call("sqlite", "export_csv",
+        lambda a: (
+            f"(lambda _c, _t, _p: (lambda _rows, _cols: "
+            f"(lambda _f: (__import__('csv').writer(_f).writerow(_cols), __import__('csv').writer(_f).writerows(_rows)))"
+            f"(open(_p, 'w', newline='', encoding='utf-8')))"
+            f"(_c.execute('SELECT * FROM ' + _t).fetchall(), "
+            f"[_d[1] for _d in _c.execute('PRAGMA table_info(' + _t + ')').fetchall()]))({a[0]}, {a[1]}, {a[2]})"
+        ))
+
+    register_lib_call("sqlite", "import_csv",
+        lambda a: (
+            f"(lambda _c, _t, _p: [_c.execute("
+            f"'INSERT INTO ' + _t + ' (' + ', '.join(_r.keys()) + ') VALUES (' + ', '.join(['?']*len(_r)) + ')', list(_r.values()))"
+            f" for _r in __import__('csv').DictReader(open(_p, newline='', encoding='utf-8'))])({a[0]}, {a[1]}, {a[2]})"
+        ))
+
+    register_lib_call("sqlite", "export_json",
+        lambda a: (
+            f"(lambda _c, _t, _p: (lambda _cols, _rows: "
+            f"open(_p, 'w', encoding='utf-8').write(__import__('json').dumps("
+            f"[dict(zip(_cols, _r)) for _r in _rows], indent=2, default=str)))"
+            f"([_d[1] for _d in _c.execute('PRAGMA table_info(' + _t + ')').fetchall()], "
+            f"_c.execute('SELECT * FROM ' + _t).fetchall()))({a[0]}, {a[1]}, {a[2]})"
+        ))
+
+    # ── Extra maintenance ─────────────────────────────────────
+    register_lib_call("sqlite", "views",
+        lambda a: (
+            f"[_r[0] for _r in {a[0]}.execute(\"SELECT name FROM sqlite_master WHERE type='view' ORDER BY name\").fetchall()]"
+        ))
+
+    register_lib_call("sqlite", "page_count",
+        lambda a: f"(lambda _c: _c.execute('PRAGMA page_count').fetchone()[0])({a[0]})")
+
+    register_lib_call("sqlite", "page_size",
+        lambda a: f"(lambda _c: _c.execute('PRAGMA page_size').fetchone()[0])({a[0]})")

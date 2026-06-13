@@ -25,6 +25,12 @@ Pickle wrappers for Cruhon — @pickle.*
   @pickle.is_pickle[data]         → bool (check magic bytes)
   @pickle.size[obj]               → int  (serialized byte size)
   @pickle.protocol[data]          → int  (detect protocol version)
+
+━━━ LIST FILE HELPERS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @pickle.append_to[path; obj]    — load list from file, append obj, save back
+  @pickle.load_list[path]         → list stored in file (or [] if missing)
+  @pickle.compress[obj]           → bytes  (pickle + zlib compress)
+  @pickle.decompress[data]        → object (zlib decompress + unpickle)
 """
 from ..registry import register_lib, register_lib_call
 
@@ -94,3 +100,21 @@ def register():
         lambda a: (
             f"(lambda _d: _d[1] if isinstance(_d, (bytes, bytearray)) and len(_d) >= 2 and _d[0] == 0x80 else 0)({a[0]})"
         ))
+
+    # ── List file helpers ─────────────────────────────────────
+    register_lib_call("pickle", "append_to",
+        lambda a: (
+            f"(lambda _p, _o: (lambda _lst: (open(_p, 'wb').write(__import__('pickle').dumps(_lst + [_o]))))("
+            f"__import__('pickle').loads(open(_p, 'rb').read()) if __import__('os').path.exists(_p) else []))({a[0]}, {a[1]})"
+        ))
+
+    register_lib_call("pickle", "load_list",
+        lambda a: (
+            f"(__import__('pickle').loads(open({a[0]}, 'rb').read()) if __import__('os').path.exists({a[0]}) else [])"
+        ))
+
+    register_lib_call("pickle", "compress",
+        lambda a: f"__import__('zlib').compress(__import__('pickle').dumps({a[0]}))")
+
+    register_lib_call("pickle", "decompress",
+        lambda a: f"__import__('pickle').loads(__import__('zlib').decompress({a[0]}))")
