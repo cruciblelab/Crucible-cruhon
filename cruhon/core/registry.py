@@ -84,6 +84,11 @@ _LIBS: dict[str, str] = {
     "yaml":        _BUILTIN,     # @yaml.* — PyYAML, requires pip install pyyaml
     "image":       _BUILTIN,     # @image.* — Pillow, requires pip install pillow
     "pdf":         _BUILTIN,     # @pdf.* — pdfplumber, requires pip install pdfplumber
+    # New in v2.8.0 — database & serialization
+    "sqlite":      _BUILTIN,     # @sqlite.* — sqlite3, no @import needed
+    "pickle":      _BUILTIN,     # @pickle.* — pickle, no @import needed
+    "shelve":      _BUILTIN,     # @shelve.* — shelve, no @import needed
+    "plist":       _BUILTIN,     # @plist.* — plistlib, no @import needed
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -284,6 +289,10 @@ def _register_stdlib():
     from .libs.yaml_        import register as _r_yaml
     from .libs.image_       import register as _r_image
     from .libs.pdf_         import register as _r_pdf
+    from .libs.sqlite_      import register as _r_sqlite
+    from .libs.pickle_      import register as _r_pickle
+    from .libs.shelve_      import register as _r_shelve
+    from .libs.plist_       import register as _r_plist
     _r_file()
     _r_time()
     _r_date()
@@ -337,5 +346,9 @@ def _register_stdlib():
     _r_yaml()
     _r_image()
     _r_pdf()
+    _r_sqlite()
+    _r_pickle()
+    _r_shelve()
+    _r_plist()
 
 _register_stdlib()

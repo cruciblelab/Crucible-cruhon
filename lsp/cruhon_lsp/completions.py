@@ -152,6 +152,11 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "csv":        ("CSV files",             ["read", "rows", "headers", "read_string", "write", "write_rows", "append", "filter", "col", "count", "to_json"]),
     "store":      ("Key-value store",       ["set", "get", "delete", "all", "keys", "values", "clear", "has"]),
     "db":         ("Database (SQLite/Postgres/MySQL)", ["connect", "close", "ping", "reconnect", "in_transaction", "exec", "execmany", "query", "fetchone", "fetchall", "fetchmany", "insert", "insertmany", "update", "delete", "table_exists", "tables", "columns", "count", "get", "begin", "commit", "rollback", "transaction", "savepoint", "vacuum", "backup", "truncate", "db_type", "server_version"]),
+    # New in v2.8.0 — database & serialization
+    "sqlite":     ("SQLite3",                  ["connect", "close", "commit", "as_dict", "fetchall", "fetchone", "fetchmany", "execute", "query", "run", "insert", "delete", "update", "tables", "columns", "count"]),
+    "pickle":     ("Pickle serialization",     ["dumps", "loads", "save", "load", "copy", "dumps_proto"]),
+    "shelve":     ("Shelve persistent dict",   ["open", "close", "get", "set", "delete", "has", "keys", "all", "clear", "update", "count"]),
+    "plist":      ("Property list (plistlib)", ["load", "save", "loads", "dumps", "get", "to_json", "from_json"]),
 }
 
 
