@@ -189,6 +189,9 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "xmlrpc":     ("XML-RPC client",           ["client", "call", "dumps", "loads", "binary", "datetime"]),
     "httpserver": ("Tiny HTTP server",         ["files", "server", "handler", "handle_one", "serve", "port", "close"]),
     "selectors":  ("I/O multiplexing",         ["new", "close", "watch_read", "watch_write", "register", "unwatch", "read", "write", "wait"]),
+    "html":       ("HTML escape & scrape",     ["escape", "unescape", "strip_tags", "text", "links", "images", "tags"]),
+    "webbrowser": ("Open URLs in a browser",   ["open", "open_new", "open_tab", "get"]),
+    "mimetypes":  ("Guess MIME types",         ["guess", "full", "is_text", "is_image", "extension", "extensions", "add", "types"]),
 }
 
 

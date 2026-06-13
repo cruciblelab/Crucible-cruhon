@@ -125,6 +125,10 @@ _LIBS: dict[str, str] = {
     "xmlrpc":      _BUILTIN,     # @xmlrpc.* — XML-RPC client
     "httpserver":  _BUILTIN,     # @httpserver.* — tiny HTTP server
     "selectors":   _BUILTIN,     # @selectors.* — I/O multiplexing
+    # New in v2.8.0 — HTML & web
+    "html":        _BUILTIN,     # @html.* — HTML escaping & light scraping
+    "webbrowser":  _BUILTIN,     # @webbrowser.* — open URLs in a browser
+    "mimetypes":   _BUILTIN,     # @mimetypes.* — guess MIME types
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -360,6 +364,9 @@ def _register_stdlib():
     from .libs.xmlrpc_      import register as _r_xmlrpc
     from .libs.httpserver_  import register as _r_httpserver
     from .libs.selectors_   import register as _r_selectors
+    from .libs.html_        import register as _r_html
+    from .libs.webbrowser_  import register as _r_webbrowser
+    from .libs.mimetypes_   import register as _r_mimetypes
     _r_file()
     _r_time()
     _r_date()
@@ -448,5 +455,8 @@ def _register_stdlib():
     _r_xmlrpc()
     _r_httpserver()
     _r_selectors()
+    _r_html()
+    _r_webbrowser()
+    _r_mimetypes()
 
 _register_stdlib()
