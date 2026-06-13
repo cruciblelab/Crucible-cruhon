@@ -95,6 +95,11 @@ _LIBS: dict[str, str] = {
     "fnmatch":     _BUILTIN,     # @fnmatch.* — filename pattern matching
     "fileinput":   _BUILTIN,     # @fileinput.* — multi-file line iteration
     "stat":        _BUILTIN,     # @stat.* — file mode inspection
+    # New in v2.8.0 — text & I/O, math & numbers
+    "textwrap":    _BUILTIN,     # @textwrap.* — wrap/fill/indent text
+    "getpass":     _BUILTIN,     # @getpass.* — secure password prompts
+    "cmath":       _BUILTIN,     # @cmath.* — complex-number math
+    "array":       _BUILTIN,     # @array.* — compact typed arrays
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -304,6 +309,10 @@ def _register_stdlib():
     from .libs.fnmatch_     import register as _r_fnmatch
     from .libs.fileinput_   import register as _r_fileinput
     from .libs.stat_        import register as _r_stat
+    from .libs.textwrap_    import register as _r_textwrap
+    from .libs.getpass_     import register as _r_getpass
+    from .libs.cmath_       import register as _r_cmath
+    from .libs.array_       import register as _r_array
     _r_file()
     _r_time()
     _r_date()
@@ -366,5 +375,9 @@ def _register_stdlib():
     _r_fnmatch()
     _r_fileinput()
     _r_stat()
+    _r_textwrap()
+    _r_getpass()
+    _r_cmath()
+    _r_array()
 
 _register_stdlib()

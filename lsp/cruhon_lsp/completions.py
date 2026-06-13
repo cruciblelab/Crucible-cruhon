@@ -163,6 +163,10 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "stat":       ("File mode inspection",     ["of", "mode", "filemode", "octal", "perms", "is_file", "is_dir", "is_link", "is_exec", "is_readable", "is_writable", "readable", "writable", "executable"]),
     "shelve":     ("Shelve persistent dict",   ["open", "close", "sync", "get", "set", "delete", "has", "pop", "setdefault", "keys", "values", "items", "all", "count", "clear", "update", "rename", "increment"]),
     "plist":      ("Property list (plistlib)", ["load", "save", "load_binary", "save_binary", "loads", "dumps", "loads_binary", "dumps_binary", "get", "set", "has", "keys", "values", "items", "merge", "remove", "to_json", "from_json", "to_dict", "fmt"]),
+    "textwrap":   ("Text wrap & fill",         ["wrap", "fill", "shorten", "indent", "dedent", "center", "truncate"]),
+    "getpass":    ("Secure password prompts",  ["ask", "password", "user"]),
+    "cmath":      ("Complex-number math",      ["complex", "rect", "polar", "phase", "modulus", "conjugate", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "is_nan", "is_inf", "is_finite", "is_close", "pi", "e", "tau", "inf", "nan"]),
+    "array":      ("Compact typed arrays",     ["of", "zeros", "range", "to_bytes", "from_bytes", "to_list", "item_size", "typecode", "length", "sum", "min", "max"]),
 }
 
 
