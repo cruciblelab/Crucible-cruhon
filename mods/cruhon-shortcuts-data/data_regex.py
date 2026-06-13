@@ -68,7 +68,7 @@ def _new_lib_calls(api) -> None:
         f"__import__('functools').reduce("
         f"lambda _t, _pr: __import__('re').sub(_pr[0], _pr[1], _t), "
         f"{a[0]}, {a[1]})"
-        if len(a) > 1 else a[1] if len(a) > 1 else "''"
+        if len(a) > 1 else "''"
     ))
 
 

@@ -461,7 +461,7 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries (52 namespaces, 1100+ commands)
+## Standard Libraries (55 namespaces, 1100+ commands)
 
 See [`library.md`](library.md) for the complete reference.
 

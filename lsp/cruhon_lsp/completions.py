@@ -99,6 +99,7 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "random":     ("Random",               ["int", "float", "choice", "choices", "shuffle", "sample", "seed", "uuid", "password", "hex", "bytes"]),
     "time":       ("Time",                 ["now", "sleep", "timestamp", "format", "parse", "diff", "since", "perf"]),
     "date":       ("Date utilities",       ["today", "now", "format", "parse", "diff", "add_days", "tomorrow", "yesterday", "weekday", "age", "strftime"]),
+    "text":       ("Text / string",         ["upper", "lower", "title", "capitalize", "strip", "lstrip", "rstrip", "split", "rsplit", "join", "replace", "sub", "search", "match", "findall", "contains", "startswith", "endswith", "count", "index", "is_digit", "is_alpha", "is_alnum", "is_space", "is_numeric", "encode", "decode", "center", "ljust", "rjust", "zfill", "slug", "clean", "wrap", "dedent", "partition", "rpartition", "swapcase"]),
     "os":         ("OS utilities",         ["getcwd", "listdir", "exists", "getenv", "environ", "run", "popen", "exit", "sep", "expanduser", "abspath"]),
     "sys":        ("System",               ["argv", "path", "version", "platform", "exit", "stdin", "stdout", "executable"]),
     "re":         ("Regex",                ["match", "search", "fullmatch", "findall", "finditer", "sub", "subn", "split", "compile", "escape", "is_match", "groups", "group1", "named", "count", "replace_first"]),
@@ -140,7 +141,14 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "bisect":     ("Bisect",               ["left", "right", "insort_left", "insort_right"]),
     "operator":   ("Operator",             ["add", "sub", "mul", "truediv", "floordiv", "mod", "pow", "neg", "lt", "le", "eq", "ne", "ge", "gt", "and_", "or_", "not_", "getitem"]),
     "pprint":     ("Pretty print",         ["pprint", "pformat", "isreadable", "isrecursive"]),
-    "db":         ("Database (SQLite/Postgres/MySQL)", ["connect", "close", "ping", "exec", "execmany", "query", "fetchone", "fetchall", "fetchmany", "insert", "insertmany", "update", "delete", "table_exists", "tables", "columns", "count", "begin", "commit", "rollback", "transaction", "savepoint", "vacuum", "backup"]),
+    "log":        ("Logging",               ["setup", "debug", "info", "warning", "error", "critical", "get", "child", "to_file", "set_level", "format", "disable", "enable"]),
+    "config":     ("Config files",          ["load", "save", "reload", "get", "set", "sections", "keys", "has", "env", "env_set", "env_del", "dotenv"]),
+    "shell":      ("Shell / subprocess",    ["run", "output", "lines", "code", "ok", "bg", "pipe", "kill", "terminate", "wait", "communicate", "poll", "getcwd", "username", "hostname", "cpu_count", "env", "which", "home"]),
+    "archive":    ("Archives",              ["zip", "unzip", "zip_list", "zip_add", "zip_read", "zip_extract_one", "tar", "untar", "tar_list", "tar_extract_one", "gzip", "gunzip", "bzip2", "bunzip2", "lzma", "unlzma", "inspect"]),
+    "mail":       ("Mail (SMTP/IMAP)",      ["send", "send_html", "send_with_attachment", "message", "html_message", "attach", "connect", "connect_tls", "login", "deliver", "close", "parse", "subject", "imap_connect", "imap_list", "imap_select", "imap_search", "imap_fetch", "imap_close"]),
+    "csv":        ("CSV files",             ["read", "rows", "headers", "read_string", "write", "write_rows", "append", "filter", "col", "count", "to_json"]),
+    "store":      ("Key-value store",       ["set", "get", "delete", "all", "keys", "values", "clear", "has"]),
+    "db":         ("Database (SQLite/Postgres/MySQL)", ["connect", "close", "ping", "reconnect", "in_transaction", "exec", "execmany", "query", "fetchone", "fetchall", "fetchmany", "insert", "insertmany", "update", "delete", "table_exists", "tables", "columns", "count", "get", "begin", "commit", "rollback", "transaction", "savepoint", "vacuum", "backup", "truncate", "db_type", "server_version"]),
 }
 
 
