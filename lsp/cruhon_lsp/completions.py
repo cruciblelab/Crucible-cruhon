@@ -153,10 +153,10 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "store":      ("Key-value store",       ["set", "get", "delete", "all", "keys", "values", "clear", "has"]),
     "db":         ("Database (SQLite/Postgres/MySQL)", ["connect", "close", "ping", "reconnect", "in_transaction", "exec", "execmany", "query", "fetchone", "fetchall", "fetchmany", "insert", "insertmany", "update", "delete", "table_exists", "tables", "columns", "count", "get", "begin", "commit", "rollback", "transaction", "savepoint", "vacuum", "backup", "truncate", "db_type", "server_version"]),
     # New in v2.8.0 — database & serialization
-    "sqlite":     ("SQLite3",                  ["connect", "close", "commit", "as_dict", "fetchall", "fetchone", "fetchmany", "execute", "query", "run", "insert", "delete", "update", "tables", "columns", "count"]),
-    "pickle":     ("Pickle serialization",     ["dumps", "loads", "save", "load", "copy", "dumps_proto"]),
-    "shelve":     ("Shelve persistent dict",   ["open", "close", "get", "set", "delete", "has", "keys", "all", "clear", "update", "count"]),
-    "plist":      ("Property list (plistlib)", ["load", "save", "loads", "dumps", "get", "to_json", "from_json"]),
+    "sqlite":     ("SQLite3",                  ["connect", "close", "commit", "rollback", "begin", "in_transaction", "set_timeout", "as_dict", "execute", "executemany", "executescript", "fetchall", "fetchone", "fetchmany", "scalar", "query", "query_one", "run", "insert", "insert_many", "upsert", "update", "delete", "truncate", "create_table", "drop_table", "table_exists", "tables", "columns", "column_types", "count", "index_create", "index_drop", "as_dicts", "row_as_dict", "last_id", "changes", "vacuum", "backup", "integrity_check", "pragma"]),
+    "pickle":     ("Pickle serialization",     ["dumps", "loads", "dumps_proto", "copy", "save", "load", "save_gz", "load_gz", "to_base64", "from_base64", "to_hex", "from_hex", "is_pickle", "size", "protocol"]),
+    "shelve":     ("Shelve persistent dict",   ["open", "close", "sync", "get", "set", "delete", "has", "pop", "setdefault", "keys", "values", "items", "all", "count", "clear", "update", "rename", "increment"]),
+    "plist":      ("Property list (plistlib)", ["load", "save", "load_binary", "save_binary", "loads", "dumps", "loads_binary", "dumps_binary", "get", "set", "has", "keys", "values", "items", "merge", "remove", "to_json", "from_json", "to_dict", "fmt"]),
 }
 
 
