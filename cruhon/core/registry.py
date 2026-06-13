@@ -89,6 +89,12 @@ _LIBS: dict[str, str] = {
     "pickle":      _BUILTIN,     # @pickle.* — pickle, no @import needed
     "shelve":      _BUILTIN,     # @shelve.* — shelve, no @import needed
     "plist":       _BUILTIN,     # @plist.* — plistlib, no @import needed
+    # New in v2.8.0 — file & path
+    "glob":        _BUILTIN,     # @glob.* — advanced file pattern matching
+    "tempfile":    _BUILTIN,     # @tempfile.* — temporary files/dirs
+    "fnmatch":     _BUILTIN,     # @fnmatch.* — filename pattern matching
+    "fileinput":   _BUILTIN,     # @fileinput.* — multi-file line iteration
+    "stat":        _BUILTIN,     # @stat.* — file mode inspection
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -293,6 +299,11 @@ def _register_stdlib():
     from .libs.pickle_      import register as _r_pickle
     from .libs.shelve_      import register as _r_shelve
     from .libs.plist_       import register as _r_plist
+    from .libs.glob_        import register as _r_glob
+    from .libs.tempfile_    import register as _r_tempfile
+    from .libs.fnmatch_     import register as _r_fnmatch
+    from .libs.fileinput_   import register as _r_fileinput
+    from .libs.stat_        import register as _r_stat
     _r_file()
     _r_time()
     _r_date()
@@ -350,5 +361,10 @@ def _register_stdlib():
     _r_pickle()
     _r_shelve()
     _r_plist()
+    _r_glob()
+    _r_tempfile()
+    _r_fnmatch()
+    _r_fileinput()
+    _r_stat()
 
 _register_stdlib()
