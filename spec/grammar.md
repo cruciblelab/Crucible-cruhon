@@ -40,6 +40,7 @@ Every Cruhon command starts with `@`:
 - Arguments are separated by `;`
 - Commands with no arguments omit the brackets: `@break`, `@pass`, `@end`
 - Named (keyword) arguments use `=` inside the brackets: `@print[a; b; sep=", "]`
+- Positional arguments must come before named arguments
 
 ### 2.2 Block format
 
@@ -123,12 +124,16 @@ The `return=` named argument extracts a return-type annotation. It is not passed
 
 ### 3.5 Dataclass (v2.7)
 
-`@dataclass` generates a decorated class with `from dataclasses import dataclass` injected automatically.
+`@dataclass` generates a decorated class with `from dataclasses import dataclass` injected automatically. An optional parent class can be supplied as a second argument.
 
 ```
 @dataclass[Name]
     @var[field: type]
     @var[field: type; default]
+@end
+
+@dataclass[Name; Parent]   # with inheritance
+    ...
 @end
 ```
 
@@ -200,6 +205,7 @@ class Name:
 |---------|--------|---------------|
 | `@type` | `@type[Name; Alias]` | `Name = Alias  # type alias` |
 | `@dataclass` | `@dataclass[Name]` / `@end` | `@dataclass class Name:` |
+| `@dataclass` (with parent) | `@dataclass[Name; Parent]` / `@end` | `@dataclass class Name(Parent):` |
 
 **Type alias example:**
 
@@ -285,13 +291,18 @@ Runs the body exactly `n` times with no loop variable exposed.
 
 ### 6.5 Foreach (auto-index)
 
-Provides an automatic index variable alongside the element variable.
+Provides an automatic index variable alongside the element variable. An optional `start` argument sets the starting index (default `0`).
 
 ```
 @foreach[index; var; iterable]
     ...
 @end
 → for index, var in enumerate(iterable):
+
+@foreach[index; var; iterable; start]
+    ...
+@end
+→ for index, var in enumerate(iterable, start):
 ```
 
 ### 6.6 Loop control
@@ -335,7 +346,7 @@ The `return=` named argument is consumed by the transpiler and becomes the `->` 
 → async def name(p1):
 ```
 
-Same annotation syntax as `@func` applies.
+Same annotation syntax as `@func` applies, including `return=`.
 
 ### 7.3 Classes
 
@@ -353,7 +364,9 @@ Same annotation syntax as `@func` applies.
 
 ### 7.4 Decorators
 
-`@decorator[expr]` applies `@expr` to the immediately following function or class definition.
+There are two decorator commands:
+
+**`@decorator[expr]`** — a block-level command that accumulates one or more decorators and applies them to the immediately following `@func` or `@class`. Multiple decorator expressions can be supplied as additional arguments.
 
 ```
 @decorator[staticmethod]
@@ -364,6 +377,8 @@ Same annotation syntax as `@func` applies.
   def helper(x):
       return x * 2
 ```
+
+**`@decorate[expr]`** — a standalone statement that emits `@expr` at the current location (useful for applying decorators in contexts where the block form is not needed).
 
 ### 7.5 Return, yield, await
 
@@ -398,7 +413,7 @@ A macro is a named, reusable block that is inlined at call sites. It is not a Py
 @call[name; arg1; arg2]
 ```
 
-At each `@call` site, the macro body is expanded with arguments substituted inline.
+At each `@call` site, the macro body is expanded with arguments substituted inline. `@call` can also appear as an inline expression inside another command's argument list.
 
 ### 8.2 Templates
 
@@ -463,6 +478,7 @@ Multiple `@catch` clauses are supported. `@finally` is optional.
 
 | Command | Syntax | Python output |
 |---------|--------|---------------|
+| `@raise` | `@raise` | `raise` (bare re-raise) |
 | `@raise` | `@raise[ExcType; msg]` | `raise ExcType(msg)` |
 | `@raise` (chained) | `@raise[ExcType; msg; from=cause]` | `raise ExcType(msg) from cause` |
 
@@ -564,7 +580,7 @@ Multiple context expressions are separated by `;`.
 | `@del` | `@del[var1; var2]` | `del var1, var2` |
 | `@assert` | `@assert[condition]` | `assert condition` |
 | `@assert` (msg) | `@assert[condition; msg]` | `assert condition, msg` |
-| `@env` | `@env[KEY]` | `os.environ["KEY"]` |
+| `@env` | `@env[KEY]` | `os.environ.get("KEY")` |
 | `@env` (default) | `@env[KEY; default]` | `os.environ.get("KEY", default)` |
 | `@import` | `@import[lib]` | `import lib` |
 | `@import` (alias) | `@import[lib as alias]` | `import lib as alias` |
@@ -610,7 +626,7 @@ Marks `name1` and `name2` as part of the module's public API (`__all__`).
 @use[path as alias]
 ```
 
-Loads a `.clpy` module from `path`.
+Loads a `.clpy` module from `path`. If no alias is given, the alias is derived from the last path segment (extension stripped, hyphens and dots converted to underscores).
 
 ### 15.4 Selective import
 
@@ -630,47 +646,66 @@ These commands are usable inside `[...]` wherever a Python expression is expecte
 | `@list` | `@list[a; b; c]` | `[a, b, c]` |
 | `@dict` | `@dict[k1; v1; k2; v2]` | `{k1: v1, k2: v2}` |
 | `@set` | `@set[a; b; c]` | `{a, b, c}` |
+| `@set` (empty) | `@set[]` | `set()` |
 | `@tuple` | `@tuple[a; b]` | `(a, b)` |
+| `@tuple` (single) | `@tuple[a]` | `(a,)` |
+| `@tuple` (empty) | `@tuple[]` | `()` |
 | `@comp` | `@comp[expr; var; iterable]` | `[expr for var in iterable]` |
-| `@comp` (typed) | `@comp[expr; var; iterable; type=dict]` | `{expr for var in iterable}` (dict, set, or gen) |
+| `@comp` (conditional) | `@comp[expr; var; iterable; cond]` | `[expr for var in iterable if cond]` |
+| `@comp` (typed) | `@comp[expr; var; iterable; type=dict\|set\|gen]` | typed comprehension |
+| `@dictcomp` | `@dictcomp[key; value; var; iterable]` | `{key: value for var in iterable}` |
+| `@dictcomp` (cond) | `@dictcomp[key; value; var; iterable; cond]` | with `if cond` filter |
+| `@setcomp` | `@setcomp[expr; var; iterable]` | `{expr for var in iterable}` |
+| `@setcomp` (cond) | `@setcomp[expr; var; iterable; cond]` | with `if cond` filter |
+| `@gencomp` | `@gencomp[expr; var; iterable]` | `(expr for var in iterable)` |
+| `@gencomp` (cond) | `@gencomp[expr; var; iterable; cond]` | with `if cond` filter |
 | `@pipe` | `@pipe[value; fn1; fn2]` | `fn2(fn1(value))` |
-| `@when` | `@when[cond; if_true; if_false]` | `if_true if cond else if_false` |
-| `@lambda` | `@lambda[params; body]` | `lambda params: body` |
-| `@fetch` | `@fetch[url]` | HTTP GET, returns response body |
-| `@render` | `@render[name; key=val]` | rendered template string (inline) |
-| `@apply` | `@apply[name; value]` | pipeline result (inline) |
+| `@when` | `@when[cond; if_true; if_false]` | `(if_true if cond else if_false)` |
+| `@default` | `@default[value; fallback]` | `(value if value is not None else fallback)` |
+| `@lambda` | `@lambda[params; body]` | `(lambda params: body)` |
+| `@lambda` (no params) | `@lambda[body]` | `(lambda: body)` |
+| `@fetch` | `@fetch[url]` | `requests.get(url)` |
+| `@env` | `@env[KEY]` | `os.environ.get("KEY")` |
+| `@env` (default) | `@env[KEY; default]` | `os.environ.get("KEY", default)` |
+| `@ctx` | `@ctx[key]` | `__ctx__.get(key, None)` |
+| `@ctx` (default) | `@ctx[key; default]` | `__ctx__.get(key, default)` |
+| `@input` | `@input[prompt]` | `input("prompt")` |
+| `@call` | `@call[name; arg1; ...]` | invoke macro inline |
+| `@render` | `@render[name; key=val]` | rendered template string |
+| `@apply` | `@apply[name; value]` | pipeline result |
 | `@spread` | `@spread[fn; iter]` | `fn(*iter)` |
 | `@unpack` | `@unpack[fn; dict]` | `fn(**dict)` |
 
 **`@comp` type values:**
 
-| `type=` | Output form |
-|---------|-------------|
+| `type=` value | Output form |
+|---------------|-------------|
 | *(omitted)* | `[expr for var in iterable]` (list) |
 | `dict` | `{expr for var in iterable}` |
 | `set` | `{expr for var in iterable}` |
-| `gen` | `(expr for var in iterable)` |
+| `gen` or `generator` | `(expr for var in iterable)` |
 
 **Namespace method calls:**
 
-Any plugin-registered namespace can be called inline:
+Any plugin-registered or stdlib namespace can be called inline:
 
 ```
 @ns.method[args]
 ```
 
-For example, `@http.get[url]`, `@db.query[sql]`.
+For example, `@http.get[url]`, `@db.query[sql]`, `@math.sqrt[16]`.
 
 ---
 
 ## 17. Named Parameters
 
-Named parameters use `key=value` syntax inside `[...]` and are always placed after positional arguments.
+Named parameters use `key=value` syntax inside `[...]` and must always be placed after positional arguments.
 
 **Rules:**
 - `return=` in `@func` / `@async` is consumed as a return-type annotation; it never becomes a positional parameter
 - `sep=` and `end=` in `@print` are passed as keyword arguments to `print()`
 - `key=value` pairs in `@render` populate template placeholders
+- `from=` in `@raise` specifies the exception cause (`raise X from cause`)
 - Any unrecognised `key=value` pair in a user-facing command is forwarded as a Python keyword argument
 
 **Examples:**
@@ -684,6 +719,9 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 
 @render[email_tmpl; name=Alice; subject=Hello]
 → (rendered string)
+
+@raise[ValueError; bad input; from=original_exc]
+→ raise ValueError("bad input") from original_exc
 ```
 
 ---
@@ -712,6 +750,7 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 |---------|-----------|---------------|
 | `@type` | `Name; Alias` | `Name = Alias  # type alias` |
 | `@dataclass` | `Name` (block) | `@dataclass class Name:` |
+| `@dataclass` | `Name; Parent` (block) | `@dataclass class Name(Parent):` |
 
 ### 18.3 Control flow
 
@@ -722,8 +761,9 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 | `@else` | — | `else:` |
 | `@for` | `var; iterable` (block) | `for var in iterable:` |
 | `@while` | `condition` (block) | `while condition:` |
-| `@repeat` | `n` (block) | `for _i in range(n):` |
+| `@repeat` | `n` (block) | `for _cruhon_i in range(n):` |
 | `@foreach` | `index; var; iterable` (block) | `for index, var in enumerate(iterable):` |
+| `@foreach` | `index; var; iterable; start` (block) | `for index, var in enumerate(iterable, start):` |
 | `@break` | — | `break` |
 | `@continue` | — | `continue` |
 | `@pass` | — | `pass` |
@@ -736,7 +776,8 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 | `@func` | `name; p1; ...; return=T` (block) | `def name(p1, ...) -> T:` |
 | `@async` | `name; p1; ...; return=T` (block) | `async def name(p1, ...) -> T:` |
 | `@class` | `Name` or `Name; Parent` (block) | `class Name:` / `class Name(Parent):` |
-| `@decorator` | `expr` | `@expr` on next definition |
+| `@decorator` | `expr` (block) | `@expr` applied to next definition |
+| `@decorate` | `expr` | `@expr` statement |
 | `@return` | `value` | `return value` |
 | `@yield` | `value` or — | `yield value` / `yield` |
 | `@yield.from` | `expr` | `yield from expr` |
@@ -749,11 +790,11 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 | Command | Arguments | Description |
 |---------|-----------|-------------|
 | `@macro` | `name; p1; ...` (block) | define named macro |
-| `@call` | `name; arg1; ...` | invoke macro inline |
+| `@call` | `name; arg1; ...` | invoke macro (statement or inline) |
 | `@template` | `name` (block) | define string template |
-| `@render` | `name; key=val; ...` | render template |
-| `@pipeline` | `name; fn1; fn2; ...` | define pipeline |
-| `@apply` | `name; value` | apply pipeline |
+| `@render` | `name; key=val; ...` | render template (statement or inline) |
+| `@pipeline` | `name; fn1; fn2; ...` | define function pipeline |
+| `@apply` | `name; value` | apply pipeline (statement or inline) |
 | `@spread` | `fn; iter` | `fn(*iter)` |
 | `@unpack` | `fn; dict` | `fn(**dict)` |
 
@@ -764,6 +805,7 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 | `@try` | — (block) | `try:` |
 | `@catch` | `ExcType; e` | `except ExcType as e:` |
 | `@finally` | — | `finally:` |
+| `@raise` | — | `raise` (bare re-raise) |
 | `@raise` | `ExcType; msg` | `raise ExcType(msg)` |
 | `@raise` | `ExcType; msg; from=cause` | `raise ExcType(msg) from cause` |
 | `@retry` | `n` or `n; ExcType` (block) | retry body up to n times |
@@ -806,7 +848,7 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 |---------|-----------|---------------|
 | `@del` | `var1; var2` | `del var1, var2` |
 | `@assert` | `condition` or `condition; msg` | `assert condition[, msg]` |
-| `@env` | `KEY` or `KEY; default` | `os.environ["KEY"]` / `os.environ.get(...)` |
+| `@env` | `KEY` or `KEY; default` | `os.environ.get(...)` |
 | `@import` | `lib` or `lib as alias` | `import lib` |
 | `@include` | `file.clpy` | inline source merge |
 | `@raw` / `@end` | — | verbatim Python pass-through |
@@ -828,11 +870,23 @@ Named parameters use `key=value` syntax inside `[...]` and are always placed aft
 | `@dict` | `k1; v1; k2; v2` | `{k1: v1, k2: v2}` |
 | `@set` | `a; b; c` | `{a, b, c}` |
 | `@tuple` | `a; b` | `(a, b)` |
-| `@comp` | `expr; var; iterable[; type=...]` | comprehension |
+| `@comp` | `expr; var; iterable[; cond][; type=...]` | comprehension |
+| `@dictcomp` | `key; value; var; iterable[; cond]` | dict comprehension |
+| `@setcomp` | `expr; var; iterable[; cond]` | set comprehension |
+| `@gencomp` | `expr; var; iterable[; cond]` | generator expression |
 | `@pipe` | `value; fn1; fn2` | `fn2(fn1(value))` |
 | `@when` | `cond; if_true; if_false` | ternary expression |
-| `@lambda` | `params; body` | `lambda params: body` |
-| `@fetch` | `url` | HTTP GET response body |
+| `@default` | `value; fallback` | `value` if not None, else `fallback` |
+| `@lambda` | `[params;] body` | `(lambda params: body)` |
+| `@fetch` | `url` | `requests.get(url)` |
+| `@env` | `KEY[; default]` | `os.environ.get(...)` |
+| `@ctx` | `key[; default]` | `__ctx__.get(key, ...)` |
+| `@input` | `prompt` | `input("prompt")` |
+| `@call` | `name; arg1; ...` | macro invocation |
+| `@render` | `name; key=val` | rendered template |
+| `@apply` | `name; value` | pipeline result |
+| `@spread` | `fn; iter` | `fn(*iter)` |
+| `@unpack` | `fn; dict` | `fn(**dict)` |
 
 ---
 
@@ -877,7 +931,7 @@ class User:
     active: bool = True
 ```
 
-### 19.3 Pattern matching
+### 19.3 Pattern matching with guard
 
 ```
 @match[status]
@@ -912,7 +966,37 @@ class User:
 @print[@render[welcome; name=name; plan=pro]]
 ```
 
-### 19.6 Async with context manager
+### 19.6 Foreach with start index
+
+```
+@foreach[i; item; items; 1]
+    @print[{i}. {item}]
+@end
+→ for i, item in enumerate(items, 1):
+      print(f"{i}. {item}")
+```
+
+### 19.7 Comprehensions
+
+```
+# list comprehension
+@var[squares; @comp[x*x; x; range(10)]]
+→ squares = [x*x for x in range(10)]
+
+# filtered list comprehension
+@var[evens; @comp[x; x; range(20); x % 2 == 0]]
+→ evens = [x for x in range(20) if x % 2 == 0]
+
+# dict comprehension (dedicated command)
+@var[sq_map; @dictcomp[x; x*x; x; range(5)]]
+→ sq_map = {x: x*x for x in range(5)}
+
+# generator expression
+@var[gen; @comp[x*2; x; data; type=gen]]
+→ gen = (x*2 for x in data)
+```
+
+### 19.8 Async with context manager
 
 ```
 @async[fetch_all; urls: list]
@@ -925,15 +1009,33 @@ class User:
 @end
 ```
 
-### 19.7 Module and export
+### 19.9 Module and export
 
 ```
 @module[utils]
     @func[clamp; val; lo; hi; return=float]
-        @return[max(lo; min(val; hi))]
+        @return[max(lo, min(val, hi))]
     @end
 
     @export[clamp]
+@end
+```
+
+### 19.10 Exception chaining and bare re-raise
+
+```
+@try
+    @var[data; risky_operation()]
+@catch[ValueError; e]
+    @raise[RuntimeError; failed to process; from=e]
+@end
+
+# bare re-raise
+@try
+    @var[x; int(raw)]
+@catch[ValueError; e]
+    @print[converting: {raw}]
+    @raise
 @end
 ```
 
@@ -946,8 +1048,10 @@ class User:
 - Add new namespaced commands: `@http.get`, `@db.query`
 - Add aliases: `@fetch` → `@http.get`
 - Add library wrappers: `register_lib("redis", "redis")`
-- Hook into lifecycle events
+- Hook into lifecycle events (pre/post hooks on lexer, parser, AST)
 - Override core commands (with explicit warning)
+- Register new inline expression commands via `register_inline_command()`
+- Register new block commands via `register_block_command()`
 
 ### 20.2 What plugins cannot do
 
@@ -979,9 +1083,9 @@ Override order is deterministic — see `rules.md`.
 | `@func` / `@async` | Added `return=type` named argument for return annotation |
 | `@func` params | `param: type` passed through as Python annotation |
 | `@type` | New — type alias command |
-| `@dataclass` | New — generates `@dataclass` class with field annotations |
+| `@dataclass` | New — generates `@dataclass` class with field annotations; optional parent argument |
 | `@repeat` | New — fixed-count loop with no loop variable |
-| `@foreach` | New — enumerate loop with automatic index |
+| `@foreach` | New — enumerate loop with automatic index; optional start argument |
 | `@match` / `@case` / `@default` | New — structural pattern matching |
 | `@retry` | New — retry-on-exception block |
 | `@timeout` | New — wall-clock deadline block |
@@ -990,7 +1094,7 @@ Override order is deterministic — see `rules.md`.
 | `@pipeline` / `@apply` | New — function composition pipelines |
 | `@async.for` / `@async.with` | New — async loop and context manager |
 | `@yield.from` | New — `yield from` |
-| `@raise` | Added `from=cause` for exception chaining |
+| `@raise` | Added bare re-raise form; added `from=cause` for exception chaining |
 | `@catch` | Multi-catch: multiple `@catch` clauses per `@try` |
 | `@with` | Multi-context: multiple `expr as var` separated by `;` |
 | `@let` | New — multi-assignment |
@@ -998,11 +1102,15 @@ Override order is deterministic — see `rules.md`.
 | `@swap` | New |
 | `@del` | New |
 | `@global` / `@nonlocal` | New |
-| `@decorator` | New |
+| `@decorator` | New — accumulates decorators for the next `@func` / `@class` |
+| `@decorate` | New — standalone decorator statement |
 | `@module` / `@export` / `@use` / `@from` | New — module system |
 | `@list` / `@dict` / `@set` / `@tuple` | New inline constructors |
-| `@comp` | New — comprehension with `type=` selector |
+| `@comp` | New — comprehension with optional filter condition and `type=` selector |
+| `@dictcomp` / `@setcomp` / `@gencomp` | New — dedicated comprehension commands with optional filter |
 | `@pipe` / `@when` / `@lambda` | New inline expression commands |
+| `@default` | New inline — `value if value is not None else fallback` |
+| `@ctx` | New inline — context dict lookup |
 | `@spread` / `@unpack` | New |
 | `@raw` | New — verbatim Python pass-through block |
 | `@import` | Added `as alias` form |
