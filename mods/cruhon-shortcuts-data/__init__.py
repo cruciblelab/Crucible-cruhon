@@ -36,6 +36,8 @@ _GROUP_MODULES: dict[str, str] = {
     "format":  "data_format",
     "numbers": "data_numbers",
     "system":  "data_system",
+    "media":   "data_media",
+    "regex":   "data_regex",
 }
 
 

@@ -140,6 +140,7 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "bisect":     ("Bisect",               ["left", "right", "insort_left", "insort_right"]),
     "operator":   ("Operator",             ["add", "sub", "mul", "truediv", "floordiv", "mod", "pow", "neg", "lt", "le", "eq", "ne", "ge", "gt", "and_", "or_", "not_", "getitem"]),
     "pprint":     ("Pretty print",         ["pprint", "pformat", "isreadable", "isrecursive"]),
+    "db":         ("Database (SQLite/Postgres/MySQL)", ["connect", "close", "ping", "exec", "execmany", "query", "fetchone", "fetchall", "fetchmany", "insert", "insertmany", "update", "delete", "table_exists", "tables", "columns", "count", "begin", "commit", "rollback", "transaction", "savepoint", "vacuum", "backup"]),
 }
 
 

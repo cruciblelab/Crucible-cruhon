@@ -11,7 +11,7 @@ custom      {}      — user-defined extra rewrites
 """
 from __future__ import annotations
 
-ALL_GROUPS: list[str] = ["format", "numbers", "system"]
+ALL_GROUPS: list[str] = ["format", "numbers", "system", "media", "regex"]
 
 
 class DataConfig:
