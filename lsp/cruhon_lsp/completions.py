@@ -195,6 +195,10 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "multiprocessing": ("Process parallelism", ["cpus", "pool", "map", "starmap", "process", "queue", "manager", "lock"]),
     "futures":    ("Thread/process pools",     ["threads", "processes", "shutdown", "thread_map", "process_map", "submit", "result", "done", "wait"]),
     "sched":      ("Event scheduling",         ["new", "run", "after", "at", "cancel", "empty", "queue"]),
+    "timeit":     ("Micro-benchmarking",       ["run", "each", "repeat", "best", "auto"]),
+    "profile":    ("Deterministic profiling",  ["run", "calls", "time", "print", "dump"]),
+    "doctest":    ("Docstring example tests",  ["run", "passed", "examples", "module", "object"]),
+    "unittest":   ("Run TestCase classes",     ["run", "passed", "count", "failures", "suite", "run_suite", "discover"]),
 }
 
 

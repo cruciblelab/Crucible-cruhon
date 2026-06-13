@@ -133,6 +133,11 @@ _LIBS: dict[str, str] = {
     "multiprocessing": _BUILTIN, # @multiprocessing.* — process parallelism
     "futures":     _BUILTIN,     # @futures.* — thread/process pools
     "sched":       _BUILTIN,     # @sched.* — event scheduling
+    # New in v2.8.0 — testing & profiling
+    "timeit":      _BUILTIN,     # @timeit.* — micro-benchmarking
+    "profile":     _BUILTIN,     # @profile.* — deterministic profiling
+    "doctest":     _BUILTIN,     # @doctest.* — docstring example tests
+    "unittest":    _BUILTIN,     # @unittest.* — run TestCase classes
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -374,6 +379,10 @@ def _register_stdlib():
     from .libs.multiprocessing_ import register as _r_multiprocessing
     from .libs.futures_     import register as _r_futures
     from .libs.sched_       import register as _r_sched
+    from .libs.timeit_      import register as _r_timeit
+    from .libs.profile_     import register as _r_profile
+    from .libs.doctest_     import register as _r_doctest
+    from .libs.unittest_    import register as _r_unittest
     _r_file()
     _r_time()
     _r_date()
@@ -468,5 +477,9 @@ def _register_stdlib():
     _r_multiprocessing()
     _r_futures()
     _r_sched()
+    _r_timeit()
+    _r_profile()
+    _r_doctest()
+    _r_unittest()
 
 _register_stdlib()
