@@ -4,7 +4,127 @@ All notable changes are documented here.
 
 ---
 
-## v2.4.0 (current) — Data & Format Namespaces & cruhon-shortcuts-data
+## v2.6.0 (current) — Templates, Pipelines, Spread/Unpack, LSP
+
+### 6 new language commands
+
+| Command | Usage | Description |
+|---|---|---|
+| `@template[name] ... @end` | block | Define a named string template with `{key}` placeholders |
+| `@render[name; key=value]` | inline/stmt | Render a template with substitutions |
+| `@let[x; v1; y; v2; ...]` | stmt | Assign multiple variables in one command |
+| `@pipeline[name; fn1; fn2; ...]` | stmt | Define a named function-composition pipeline |
+| `@apply[name; value]` | inline/stmt | Apply a pipeline to a value |
+| `@spread[fn; iter]` | inline/stmt | Call `fn(*iterable)` — spread positional args |
+| `@unpack[fn; dict]` | inline/stmt | Call `fn(**mapping)` — spread keyword args |
+
+```clpy
+@template[greeting]
+    Hello, {name}! You have {count} messages.
+@end
+
+@var[msg; @render[greeting; name="Alice"; count=5]]
+@print[{msg}]   # Hello, Alice! You have 5 messages.
+
+@pipeline[normalize; str.strip; str.lower]
+@var[result; @apply[normalize; "  Hello  "]]   # "hello"
+
+@let[x; 10; y; 20; z; 30]   # x = 10, y = 20, z = 30
+
+@var[n; @spread[max; [3, 1, 4, 1, 5]]]   # max(*[3,1,4,1,5])
+```
+
+### Language Server Protocol (LSP) support
+
+- VS Code extension (`lsp/vscode-cruhon/`) — completions, diagnostics, hover, go-to-definition, symbols for `.clpy` files
+- Neovim integration (`lsp/neovim/cruhon_lsp.lua`) — nvim-lspconfig setup with filetype detection and syntax fallback
+- Python server package (`lsp/cruhon_lsp/`) — pygls 2.x, `pip install cruhon-lsp`
+- 91 command completions + 48 namespace completions with inline docs
+- Real-time diagnostics (parse + transpile errors) with line/column positions
+- Document symbols panel: `@var`, `@const`, `@func`, `@macro`, `@class`, `@template`, `@pipeline`, `@module`
+- Go-to-definition for `@call[macro]`, `@apply[pipeline]`, `@render[template]`
+
+### Bug fix
+
+`_apply_ast_hooks` no longer corrupts `TemplateDefNode.body` — a string field was previously iterated as a character list. Fixed with an `isinstance(list)` guard.
+
+### Tests: **1474** (+32 from v2.5.0)
+
+---
+
+## v2.5.0 — Retry/Timeout/Macro, 4 New Namespaces, CLI tools
+
+### 3 new language block commands
+
+| Command | Usage | Description |
+|---|---|---|
+| `@retry[n]` or `@retry[n; ExcType]` | block | Retry the body up to n times on exception |
+| `@timeout[seconds]` | block | Run body with a wall-clock deadline; raises TimeoutError |
+| `@macro[name; p1; ...] ... @end` | block | Define a reusable named macro |
+| `@call[name; arg1; arg2]` | stmt | Call a defined `@macro` |
+
+```clpy
+@retry[3]
+    risky_call()
+@end
+
+@retry[5; requests.Timeout]
+    @var[data; @http.get["https://api.example.com"]]
+@end
+
+@timeout[10]
+    @var[result; slow_operation()]
+@end
+
+@macro[greet; name]
+    @print[Hello, {name}!]
+@end
+@call[greet; "Alice"]
+```
+
+### 4 new stdlib namespaces
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@re.*` | `re` | `match`, `search`, `fullmatch`, `findall`, `finditer`, `sub`, `subn`, `split`, `compile`, `escape`, `is_match`, `groups`, `group1`, `named`, `count`, `replace_first` |
+| `@yaml.*` | `PyYAML` | `loads`, `dumps`, `load_file`, `dump_file`, `parse`, `stringify`, `get`, `to_json`, `from_json` |
+| `@image.*` | `Pillow` | `open`, `new`, `save`, `resize`, `rotate`, `crop`, `convert`, `size`, `width`, `height`, `thumbnail`, `flip_h`, `flip_v`, `grayscale`, `show`, `format`, `to_bytes`, `paste` |
+| `@pdf.*` | `pdfplumber` | `open`, `pages`, `page_count`, `text`, `text_of`, `words`, `tables`, `table_of`, `metadata`, `lines` |
+
+```clpy
+@var[m; @re.search["(\d+)"; "order 42"]]
+@var[n; @re.group1[m]]   # "42"
+
+@var[data; @yaml.loads["name: Alice\nage: 30"]]
+@var[name; @yaml.get[data; "name"]]
+
+@var[img; @image.open["photo.png"]]
+@var[thumb; @image.thumbnail[img; 128; 128]]
+@image.save[thumb; "thumb.png"]
+
+@var[doc; @pdf.open["report.pdf"]]
+@var[txt; @pdf.text[doc]]
+```
+
+### 3 new CLI commands
+
+| Command | Description |
+|---|---|
+| `cruhon lint file.clpy` | Static analysis — style warnings without running |
+| `cruhon test` | Run `cruhon/tests/` (or a specified directory) |
+| `cruhon bundle file.clpy -o out.py` | Bundle `.clpy` + all includes into a single `.py` |
+
+### cruhon-shortcuts-pro: 3 new groups
+
+- **regex group** — `@re_match`, `@re_find`, `@re_sub`, `@re_split`, `@re_groups`, `@re_named`, `@re_count`, `@is_match`, `@replace_first`
+- **http group** — `@retry_get`, `@bearer`, `@json_post`, `@put_json`, `@patch_json`, `@del_req`, `@http_ok`, `@http_status_text`, `@multipart_post`, `@stream_get`
+- **file group** — `@read_file`, `@write_file`, `@file_find`, `@joinpath`, `@file_ext`, `@file_stem`, `@file_size`, `@file_modified`, `@is_file`, `@is_dir`, `@file_lines`, `@file_words`
+
+### Tests: **1442** (+41 from v2.4.0)
+
+---
+
+## v2.4.0 — Data & Format Namespaces & cruhon-shortcuts-data
 
 ### 10 new stdlib namespaces
 

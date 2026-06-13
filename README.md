@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.4.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.6.0
 
 ---
 
@@ -461,7 +461,7 @@ it to pass data into block bodies. Scripts can read and write it directly.
 
 ---
 
-## Standard Libraries (48 namespaces, 1000+ commands)
+## Standard Libraries (52 namespaces, 1100+ commands)
 
 See [`library.md`](library.md) for the complete reference.
 
@@ -709,10 +709,39 @@ New set: `@string` `@struct` `@zlib` `@calendar` `@email`.
 New set: `@xml` `@toml` `@diff` `@decimal` `@fraction` `@ip` `@platform`
 `@unicode` `@binascii` `@shlex`.
 
+### Media & regex wrappers (4 namespaces, new in v2.5)
+
+```clpy
+# Regex (re module — no @import needed)
+@var[m; @re.search["(\d+)"; "price: 42"]]
+@var[n; @re.group1[m]]                         # "42"
+@var[all; @re.findall["\w+"; "hello world"]]   # ["hello", "world"]
+@var[out; @re.sub["[aeiou]"; "*"; "hello"]]    # "h*ll*"
+
+# YAML (PyYAML)
+@var[data; @yaml.loads["name: Alice\nage: 30"]]
+@var[name; @yaml.get[data; "name"]]            # "Alice"
+@var[text; @yaml.dumps[data]]
+
+# Image (Pillow)
+@var[img; @image.open["photo.png"]]
+@var[w; @image.width[img]]
+@var[resized; @image.resize[img; 800; 600]]
+@image.save[resized; "resized.png"]
+
+# PDF (pdfplumber)
+@var[doc; @pdf.open["report.pdf"]]
+@var[pages; @pdf.page_count[doc]]
+@var[text; @pdf.text[doc]]                     # all text
+@var[pg1; @pdf.text_of[doc; 0]]               # page 0 only
+```
+
+New set: `@re` `@yaml` `@image` `@pdf`.
+
 ### Shortcut plugins — shorter syntax for everything
 
-Three bundled shortcut plugins let you drop the namespace prefix on common
-operations and add hundreds of extra convenience methods. All three load
+Four configurable shortcut plugins let you drop the namespace prefix on common
+operations and add hundreds of extra convenience methods. All four load
 together without conflicts:
 
 ```clpy
@@ -730,12 +759,48 @@ together without conflicts:
 @var[cfg; @toml_load["port = 8080"]]       # @toml_load → @toml.loads
 @var[amt; @money["3.14159"]]               # @money → @decimal.money (2 dp)
 @var[ok; @is_private_ip["10.0.0.1"]]       # @is_private_ip → @ip.is_private
+# cruhon-shortcuts-data also covers @re, @yaml, @image, @pdf (v2.5 namespaces)
 ```
 
 Each plugin is fully configurable in its `mod.json` — pick groups, toggle
 global vs. method aliases, disable specific shortcuts, or add your own.
 
-See [`library.md`](library.md) for the full reference on all 1000+ commands.
+See [`library.md`](library.md) for the full reference on all 1100+ commands.
+
+---
+
+## v2.6 Language Commands — Templates, Pipelines, Spread/Unpack
+
+### Templates
+
+```clpy
+@template[greeting]
+    Hello, {name}! You have {count} messages.
+@end
+
+@var[msg; @render[greeting; name="Alice"; count=5]]
+@print[{msg}]   # Hello, Alice! You have 5 messages.
+```
+
+### Pipelines
+
+```clpy
+@pipeline[normalize; str.strip; str.lower]
+@var[result; @apply[normalize; "  Hello  "]]   # "hello"
+```
+
+### Multi-variable assignment
+
+```clpy
+@let[x; 10; y; 20; z; 30]   # x = 10, y = 20, z = 30
+```
+
+### Spread / unpack
+
+```clpy
+@var[n; @spread[max; [3, 1, 4, 1, 5]]]     # max(*[3,1,4,1,5]) → 5
+@var[r; @unpack[dict; {"a": 1, "b": 2}]]   # dict(**{"a":1,"b":2})
+```
 
 ---
 
