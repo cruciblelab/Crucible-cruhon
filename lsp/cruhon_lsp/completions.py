@@ -167,6 +167,13 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "getpass":    ("Secure password prompts",  ["ask", "password", "user"]),
     "cmath":      ("Complex-number math",      ["complex", "rect", "polar", "phase", "modulus", "conjugate", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "is_nan", "is_inf", "is_finite", "is_close", "pi", "e", "tau", "inf", "nan"]),
     "array":      ("Compact typed arrays",     ["of", "zeros", "range", "to_bytes", "from_bytes", "to_list", "item_size", "typecode", "length", "sum", "min", "max"]),
+    "gc":         ("Garbage-collector control", ["collect", "enable", "disable", "is_enabled", "count", "stats", "threshold", "set_threshold", "objects", "referrers", "referents", "is_tracked", "garbage", "freeze", "unfreeze"]),
+    "inspect":    ("Object introspection",     ["source", "source_lines", "doc", "comments", "file", "module", "signature", "parameters", "mro", "members", "is_function", "is_class", "is_method", "is_module", "is_generator", "is_coroutine", "is_builtin"]),
+    "traceback":  ("Exception formatting",     ["format", "print", "format_exception", "message", "stack", "print_stack"]),
+    "warnings":   ("Warning control",          ["warn", "deprecated", "ignore", "once", "always", "error", "filter", "reset"]),
+    "weakref":    ("Weak references",          ["ref", "proxy", "deref", "is_alive", "count", "refs", "dict", "key_dict", "set"]),
+    "types":      ("Dynamic type helpers",     ["namespace", "readonly", "new_class", "is_function", "is_lambda", "is_method", "is_module", "is_generator", "is_builtin"]),
+    "abc":        ("Abstract base classes",    ["is_abstract", "abstract_methods", "cache_token", "register", "is_subclass", "is_instance"]),
 }
 
 

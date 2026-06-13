@@ -100,6 +100,14 @@ _LIBS: dict[str, str] = {
     "getpass":     _BUILTIN,     # @getpass.* — secure password prompts
     "cmath":       _BUILTIN,     # @cmath.* — complex-number math
     "array":       _BUILTIN,     # @array.* — compact typed arrays
+    # New in v2.8.0 — OS & system (introspection / runtime)
+    "gc":          _BUILTIN,     # @gc.* — garbage-collector control
+    "inspect":     _BUILTIN,     # @inspect.* — live-object introspection
+    "traceback":   _BUILTIN,     # @traceback.* — exception/stack formatting
+    "warnings":    _BUILTIN,     # @warnings.* — warning control
+    "weakref":     _BUILTIN,     # @weakref.* — weak references
+    "types":       _BUILTIN,     # @types.* — dynamic type helpers
+    "abc":         _BUILTIN,     # @abc.* — abstract base class helpers
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -313,6 +321,13 @@ def _register_stdlib():
     from .libs.getpass_     import register as _r_getpass
     from .libs.cmath_       import register as _r_cmath
     from .libs.array_       import register as _r_array
+    from .libs.gc_          import register as _r_gc
+    from .libs.inspect_     import register as _r_inspect
+    from .libs.traceback_   import register as _r_traceback
+    from .libs.warnings_    import register as _r_warnings
+    from .libs.weakref_     import register as _r_weakref
+    from .libs.types_       import register as _r_types
+    from .libs.abc_         import register as _r_abc
     _r_file()
     _r_time()
     _r_date()
@@ -379,5 +394,12 @@ def _register_stdlib():
     _r_getpass()
     _r_cmath()
     _r_array()
+    _r_gc()
+    _r_inspect()
+    _r_traceback()
+    _r_warnings()
+    _r_weakref()
+    _r_types()
+    _r_abc()
 
 _register_stdlib()
