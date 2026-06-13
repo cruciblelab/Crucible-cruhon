@@ -108,6 +108,15 @@ _LIBS: dict[str, str] = {
     "weakref":     _BUILTIN,     # @weakref.* — weak references
     "types":       _BUILTIN,     # @types.* — dynamic type helpers
     "abc":         _BUILTIN,     # @abc.* — abstract base class helpers
+    # New in v2.8.0 — OS & system (system / config)
+    "signal":      _BUILTIN,     # @signal.* — OS signal helpers
+    "mmap":        _BUILTIN,     # @mmap.* — memory-mapped file reads
+    "atexit":      _BUILTIN,     # @atexit.* — exit-time callbacks
+    "locale":      _BUILTIN,     # @locale.* — locale-aware formatting
+    "gettext":     _BUILTIN,     # @gettext.* — message translation
+    "argparse":    _BUILTIN,     # @argparse.* — CLI argument parsing
+    "sysconfig":   _BUILTIN,     # @sysconfig.* — install paths & config
+    "resource":    _BUILTIN,     # @resource.* — process resource usage (Unix)
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -328,6 +337,14 @@ def _register_stdlib():
     from .libs.weakref_     import register as _r_weakref
     from .libs.types_       import register as _r_types
     from .libs.abc_         import register as _r_abc
+    from .libs.signal_      import register as _r_signal
+    from .libs.mmap_        import register as _r_mmap
+    from .libs.atexit_      import register as _r_atexit
+    from .libs.locale_      import register as _r_locale
+    from .libs.gettext_     import register as _r_gettext
+    from .libs.argparse_    import register as _r_argparse
+    from .libs.sysconfig_   import register as _r_sysconfig
+    from .libs.resource_    import register as _r_resource
     _r_file()
     _r_time()
     _r_date()
@@ -401,5 +418,13 @@ def _register_stdlib():
     _r_weakref()
     _r_types()
     _r_abc()
+    _r_signal()
+    _r_mmap()
+    _r_atexit()
+    _r_locale()
+    _r_gettext()
+    _r_argparse()
+    _r_sysconfig()
+    _r_resource()
 
 _register_stdlib()

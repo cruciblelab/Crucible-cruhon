@@ -174,6 +174,14 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "weakref":    ("Weak references",          ["ref", "proxy", "deref", "is_alive", "count", "refs", "dict", "key_dict", "set"]),
     "types":      ("Dynamic type helpers",     ["namespace", "readonly", "new_class", "is_function", "is_lambda", "is_method", "is_module", "is_generator", "is_builtin"]),
     "abc":        ("Abstract base classes",    ["is_abstract", "abstract_methods", "cache_token", "register", "is_subclass", "is_instance"]),
+    "signal":     ("OS signal helpers",        ["number", "name", "describe", "valid", "get", "on", "ignore", "default", "send", "alarm"]),
+    "mmap":       ("Memory-mapped reads",      ["read", "slice", "size", "find", "contains", "count"]),
+    "atexit":     ("Exit-time callbacks",      ["register", "unregister", "run"]),
+    "locale":     ("Locale-aware formatting",  ["get", "set", "encoding", "number", "decimal", "currency", "atof", "atoi"]),
+    "gettext":    ("Message translation",      ["t", "plural", "translation", "install", "find"]),
+    "argparse":   ("CLI argument parsing",     ["parse", "parse_dict", "new", "to_dict"]),
+    "sysconfig":  ("Install paths & config",   ["paths", "path", "path_names", "vars", "var", "platform", "version"]),
+    "resource":   ("Process resource usage",   ["usage", "max_rss", "user_time", "sys_time", "limit", "set_limit", "page_size"]),
 }
 
 
