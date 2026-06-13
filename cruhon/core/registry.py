@@ -117,6 +117,14 @@ _LIBS: dict[str, str] = {
     "argparse":    _BUILTIN,     # @argparse.* — CLI argument parsing
     "sysconfig":   _BUILTIN,     # @sysconfig.* — install paths & config
     "resource":    _BUILTIN,     # @resource.* — process resource usage (Unix)
+    # New in v2.8.0 — networking
+    "socket":      _BUILTIN,     # @socket.* — TCP/IP sockets
+    "ssl":         _BUILTIN,     # @ssl.* — TLS/SSL helpers
+    "ftp":         _BUILTIN,     # @ftp.* — FTP client
+    "pop3":        _BUILTIN,     # @pop3.* — POP3 mail retrieval
+    "xmlrpc":      _BUILTIN,     # @xmlrpc.* — XML-RPC client
+    "httpserver":  _BUILTIN,     # @httpserver.* — tiny HTTP server
+    "selectors":   _BUILTIN,     # @selectors.* — I/O multiplexing
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -345,6 +353,13 @@ def _register_stdlib():
     from .libs.argparse_    import register as _r_argparse
     from .libs.sysconfig_   import register as _r_sysconfig
     from .libs.resource_    import register as _r_resource
+    from .libs.socket_      import register as _r_socket
+    from .libs.ssl_         import register as _r_ssl
+    from .libs.ftp_         import register as _r_ftp
+    from .libs.pop3_        import register as _r_pop3
+    from .libs.xmlrpc_      import register as _r_xmlrpc
+    from .libs.httpserver_  import register as _r_httpserver
+    from .libs.selectors_   import register as _r_selectors
     _r_file()
     _r_time()
     _r_date()
@@ -426,5 +441,12 @@ def _register_stdlib():
     _r_argparse()
     _r_sysconfig()
     _r_resource()
+    _r_socket()
+    _r_ssl()
+    _r_ftp()
+    _r_pop3()
+    _r_xmlrpc()
+    _r_httpserver()
+    _r_selectors()
 
 _register_stdlib()

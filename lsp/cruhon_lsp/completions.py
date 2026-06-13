@@ -182,6 +182,13 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "argparse":   ("CLI argument parsing",     ["parse", "parse_dict", "new", "to_dict"]),
     "sysconfig":  ("Install paths & config",   ["paths", "path", "path_names", "vars", "var", "platform", "version"]),
     "resource":   ("Process resource usage",   ["usage", "max_rss", "user_time", "sys_time", "limit", "set_limit", "page_size"]),
+    "socket":     ("TCP/IP sockets",           ["hostname", "fqdn", "host_to_ip", "ip_to_host", "resolve", "connect", "send", "recv", "close", "is_open", "free_port"]),
+    "ssl":        ("TLS/SSL helpers",          ["context", "unverified", "server_context", "wrap", "server_cert", "cert_dict", "verify_paths"]),
+    "ftp":        ("FTP client",               ["new", "connect", "connect_tls", "quit", "list", "details", "pwd", "cwd", "size", "download", "upload", "delete"]),
+    "pop3":       ("POP3 mail retrieval",      ["connect", "connect_ssl", "login", "quit", "count", "size", "list", "get", "text", "delete"]),
+    "xmlrpc":     ("XML-RPC client",           ["client", "call", "dumps", "loads", "binary", "datetime"]),
+    "httpserver": ("Tiny HTTP server",         ["files", "server", "handler", "handle_one", "serve", "port", "close"]),
+    "selectors":  ("I/O multiplexing",         ["new", "close", "watch_read", "watch_write", "register", "unwatch", "read", "write", "wait"]),
 }
 
 
