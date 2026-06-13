@@ -71,7 +71,7 @@ _LINT_MAX_NEST = 8
 _BLOCK_OPENERS = {
     "if", "for", "while", "func", "class", "try", "with", "match", "async",
     "module", "repeat", "foreach", "retry", "timeout", "macro", "template",
-    "decorator", "raw",
+    "decorator", "raw", "dataclass",
 }
 
 

@@ -119,13 +119,13 @@ class Parser:
             "swap":     self._parse_swap,
         }
         self._block_commands = {
-            "if":      self._parse_if,
-            "for":     self._parse_for,
-            "while":   self._parse_while,
-            "func":    self._parse_func,
-            "class":   self._parse_class,
-            "try":     self._parse_try,
-            "async":   self._parse_async_func,
+            "if":        self._parse_if,
+            "for":       self._parse_for,
+            "while":     self._parse_while,
+            "func":      self._parse_func,
+            "class":     self._parse_class,
+            "try":       self._parse_try,
+            "async":     self._parse_async_func,
             "repeat":    self._parse_repeat,
             "raw":       self._parse_raw,
             "with":      self._parse_with,
@@ -137,6 +137,7 @@ class Parser:
             "timeout":   self._parse_timeout,
             "macro":     self._parse_macro,
             "template":  self._parse_template,
+            "dataclass": self._parse_dataclass,
         }
         self._commands.update({
             "export":   self._parse_export,
@@ -149,6 +150,7 @@ class Parser:
             "unpack":   self._parse_unpack,
             "apply":    self._parse_apply,
             "render":   self._parse_render,
+            "type":     self._parse_type,
         })
 
     # ── Token navigation ──────────────────────────────────────
@@ -740,17 +742,39 @@ class Parser:
         line = self.current.line
         self.advance()  # @var
         args = self.parse_args()
-        if len(args) < 2:
+        if not args:
+            raise ParseError("@var requires [name; value] or [name: type; value]", line)
+        raw_name = args[0]
+        type_hint = None
+        if ": " in raw_name:
+            name_part, type_part = raw_name.split(": ", 1)
+            name = name_part.strip()
+            type_hint = type_part.strip()
+        else:
+            name = raw_name
+        value = args[1] if len(args) > 1 else None
+        if value is None and type_hint is None:
             raise ParseError("@var requires [name; value]", line)
-        return VarNode(name=args[0], value=args[1], line=line)
+        return VarNode(name=name, value=value, type_hint=type_hint, line=line)
 
     def _parse_const(self) -> ConstNode:
         line = self.current.line
         self.advance()  # @const
         args = self.parse_args()
-        if len(args) < 2:
+        if not args:
+            raise ParseError("@const requires [NAME; value] or [NAME: type; value]", line)
+        raw_name = args[0]
+        type_hint = None
+        if ": " in raw_name:
+            name_part, type_part = raw_name.split(": ", 1)
+            name = name_part.strip()
+            type_hint = type_part.strip()
+        else:
+            name = raw_name
+        value = args[1] if len(args) > 1 else None
+        if value is None and type_hint is None:
             raise ParseError("@const requires [NAME; value]", line)
-        return ConstNode(name=args[0], value=args[1], line=line)
+        return ConstNode(name=name, value=value, type_hint=type_hint, line=line)
 
     def _parse_assert(self) -> AssertNode:
         line = self.current.line
@@ -1014,7 +1038,14 @@ class Parser:
             raise ParseError("@func requires at least a name", line)
 
         name = args[0]
-        params = list(args[1:])
+        return_type = None
+        params = []
+        for p in args[1:]:
+            stripped = p.strip()
+            if stripped.startswith("return="):
+                return_type = stripped[len("return="):].strip()
+            else:
+                params.append(p)
         decs = self._pending_decorators[:]
         self._pending_decorators.clear()
 
@@ -1027,7 +1058,8 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return FuncNode(name=name, params=params, body=body, line=line, decorators=decs)
+        return FuncNode(name=name, params=params, body=body, line=line,
+                        decorators=decs, return_type=return_type)
 
     def _parse_async_func(self) -> FuncNode:
         line = self.current.line
@@ -1037,7 +1069,14 @@ class Parser:
             raise ParseError("@async requires at least a name", line)
 
         name = args[0]
-        params = list(args[1:])
+        return_type = None
+        params = []
+        for p in args[1:]:
+            stripped = p.strip()
+            if stripped.startswith("return="):
+                return_type = stripped[len("return="):].strip()
+            else:
+                params.append(p)
         decs = self._pending_decorators[:]
         self._pending_decorators.clear()
 
@@ -1050,7 +1089,8 @@ class Parser:
         if self.current.type == "AT_CMD" and self.current.value == "end":
             self.advance()
 
-        return FuncNode(name=name, params=params, body=body, is_async=True, line=line, decorators=decs)
+        return FuncNode(name=name, params=params, body=body, is_async=True, line=line,
+                        decorators=decs, return_type=return_type)
 
     def _parse_class(self) -> ClassNode:
         line = self.current.line
@@ -1074,6 +1114,30 @@ class Parser:
             self.advance()
 
         return ClassNode(name=name, parent=parent, body=body, line=line, decorators=decs)
+
+    def _parse_type(self) -> TypeAliasNode:
+        line = self.current.line
+        self.advance()  # @type
+        args = self.parse_args()
+        if len(args) < 2:
+            raise ParseError("@type requires [Name; Alias]", line)
+        return TypeAliasNode(name=args[0].strip(), alias=args[1].strip(), line=line)
+
+    def _parse_dataclass(self) -> DataclassNode:
+        line = self.current.line
+        self.advance()  # @dataclass
+        args = self.parse_args()
+        if not args:
+            raise ParseError("@dataclass requires a name", line)
+        name = args[0].strip()
+        parent = args[1].strip() if len(args) > 1 else None
+        self.skip_newlines()
+        if self.current.type == "INDENT":
+            self.advance()
+        body = self._parse_block()
+        if self.current.type == "AT_CMD" and self.current.value == "end":
+            self.advance()
+        return DataclassNode(name=name, parent=parent, body=body, line=line)
 
     def _parse_try(self) -> TryNode:
         line = self.current.line

@@ -1,5 +1,5 @@
 {
-  "current": "2.6.0",
+  "current": "2.7.0",
   "spec_version": "1.0",
   "frozen": false,
   "semantic_freeze": {
@@ -70,6 +70,11 @@
       "version": "2.6.0",
       "status": "released",
       "summary": "v2.6.0: Language — @template[name]...@end + @render[name; k=v] (string template system with format_map), @spread[fn; iter] + @unpack[fn; dict] (positional/keyword spread, statement + inline), @let[x; v1; y; v2; ...] (multi-variable assignment), @pipeline[name; fn1; fn2; ...] + @apply[name; value] (function composition pipelines). LSP — VS Code + Neovim extensions via pygls 2.x (completions, diagnostics, hover, symbols, go-to-definition). Bug fix: _apply_ast_hooks no longer corrupts string body fields. cruhon-shortcuts-data v1.1.0 adds @re/@yaml/@image/@pdf shortcuts. 1505-test suite."
+    },
+    {
+      "version": "2.7.0",
+      "status": "released",
+      "summary": "v2.7.0: Type system — @var[x: int; 42] and @const[MAX: int; 100] emit Python type annotations. @func[name; a: int; b: int; return=int] emits typed signatures with -> return type. @type[Name; Alias] declares type aliases. @dataclass[Name]...@end block emits @dataclass class with annotated fields. REPL — readline history (~/.cruhon_history, persistent across sessions), tab-autocomplete for all @commands and :meta-commands, new :history [n], :load <file>, :type <expr> commands. LSP — @dataclass added to block openers; @type and @dataclass completions. 1536-test suite."
     }
   ],
   "frozen_at": null,

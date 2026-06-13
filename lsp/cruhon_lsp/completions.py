@@ -9,8 +9,8 @@ CIK = types.CompletionItemKind
 # (name, kind, detail/signature, documentation)
 COMMANDS: list[tuple[str, types.CompletionItemKind, str, str]] = [
     # ── Assignment ─────────────────────────────────────────────
-    ("var",      CIK.Variable, "@var[name; value]",                 "Declare or assign a variable."),
-    ("const",    CIK.Variable, "@const[NAME; value]",               "Declare a constant (uppercase by convention)."),
+    ("var",      CIK.Variable, "@var[name; value]",                 "Declare or assign a variable. Type annotation: @var[name: type; value] or @var[name: type]."),
+    ("const",    CIK.Variable, "@const[NAME; value]",               "Declare a constant (uppercase by convention). Type annotation: @const[NAME: type; value]."),
     ("let",      CIK.Function, "@let[x; v1; y; v2; ...]",           "Assign multiple variables in one command."),
     ("inc",      CIK.Function, "@inc[name]",                        "Increment a variable by 1, or by n: @inc[x; 2]."),
     ("dec",      CIK.Function, "@dec[name]",                        "Decrement a variable by 1, or by n: @dec[x; 2]."),
@@ -88,6 +88,9 @@ COMMANDS: list[tuple[str, types.CompletionItemKind, str, str]] = [
     ("when",     CIK.Function, "@when[condition; if_true; if_false]", "Ternary (inline conditional): (if_true if cond else if_false)."),
     ("lambda",   CIK.Function, "@lambda[params; body]",             "Create a lambda: (lambda params: body)."),
     ("fetch",    CIK.Function, "@fetch[url]",                       "HTTP GET (inline): requests.get(url)."),
+    # ── Type system (v2.7) ─────────────────────────────────────
+    ("type",      CIK.Keyword,  "@type[Name; Alias]",                "Type alias declaration. Emits Name = Alias."),
+    ("dataclass", CIK.Class,    "@dataclass[Name]\n    @var[field: type]\n@end", "Define a dataclass. Fields use @var[name: type] or @var[name: type; default]."),
 ]
 
 # Namespace → (description, [methods])

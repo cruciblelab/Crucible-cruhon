@@ -201,6 +201,30 @@ def cmd_libs(args):
 # REPL — interactive Cruhon session
 # ─────────────────────────────────────────────────────────────
 
+def _repl_setup_readline(completions: list[str]) -> None:
+    """Enable readline history and tab-completion (no-op if readline unavailable)."""
+    try:
+        import readline
+        import atexit
+        import os
+        hist = os.path.expanduser("~/.cruhon_history")
+        try:
+            readline.read_history_file(hist)
+        except FileNotFoundError:
+            pass
+        readline.set_history_length(1000)
+        atexit.register(readline.write_history_file, hist)
+
+        def _completer(text, state):
+            matches = [c for c in completions if c.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        readline.set_completer(_completer)
+        readline.parse_and_bind("tab: complete")
+    except ImportError:
+        pass  # readline not available on this platform
+
+
 def cmd_repl(args):
     from cruhon.core.parser import parse, get_parser
     from cruhon.core.lexer import get_lexer
@@ -217,6 +241,15 @@ def cmd_repl(args):
     block_openers = set(parser._block_commands.keys()) - {"decorator"}
     for cmds in list_block_commands().values():
         block_openers.update(cmds)
+
+    # Readline history + tab-complete (all @commands + meta-commands)
+    at_completions = sorted(
+        ["@" + c for c in parser._commands]
+        + ["@" + c for c in parser._block_commands]
+    )
+    meta_completions = [":quit", ":q", ":exit", ":help", ":h", ":clear",
+                        ":vars", ":history", ":load", ":type"]
+    _repl_setup_readline(at_completions + meta_completions)
 
     # Persistent exec namespace — definitions and variables survive across lines.
     ns_registry = get_namespace_registry()
@@ -253,9 +286,12 @@ def cmd_repl(args):
             print("  \033[90mbye\033[0m")
             break
         if depth == 0 and stripped in (":help", ":h"):
-            print("  \033[36m:quit/:q\033[0m   exit    "
-                  "\033[36m:clear\033[0m   reset namespace    "
-                  "\033[36m:vars\033[0m   show defined names")
+            print("  \033[36m:quit/:q\033[0m      exit")
+            print("  \033[36m:clear\033[0m        reset namespace")
+            print("  \033[36m:vars\033[0m         show defined names")
+            print("  \033[36m:history [n]\033[0m  show last n history entries (default 20)")
+            print("  \033[36m:load <file>\033[0m  run a .clpy file in the current session")
+            print("  \033[36m:type <expr>\033[0m  show the type of an expression")
             print("  Type Cruhon normally. Blocks (@for, @func, ...) buffer until @end.\n")
             continue
         if depth == 0 and stripped == ":clear":
@@ -266,6 +302,33 @@ def cmd_repl(args):
         if depth == 0 and stripped == ":vars":
             names = [k for k in exec_globals if not k.startswith("__") and k not in reserved]
             print("  " + ("  ".join(sorted(names)) if names else "\033[90m(none)\033[0m"))
+            continue
+        if depth == 0 and (stripped == ":history" or stripped.startswith(":history ")):
+            try:
+                import readline as _rl
+                parts = stripped.split(None, 1)
+                n = int(parts[1]) if len(parts) > 1 else 20
+                total = _rl.get_current_history_length()
+                start = max(1, total - n + 1)
+                for i in range(start, total + 1):
+                    print(f"  \033[90m{i:4d}\033[0m  {_rl.get_history_item(i)}")
+            except ImportError:
+                print("  \033[90m(readline not available)\033[0m")
+            continue
+        if depth == 0 and stripped.startswith(":load "):
+            load_path = stripped[6:].strip().strip('"\'')
+            try:
+                load_src = Path(load_path).read_text(encoding="utf-8")
+                _repl_eval(load_src, exec_globals, parse, transpile)
+                print(f"  \033[90mloaded {load_path}\033[0m")
+            except FileNotFoundError:
+                print(f"  \033[31m✗ file not found: {load_path}\033[0m")
+            except Exception as exc:
+                print(f"  \033[31m✗ {type(exc).__name__}: {exc}\033[0m")
+            continue
+        if depth == 0 and stripped.startswith(":type "):
+            expr_src = stripped[6:].strip()
+            _repl_eval(f"@print[type({expr_src}).__name__]", exec_globals, parse, transpile)
             continue
 
         # Track block depth

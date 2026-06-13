@@ -38,16 +38,18 @@ class ProgramNode(Node):
 
 @dataclass
 class VarNode(Node):
-    """@var[name; value]"""
+    """@var[name; value] or @var[name: type; value] or @var[name: type]"""
     name: str = ""
     value: Any = None
+    type_hint: Optional[str] = None
 
 
 @dataclass
 class ConstNode(Node):
-    """@const[NAME; value] — constant declaration (convention: uppercase)"""
+    """@const[NAME; value] or @const[NAME: type; value] — constant declaration"""
     name: str = ""
     value: Any = None
+    type_hint: Optional[str] = None
 
 
 @dataclass
@@ -206,12 +208,13 @@ class RepeatNode(Node):
 
 @dataclass
 class FuncNode(Node):
-    """@func[name; param1; param2] ... @end"""
+    """@func[name; param1: type; ...; return=type] ... @end"""
     name: str = ""
     params: List[str] = field(default_factory=list)
     body: List[Node] = field(default_factory=list)
     is_async: bool = False
     decorators: List[str] = field(default_factory=list)
+    return_type: Optional[str] = None
 
 
 @dataclass
@@ -460,6 +463,21 @@ class PluginBlockNode(Node):
     plugin_name: str = ""
     args: List[str] = field(default_factory=list)
     kwargs: dict = field(default_factory=dict)
+    body: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class TypeAliasNode(Node):
+    """@type[Name; Alias] — type alias declaration"""
+    name: str = ""
+    alias: str = ""
+
+
+@dataclass
+class DataclassNode(Node):
+    """@dataclass[Name; parent?] ... @end — dataclass block"""
+    name: str = ""
+    parent: Optional[str] = None
     body: List[Node] = field(default_factory=list)
 
 

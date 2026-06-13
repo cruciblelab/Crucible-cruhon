@@ -490,12 +490,21 @@ class Transpiler:
 
     def visit_VarNode(self, node: VarNode) -> str:
         if "," in node.name:
-            # Tuple unpacking — bypass _eval_value to avoid quote-wrapping
             return self._line(f"{node.name} = {node.value}", node.line)
+        if node.type_hint is not None:
+            if node.value is None:
+                return self._line(f"{node.name}: {node.type_hint}", node.line)
+            value = self._eval_value(str(node.value), "expr")
+            return self._line(f"{node.name}: {node.type_hint} = {value}", node.line)
         value = self._eval_value(str(node.value), "expr")
         return self._line(f"{node.name} = {value}", node.line)
 
     def visit_ConstNode(self, node: ConstNode) -> str:
+        if node.type_hint is not None:
+            if node.value is None:
+                return self._line(f"{node.name}: {node.type_hint}", node.line)
+            value = self._eval_value(str(node.value), "expr")
+            return self._line(f"{node.name}: {node.type_hint} = {value}  # const", node.line)
         value = self._eval_value(str(node.value), "expr")
         return self._line(f"{node.name} = {value}  # const", node.line)
 
@@ -717,15 +726,32 @@ class Transpiler:
 
     def visit_FuncNode(self, node: FuncNode) -> str:
         params = list(node.params)
+        # Legacy: last param starting with "->" is the return type
         return_type = ""
         if params and params[-1].strip().startswith("->"):
             return_type = " " + params[-1].strip()
             params = params[:-1]
+        # New: explicit return_type field (set via return=type named arg)
+        if node.return_type:
+            return_type = f" -> {node.return_type}"
         params_str = ", ".join(params)
         prefix = "async " if node.is_async else ""
         lines = [self._line(f"@{d}", node.line) for d in (node.decorators or [])]
         lines.append(self._line(f"{prefix}def {node.name}({params_str}){return_type}:", node.line))
         lines.append(self._block(node.body))
+        return "\n".join(lines)
+
+    def visit_TypeAliasNode(self, node) -> str:
+        return self._line(f"{node.name} = {node.alias}  # type alias", node.line)
+
+    def visit_DataclassNode(self, node) -> str:
+        parent = f"({node.parent})" if node.parent else ""
+        lines = [
+            self._line("from dataclasses import dataclass", node.line),
+            self._line("@dataclass", node.line),
+            self._line(f"class {node.name}{parent}:", node.line),
+            self._block(node.body),
+        ]
         return "\n".join(lines)
 
     def visit_ClassNode(self, node: ClassNode) -> str:
