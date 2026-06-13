@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 
 
-CRUHON_VERSION = "2.6.0"
+CRUHON_VERSION = "2.7.0"
 
 BANNER = f"""
   \033[36m╔═══════════════════════════╗
@@ -809,6 +809,25 @@ def _cmd_new_plugin(name: str):
     print(f"  \033[90m  Edit mods/{name}/__init__.py to add commands\033[0m")
 
 
+def cmd_cache(args):
+    from cruhon.core import cache as _cache
+    cache_dir = Path.cwd() / ".cruhon_cache"
+
+    if getattr(args, "clear", False):
+        n = _cache.clear(cache_dir)
+        print(f"  \033[32m✓ Cleared {n} cache file(s) from {cache_dir}\033[0m")
+        return
+
+    # Default: show stats
+    s = _cache.stats(cache_dir)
+    if s["files"] == 0:
+        print(f"  \033[90mNo cache files in {cache_dir}\033[0m")
+    else:
+        size_kb = s["bytes"] / 1024
+        print(f"  \033[36m{s['files']} cache file(s)\033[0m  "
+              f"\033[90m{size_kb:.1f} KB  →  {cache_dir}\033[0m")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="cruhon",
@@ -892,6 +911,10 @@ def main():
     p_new.add_argument("name", help="Project or plugin name")
     p_new.add_argument("--plugin", action="store_true", help="Create a plugin skeleton in mods/<name>/")
     p_new.set_defaults(fn=cmd_new)
+
+    p_cache = sub.add_parser("cache", help="Manage the transpile cache (.cruhon_cache/)")
+    p_cache.add_argument("--clear", action="store_true", help="Delete all cache files")
+    p_cache.set_defaults(fn=cmd_cache)
 
     args = parser.parse_args()
 

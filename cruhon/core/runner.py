@@ -373,6 +373,28 @@ def _show_python_end():
 # RUN
 # ─────────────────────────────────────────────────────────────
 
+def _exec_globals(ns_registry) -> dict:
+    """Build the standard exec globals dict."""
+    _block_hooks = get_transpiler()._block_hooks
+
+    def _ph(event: str, plugin_name: str, args=None):
+        for fn in _block_hooks.get(event, []):
+            fn(plugin_name, args or [])
+
+    _RESERVED = {"__name__", "__ns__", "__ctx__", "__ctx_stack__", "__ph__"}
+    g = {
+        "__name__": "__main__",
+        "__ns__": ns_registry,
+        "__ctx__": {},
+        "__ctx_stack__": [],
+        "__ph__": _ph,
+    }
+    for _k, _v in get_inject_globals().items():
+        if _k not in _RESERVED:
+            g[_k] = _v
+    return g
+
+
 def run_source(
     source: str,
     filename: str = "<clpy>",
@@ -380,6 +402,7 @@ def run_source(
     show_python: bool = False,
     base_dir: Optional[Path] = None,
     _root_path: Optional[Path] = None,
+    _no_cache: bool = False,
 ) -> str:
     """
     Run Cruhon source code. Returns the generated Python code.
@@ -388,6 +411,7 @@ def run_source(
     debug: legacy alias for show_python.
     base_dir: directory for resolving @include paths.
     _root_path: absolute path of the root file (for circular include detection).
+    _no_cache: bypass cache even if available.
     """
     _show = show_python or debug
     if base_dir is None:
@@ -399,6 +423,51 @@ def run_source(
     python_code = ""  # defined early so error handlers can reference it
 
     dlog.run_start(filename, source)
+
+    # ── Cache fast path ───────────────────────────────────────────────────────
+    # Skip cache when: show_python is on, running inline source ("<clpy>"),
+    # or _no_cache is explicitly requested.
+    _cache_enabled = (
+        not _show
+        and not _no_cache
+        and not filename.startswith("<")
+    )
+    _cache_key: Optional[str] = None
+    _cache_dir: Optional[Path] = None
+
+    if _cache_enabled:
+        try:
+            from . import cache as _cache
+            from .mod_loader import get_load_order
+            from cruhon import __version__ as _cruhon_ver
+
+            _src_path = Path(filename).resolve()
+            _cache_dir = _src_path.parent / ".cruhon_cache"
+
+            _mod_fp = "|".join(
+                f"{e['name']}:{e.get('version', '')}"
+                for e in sorted(get_load_order(), key=lambda e: e["name"])
+            )
+            _cache_key = _cache.build_key(source, base_dir, _cruhon_ver, _mod_fp)
+            _code_obj = _cache.try_load(_src_path, _cache_key, _cache_dir)
+
+            if _code_obj is not None:
+                # Cache hit — skip parse/transpile entirely
+                fire_hook("before_run", source=source)
+                fire_hook("before_exec", python_code="")
+                from .namespace_runtime import get_namespace_registry
+                ns_registry = get_namespace_registry()
+                ns_registry.init_all()
+                try:
+                    exec(_code_obj, _exec_globals(ns_registry))
+                finally:
+                    ns_registry.destroy_all()
+                fire_hook("after_run", source=source, python_code="")
+                dlog.run_ok(filename, "", (time.perf_counter() - _t0) * 1000.0)
+                return ""
+        except Exception:
+            _cache_enabled = False  # graceful degradation — proceed normally
+    # ─────────────────────────────────────────────────────────────────────────
 
     try:
         fire_hook("before_run", source=source)
@@ -441,36 +510,30 @@ def run_source(
         if _is_async_code(python_code):
             python_code = _make_async_runner(python_code)
 
+        # ── Save to cache before exec ─────────────────────────────────────
+        if _cache_enabled and _cache_key and _cache_dir:
+            try:
+                from . import cache as _cache
+                _cache.save(
+                    Path(filename).resolve(),
+                    _cache_key,
+                    python_code,
+                    filename,
+                    _cache_dir,
+                )
+            except Exception:
+                pass
+        # ─────────────────────────────────────────────────────────────────
+
         # Execute — inject runtime globals
         from .namespace_runtime import get_namespace_registry
         ns_registry = get_namespace_registry()
         ns_registry.init_all()  # fire init hooks before exec
 
-        # Build __ph__ (plugin hook runner) from registered block hooks
-        _block_hooks = get_transpiler()._block_hooks
-
-        def _ph(event: str, plugin_name: str, args=None):
-            for fn in _block_hooks.get(event, []):
-                fn(plugin_name, args or [])
-
-        # Build exec globals: fixed builtins + plugin injections
-        # Reserved keys cannot be overridden by api.inject()
-        _RESERVED = {"__name__", "__ns__", "__ctx__", "__ctx_stack__", "__ph__"}
-        exec_globals = {
-            "__name__": "__main__",
-            "__ns__": ns_registry,
-            "__ctx__": {},
-            "__ctx_stack__": [],
-            "__ph__": _ph,
-        }
-        for _k, _v in get_inject_globals().items():
-            if _k not in _RESERVED:
-                exec_globals[_k] = _v
-
         try:
             exec(
                 compile(python_code, f"<cruhon:{filename}>", "exec"),
-                exec_globals
+                _exec_globals(ns_registry),
             )
         finally:
             ns_registry.destroy_all()  # fire destroy hooks after exec
@@ -555,6 +618,7 @@ def run_file(
     path: str | Path,
     debug: bool = False,
     show_python: bool = False,
+    no_cache: bool = False,
 ) -> str:
     """Load and run a .clpy file."""
     path = Path(path)
@@ -577,6 +641,7 @@ def run_file(
         show_python=show_python,
         base_dir=path.parent,
         _root_path=path.resolve(),
+        _no_cache=no_cache,
     )
 
 
