@@ -192,6 +192,9 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "html":       ("HTML escape & scrape",     ["escape", "unescape", "strip_tags", "text", "links", "images", "tags"]),
     "webbrowser": ("Open URLs in a browser",   ["open", "open_new", "open_tab", "get"]),
     "mimetypes":  ("Guess MIME types",         ["guess", "full", "is_text", "is_image", "extension", "extensions", "add", "types"]),
+    "multiprocessing": ("Process parallelism", ["cpus", "pool", "map", "starmap", "process", "queue", "manager", "lock"]),
+    "futures":    ("Thread/process pools",     ["threads", "processes", "shutdown", "thread_map", "process_map", "submit", "result", "done", "wait"]),
+    "sched":      ("Event scheduling",         ["new", "run", "after", "at", "cancel", "empty", "queue"]),
 }
 
 

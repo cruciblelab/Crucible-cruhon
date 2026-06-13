@@ -129,6 +129,10 @@ _LIBS: dict[str, str] = {
     "html":        _BUILTIN,     # @html.* — HTML escaping & light scraping
     "webbrowser":  _BUILTIN,     # @webbrowser.* — open URLs in a browser
     "mimetypes":   _BUILTIN,     # @mimetypes.* — guess MIME types
+    # New in v2.8.0 — concurrency
+    "multiprocessing": _BUILTIN, # @multiprocessing.* — process parallelism
+    "futures":     _BUILTIN,     # @futures.* — thread/process pools
+    "sched":       _BUILTIN,     # @sched.* — event scheduling
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -367,6 +371,9 @@ def _register_stdlib():
     from .libs.html_        import register as _r_html
     from .libs.webbrowser_  import register as _r_webbrowser
     from .libs.mimetypes_   import register as _r_mimetypes
+    from .libs.multiprocessing_ import register as _r_multiprocessing
+    from .libs.futures_     import register as _r_futures
+    from .libs.sched_       import register as _r_sched
     _r_file()
     _r_time()
     _r_date()
@@ -458,5 +465,8 @@ def _register_stdlib():
     _r_html()
     _r_webbrowser()
     _r_mimetypes()
+    _r_multiprocessing()
+    _r_futures()
+    _r_sched()
 
 _register_stdlib()
