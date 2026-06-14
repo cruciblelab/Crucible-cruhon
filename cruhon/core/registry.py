@@ -138,6 +138,15 @@ _LIBS: dict[str, str] = {
     "profile":     _BUILTIN,     # @profile.* — deterministic profiling
     "doctest":     _BUILTIN,     # @doctest.* — docstring example tests
     "unittest":    _BUILTIN,     # @unittest.* — run TestCase classes
+    # New in v2.8.0 — developer tools
+    "ast":         _BUILTIN,     # @ast.* — Python source ↔ syntax tree
+    "dis":         _BUILTIN,     # @dis.* — bytecode disassembler
+    "keyword":     _BUILTIN,     # @keyword.* — keyword inspection
+    "importlib":   _BUILTIN,     # @importlib.* — dynamic import helpers
+    # New in v2.8.0 — other utilities
+    "graphlib":    _BUILTIN,     # @graphlib.* — topological sorting
+    "reprlib":     _BUILTIN,     # @reprlib.* — truncating repr
+    "tracemalloc": _BUILTIN,     # @tracemalloc.* — memory allocation tracing
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -383,6 +392,13 @@ def _register_stdlib():
     from .libs.profile_     import register as _r_profile
     from .libs.doctest_     import register as _r_doctest
     from .libs.unittest_    import register as _r_unittest
+    from .libs.ast_         import register as _r_ast
+    from .libs.dis_         import register as _r_dis
+    from .libs.keyword_     import register as _r_keyword
+    from .libs.importlib_   import register as _r_importlib
+    from .libs.graphlib_    import register as _r_graphlib
+    from .libs.reprlib_     import register as _r_reprlib
+    from .libs.tracemalloc_ import register as _r_tracemalloc
     _r_file()
     _r_time()
     _r_date()
@@ -481,5 +497,12 @@ def _register_stdlib():
     _r_profile()
     _r_doctest()
     _r_unittest()
+    _r_ast()
+    _r_dis()
+    _r_keyword()
+    _r_importlib()
+    _r_graphlib()
+    _r_reprlib()
+    _r_tracemalloc()
 
 _register_stdlib()

@@ -199,6 +199,13 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "profile":    ("Deterministic profiling",  ["run", "calls", "time", "print", "dump"]),
     "doctest":    ("Docstring example tests",  ["run", "passed", "examples", "module", "object"]),
     "unittest":   ("Run TestCase classes",     ["run", "passed", "count", "failures", "suite", "run_suite", "discover"]),
+    "ast":        ("Python source ↔ AST",     ["parse", "dump", "unparse", "compile", "literal", "walk", "node_types", "names"]),
+    "dis":        ("Bytecode disassembler",    ["disasm", "instructions", "opnames", "stack_size", "consts", "names", "code"]),
+    "keyword":    ("Keyword inspection",       ["is_keyword", "is_soft", "all", "soft", "count"]),
+    "importlib":  ("Dynamic import helpers",   ["load", "attr", "reload", "spec", "find", "origin"]),
+    "graphlib":   ("Topological sorting",      ["sort", "sort_groups", "is_dag", "new", "add", "ready", "done"]),
+    "reprlib":    ("Truncating repr",          ["repr", "short", "recursive"]),
+    "tracemalloc": ("Memory allocation trace", ["start", "stop", "is_tracing", "snapshot", "top", "diff", "current"]),
 }
 
 
