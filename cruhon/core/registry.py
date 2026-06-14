@@ -147,6 +147,13 @@ _LIBS: dict[str, str] = {
     "graphlib":    _BUILTIN,     # @graphlib.* — topological sorting
     "reprlib":     _BUILTIN,     # @reprlib.* — truncating repr
     "tracemalloc": _BUILTIN,     # @tracemalloc.* — memory allocation tracing
+    # New in v2.8.0 — file management, config, system utilities
+    "shutil":      _BUILTIN,     # @shutil.* — high-level file operations
+    "filecmp":     _BUILTIN,     # @filecmp.* — file and directory comparison
+    "configparser": _BUILTIN,    # @configparser.* — INI config file handling
+    "errno":       _BUILTIN,     # @errno.* — OS error-code helpers
+    "linecache":   _BUILTIN,     # @linecache.* — cached source-line retrieval
+    "numbers":     _BUILTIN,     # @numbers.* — numeric-tower ABC checks
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -399,6 +406,12 @@ def _register_stdlib():
     from .libs.graphlib_    import register as _r_graphlib
     from .libs.reprlib_     import register as _r_reprlib
     from .libs.tracemalloc_ import register as _r_tracemalloc
+    from .libs.shutil_      import register as _r_shutil
+    from .libs.filecmp_     import register as _r_filecmp
+    from .libs.configparser_ import register as _r_configparser
+    from .libs.errno_       import register as _r_errno
+    from .libs.linecache_   import register as _r_linecache
+    from .libs.numbers_     import register as _r_numbers
     _r_file()
     _r_time()
     _r_date()
@@ -504,5 +517,11 @@ def _register_stdlib():
     _r_graphlib()
     _r_reprlib()
     _r_tracemalloc()
+    _r_shutil()
+    _r_filecmp()
+    _r_configparser()
+    _r_errno()
+    _r_linecache()
+    _r_numbers()
 
 _register_stdlib()

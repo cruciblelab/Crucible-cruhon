@@ -206,6 +206,12 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "graphlib":   ("Topological sorting",      ["sort", "sort_groups", "is_dag", "new", "add", "ready", "done"]),
     "reprlib":    ("Truncating repr",          ["repr", "short", "recursive"]),
     "tracemalloc": ("Memory allocation trace", ["start", "stop", "is_tracing", "snapshot", "top", "diff", "current"]),
+    "shutil":     ("High-level file ops",      ["copy", "copy_data", "copy_tree", "copy2", "move", "rm", "rmtree", "disk_usage", "free", "which", "unpack", "make_archive"]),
+    "filecmp":    ("File/dir comparison",      ["equal", "shallow", "dircmp", "same_files", "diff_files", "left_only", "right_only"]),
+    "configparser": ("INI config files",       ["load", "loads", "new", "get", "getint", "getfloat", "getbool", "sections", "keys", "items", "has", "set", "add_section", "save", "dumps"]),
+    "errno":      ("OS error-code helpers",    ["name", "description", "code", "all", "ENOENT", "EEXIST", "EACCES", "EPERM", "ENOTEMPTY", "EINVAL", "EBADF"]),
+    "linecache":  ("Cached source lines",      ["line", "lines", "clear"]),
+    "numbers":    ("Numeric-tower ABC checks", ["is_number", "is_complex", "is_real", "is_rational", "is_integral"]),
 }
 
 
