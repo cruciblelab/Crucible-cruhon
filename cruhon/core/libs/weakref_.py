@@ -20,6 +20,9 @@ back-references that must not create cycles.
   @weakref.dict[]                 → WeakValueDictionary
   @weakref.key_dict[]             → WeakKeyDictionary
   @weakref.set[]                  → WeakSet
+
+━━━ FINALIZE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @weakref.finalize[obj; fn]      → call fn when obj is garbage-collected
 """
 from ..registry import register_lib, register_lib_call
 
@@ -52,3 +55,7 @@ def register():
         lambda a: f"{_WR}.WeakKeyDictionary()")
     register_lib_call("weakref", "set",
         lambda a: f"{_WR}.WeakSet()")
+
+    # ── Finalize ──────────────────────────────────────────────
+    register_lib_call("weakref", "finalize",
+        lambda a: f"{_WR}.finalize({a[0]}, {a[1]})")

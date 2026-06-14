@@ -18,7 +18,11 @@ Connect to a POP3 mailbox, count messages and download them.
   @pop3.list[pop]                 → per-message (number, size) listing
   @pop3.get[pop; n]               → raw lines of message n
   @pop3.text[pop; n]              → message n decoded as a single string
+  @pop3.top[pop; n; lines]        → headers + first N body lines of message n
+  @pop3.uidl[pop]                 → unique-id listing for all messages
   @pop3.delete[pop; n]            → mark message n for deletion
+  @pop3.reset[pop]                → undo all deletions this session
+  @pop3.noop[pop]                 → keep the connection alive
 """
 from ..registry import register_lib, register_lib_call
 
@@ -59,5 +63,13 @@ def register():
         lambda a: (
             f"(lambda _p, _n: b'\\n'.join(_p.retr(_n)[1]).decode('utf-8', 'replace'))({a[0]}, {a[1]})"
         ))
+    register_lib_call("pop3", "top",
+        lambda a: f"{a[0]}.top({a[1]}, {a[2]})[1]")
+    register_lib_call("pop3", "uidl",
+        lambda a: f"{a[0]}.uidl()[1]")
     register_lib_call("pop3", "delete",
         lambda a: f"{a[0]}.dele({a[1]})")
+    register_lib_call("pop3", "reset",
+        lambda a: f"{a[0]}.rset()")
+    register_lib_call("pop3", "noop",
+        lambda a: f"{a[0]}.noop()")

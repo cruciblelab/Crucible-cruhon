@@ -15,6 +15,10 @@ no multi-line boilerplate.
 ━━━ OBJECTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @argparse.new[]                 → empty ArgumentParser
   @argparse.new[description]      → ArgumentParser with a description
+  @argparse.add[parser; name]     → add an argument (returns the parser)
+  @argparse.add[parser; name; opts]→ add an argument with an options dict
+  @argparse.run[parser; argv]     → parse argv with a prepared parser
+  @argparse.run_known[parser; argv]→ parse, ignoring unknown args → (ns, extra)
   @argparse.to_dict[namespace]    → vars(namespace)
 """
 from ..registry import register_lib, register_lib_call
@@ -44,5 +48,15 @@ def register():
             f"__import__('argparse').ArgumentParser(description={a[0]})" if a else
             f"__import__('argparse').ArgumentParser()"
         ))
+    register_lib_call("argparse", "add",
+        lambda a: (
+            f"(lambda _p, _n, _o: (_p.add_argument(_n, **_o), _p)[1])({a[0]}, {a[1]}, {a[2]})"
+            if len(a) > 2 else
+            f"(lambda _p, _n: (_p.add_argument(_n), _p)[1])({a[0]}, {a[1]})"
+        ))
+    register_lib_call("argparse", "run",
+        lambda a: f"{a[0]}.parse_args({a[1]})")
+    register_lib_call("argparse", "run_known",
+        lambda a: f"{a[0]}.parse_known_args({a[1]})")
     register_lib_call("argparse", "to_dict",
         lambda a: f"vars({a[0]})")

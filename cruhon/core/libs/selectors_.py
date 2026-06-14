@@ -15,7 +15,10 @@ without low-level select() bit-twiddling.
   @selectors.watch_write[sel; obj]     → register obj for write-readiness
   @selectors.register[sel; obj; events] → register with explicit event mask
   @selectors.register[sel; obj; events; data] → … with attached data
+  @selectors.modify[sel; obj; events]  → change what obj is watched for
   @selectors.unwatch[sel; obj]         → stop watching obj
+  @selectors.watched[sel]              → mapping of everything registered
+  @selectors.count[sel]                → how many objects are registered
 
 ━━━ EVENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @selectors.read[]               → the EVENT_READ flag
@@ -47,8 +50,14 @@ def register():
             f"{a[0]}.register({a[1]}, {a[2]}, {a[3]})" if len(a) > 3 else
             f"{a[0]}.register({a[1]}, {a[2]})"
         ))
+    register_lib_call("selectors", "modify",
+        lambda a: f"{a[0]}.modify({a[1]}, {a[2]})")
     register_lib_call("selectors", "unwatch",
         lambda a: f"{a[0]}.unregister({a[1]})")
+    register_lib_call("selectors", "watched",
+        lambda a: f"{a[0]}.get_map()")
+    register_lib_call("selectors", "count",
+        lambda a: f"len({a[0]}.get_map())")
 
     # ── Events ────────────────────────────────────────────────
     register_lib_call("selectors", "read",

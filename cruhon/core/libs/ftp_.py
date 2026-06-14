@@ -23,6 +23,13 @@ Connect to FTP servers, browse directories and transfer files.
   @ftp.download[ftp; remote; local] → fetch a file to a local path
   @ftp.upload[ftp; local; remote]   → store a local file remotely
   @ftp.delete[ftp; name]            → delete a remote file
+
+━━━ MANAGE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @ftp.rename[ftp; from; to]      → rename a remote file/directory
+  @ftp.mkdir[ftp; path]           → create a remote directory
+  @ftp.rmdir[ftp; path]           → remove a remote directory
+  @ftp.passive[ftp; on]           → toggle passive mode (returns ftp)
+  @ftp.command[ftp; cmd]          → send a raw command, return the reply
 """
 from ..registry import register_lib, register_lib_call
 
@@ -73,3 +80,15 @@ def register():
         ))
     register_lib_call("ftp", "delete",
         lambda a: f"{a[0]}.delete({a[1]})")
+
+    # ── Manage ────────────────────────────────────────────────
+    register_lib_call("ftp", "rename",
+        lambda a: f"{a[0]}.rename({a[1]}, {a[2]})")
+    register_lib_call("ftp", "mkdir",
+        lambda a: f"{a[0]}.mkd({a[1]})")
+    register_lib_call("ftp", "rmdir",
+        lambda a: f"{a[0]}.rmd({a[1]})")
+    register_lib_call("ftp", "passive",
+        lambda a: f"(lambda _f, _on: (_f.set_pasv(_on), _f)[1])({a[0]}, {a[1]})")
+    register_lib_call("ftp", "command",
+        lambda a: f"{a[0]}.sendcmd({a[1]})")
