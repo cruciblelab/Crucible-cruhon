@@ -145,35 +145,87 @@ def get_tris_cached() -> list:
 # ══════════════════════════════════════════════════════════════════
 
 class HolisticRef:
-    """model_complexity'yi runtime'da değiştirmek için sarmalayıcı."""
-    def __init__(self, complexity: int = 1):
-        self.complexity = complexity
-        self._init(complexity)
+    """MediaPipe Holistic sarmalayıcısı — runtime'da tüm parametreler değiştirilebilir."""
+    def __init__(self, complexity: int = 1, det_conf: float = 0.5, track_conf: float = 0.5):
+        self.complexity  = complexity
+        self.det_conf    = det_conf
+        self.track_conf  = track_conf
+        self._create()
 
-    def _init(self, complexity: int):
+    def _create(self):
         self.model = mp_holistic.Holistic(
             static_image_mode=False,
-            model_complexity=complexity,
+            model_complexity=self.complexity,
             smooth_landmarks=True,
             enable_segmentation=False,
             smooth_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_detection_confidence=self.det_conf,
+            min_tracking_confidence=self.track_conf,
         )
 
     def process(self, rgb):
         return self.model.process(rgb)
 
+    def update(self, complexity: int = None, det_conf: float = None,
+               track_conf: float = None) -> bool:
+        """Parametreleri güncelle; değişiklik varsa modeli yeniden oluştur."""
+        changed = False
+        if complexity  is not None and complexity  != self.complexity:  self.complexity  = complexity;  changed = True
+        if det_conf    is not None and det_conf    != self.det_conf:    self.det_conf    = det_conf;    changed = True
+        if track_conf  is not None and track_conf  != self.track_conf:  self.track_conf  = track_conf;  changed = True
+        if changed:
+            self.model.close()
+            self._create()
+        return changed
+
+    # Geriye dönük uyumluluk
     def set_complexity(self, complexity: int) -> bool:
-        if complexity == self.complexity:
-            return False
-        self.model.close()
-        self.complexity = complexity
-        self._init(complexity)
-        return True
+        return self.update(complexity=complexity)
 
     def close(self):
         self.model.close()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ÖN-İŞLEM PIPELINE (MediaPipe giriş kalitesini artırır)
+# ══════════════════════════════════════════════════════════════════
+
+PREPROC_NAMES = {
+    "none":     "Yok",
+    "sharpen":  "Keskinleştir",
+    "clahe":    "CLAHE (kontrast)",
+    "enhance":  "CLAHE + Keskinleştir",
+    "denoise":  "Gürültü Azalt",
+    "lowlight": "Az Işık Modu",
+}
+
+class PreprocessPipeline:
+    """Kamera profiline göre MediaPipe girişini iyileştiren ön-işlem zinciri."""
+    def __init__(self):
+        self.mode   = "none"
+        self._clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        self._sharp = np.array([[-1,-1,-1],[-1,9,-1],[-1,-1,-1]], dtype=np.float32)
+        # Düşük-ışık gamma LUT (gamma = 0.55)
+        self._ll_lut = np.array(
+            [min(255, int(((i / 255.0) ** 0.55) * 255)) for i in range(256)],
+            dtype=np.uint8,
+        )
+
+    def apply(self, frame: np.ndarray) -> np.ndarray:
+        if self.mode == "none":
+            return frame
+        out = frame.copy()
+        if self.mode in ("clahe", "enhance", "lowlight"):
+            lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
+            lab[:, :, 0] = self._clahe.apply(lab[:, :, 0])
+            out = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        if self.mode in ("sharpen", "enhance"):
+            out = cv2.filter2D(out, -1, self._sharp)
+        if self.mode == "denoise":
+            out = cv2.bilateralFilter(out, 5, 50, 50)
+        if self.mode == "lowlight":
+            out = cv2.LUT(out, self._ll_lut)
+        return out
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -195,9 +247,14 @@ class Session:
         self.snapshot_req    = False
         # Kamera & kalite ayarları
         self.face_crop_enabled = False
-        self.crop_padding      = 0.28   # Yüz kesim kenar payı
-        self.jpeg_quality      = 75     # Kamera profiline göre uyarlanır
+        self.crop_padding      = 0.28
+        self.jpeg_quality      = 75
         self.camera_profile: dict = {}
+        # Donanım uyarlama durumu
+        self.preprocess  = PreprocessPipeline()
+        self.det_conf    = 0.5   # MediaPipe algılama eşiği
+        self.track_conf  = 0.5   # MediaPipe takip eşiği
+        self.lm_radius   = 2     # Landmark nokta boyutu (piksel)
         # İç durum
         self._log_q: _queue.Queue = _queue.Queue(maxsize=400)
         self._fps_buf = deque(maxlen=30)
@@ -231,6 +288,64 @@ class Session:
 
     def at_frame_limit(self) -> bool:
         return self.frame_count >= MAX_FRAMES
+
+
+# ══════════════════════════════════════════════════════════════════
+#  KAMERA PROFİLİNE GÖRE OTOMATİK AYARLAMA
+# ══════════════════════════════════════════════════════════════════
+
+def auto_tune_from_profile(profile: dict, holistic: HolisticRef, sess: Session) -> dict:
+    """
+    Kamera çözünürlüğü ve kalite tier'ına göre tüm parametreleri otomatik ayarlar:
+    - MediaPipe model_complexity
+    - detection/tracking confidence eşikleri
+    - OpenCV ön-işlem modu
+    - Landmark nokta boyutu
+    - JPEG kalitesi
+    """
+    w    = int(profile.get("width",  640))
+    h    = int(profile.get("height", 480))
+    tier = profile.get("tier", "medium")
+
+    if tier == "low":
+        # Düşük kalite kamera → hızlı model, toleranslı eşikler, ön-işlem açık
+        complexity,  det_conf, track_conf = 0, 0.35, 0.40
+        preproc, lm_r, jpeg_q = "enhance", 2, 62
+    elif tier == "high":
+        # Yüksek kalite kamera → hassas model, seçici eşikler, ön-işlem kapalı
+        complexity, det_conf, track_conf = 2, 0.65, 0.65
+        preproc, lm_r, jpeg_q = "none", 2, 85
+    else:  # medium
+        complexity, det_conf, track_conf = 1, 0.50, 0.50
+        preproc, lm_r, jpeg_q = "none", 2, 75
+
+    # Çok düşük çözünürlük (<480p) → en agresif iyileştirme
+    if max(w, h) < 480:
+        preproc = "lowlight" if preproc == "enhance" else preproc
+        det_conf, track_conf = 0.30, 0.35
+
+    # Güncelle
+    holistic_updated = holistic.update(
+        complexity=complexity,
+        det_conf=det_conf,
+        track_conf=track_conf,
+    )
+    sess.preprocess.mode = preproc
+    sess.det_conf        = det_conf
+    sess.track_conf      = track_conf
+    sess.lm_radius       = lm_r
+    sess.jpeg_quality    = jpeg_q
+
+    return {
+        "complexity":       complexity,
+        "det_conf":         det_conf,
+        "track_conf":       track_conf,
+        "preproc":          preproc,
+        "preproc_name":     PREPROC_NAMES[preproc],
+        "lm_radius":        lm_r,
+        "jpeg_quality":     jpeg_q,
+        "holistic_updated": holistic_updated,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -619,10 +734,12 @@ async def ws_endpoint(ws: WebSocket):
                 h, w  = frame.shape[:2]
                 fps   = sess.fps()
 
-                # Temiz kare (kırpma için annotation öncesi)
+                # Temiz kare: kırpma için (annotation ve preprocessing öncesi)
                 clean = frame.copy() if sess.face_crop_enabled else None
 
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # Ön-işlem: sadece MediaPipe girişine uygulanır, gösterim karesi etkilenmez
+                mp_frame = sess.preprocess.apply(frame)
+                rgb = cv2.cvtColor(mp_frame, cv2.COLOR_BGR2RGB)
                 rgb.flags.writeable = False
                 res = holistic.process(rgb)
                 rgb.flags.writeable = True
@@ -695,6 +812,10 @@ async def ws_endpoint(ws: WebSocket):
                         "at_limit":    sess.at_frame_limit(),
                         "crop_on":     sess.face_crop_enabled,
                         "quality":     holistic.complexity,
+                        "preproc":     sess.preprocess.mode,
+                        "det_conf":    holistic.det_conf,
+                        "track_conf":  holistic.track_conf,
+                        "lm_radius":   sess.lm_radius,
                     }
                 }
                 if face_crop_b64:
@@ -790,14 +911,48 @@ async def ws_endpoint(ws: WebSocket):
                     try:
                         q = int(val)
                         if q in (0, 1, 2):
-                            changed = holistic.set_complexity(q)
-                            names   = ["Hızlı (model=0)", "Dengeli (model=1)", "Yüksek (model=2)"]
+                            names = ["Hızlı (model=0)", "Dengeli (model=1)", "Yüksek (model=2)"]
+                            changed = holistic.update(complexity=q)
                             if changed:
                                 sess.log(f"Kalite → {names[q]} (yeniden yükleniyor…)", "INFO")
                             else:
                                 sess.log(f"Kalite zaten {names[q]}", "INFO")
                     except (TypeError, ValueError):
                         pass
+
+                elif cmd == "set_preprocessing":
+                    if val in PREPROC_NAMES:
+                        sess.preprocess.mode = val
+                        sess.log(f"Ön-işlem → {PREPROC_NAMES[val]}", "INFO")
+                    else:
+                        sess.log(f"Bilinmeyen ön-işlem modu: {val}", "WARN")
+
+                elif cmd == "set_confidence":
+                    # val: {det: float, track: float}
+                    if isinstance(val, dict):
+                        det   = float(val.get("det",   holistic.det_conf))
+                        track = float(val.get("track", holistic.track_conf))
+                        det   = max(0.1, min(0.95, det))
+                        track = max(0.1, min(0.95, track))
+                        changed = holistic.update(det_conf=det, track_conf=track)
+                        sess.det_conf   = det
+                        sess.track_conf = track
+                        if changed:
+                            sess.log(f"Güven eşikleri → algılama={det:.2f}, takip={track:.2f}", "OK")
+
+                elif cmd == "auto_optimize":
+                    # Mevcut kamera profiline göre tam otomatik ayarlama
+                    if sess.camera_profile:
+                        result = auto_tune_from_profile(sess.camera_profile, holistic, sess)
+                        names  = ["Hızlı", "Dengeli", "Yüksek"]
+                        sess.log(
+                            f"Oto-optimize: model={names[result['complexity']]}, "
+                            f"conf={result['det_conf']:.2f}/{result['track_conf']:.2f}, "
+                            f"ön-işlem={result['preproc_name']}", "OK"
+                        )
+                        await ws.send_text(json.dumps({"type": "auto_tuned", **result}))
+                    else:
+                        sess.log("Kamera profili yok — önce kamera bağlayın", "WARN")
 
                 elif cmd == "camera_profile":
                     # val: {label, width, height, frameRate, facingMode, tier, hasZoom, hasTorch, ...}
@@ -817,12 +972,18 @@ async def ws_endpoint(ws: WebSocket):
                         if has_t: extras.append("torch")
                         if extras:
                             sess.log(f"Özellikler: {', '.join(extras)}", "SYSTEM")
-                        # Kamera tier'ına göre JPEG kalitesi uyarla
-                        sess.jpeg_quality = {"low": 62, "medium": 75, "high": 85}.get(tier, 75)
+                        # Kamera profiline göre tüm parametreleri otomatik ayarla
+                        result = auto_tune_from_profile(val, holistic, sess)
+                        names  = ["Hızlı", "Dengeli", "Yüksek"]
+                        sess.log(
+                            f"Oto-tune: model={names[result['complexity']]}, "
+                            f"conf={result['det_conf']:.2f}/{result['track_conf']:.2f}, "
+                            f"ön-işlem={result['preproc_name']}", "OK"
+                        )
                         await ws.send_text(json.dumps({
                             "type": "cam_adapted",
-                            "jpeg_quality": sess.jpeg_quality,
                             "tier": tier,
+                            **result,
                         }))
 
                 await flush()
