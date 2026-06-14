@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import queue as _queue
 import shutil
 import threading
@@ -229,6 +230,47 @@ class PreprocessPipeline:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  EMA STABİLİZASYON
+# ══════════════════════════════════════════════════════════════════
+
+class EMAFilter:
+    """Exponential Moving Average — landmark titremesini azaltır."""
+    def __init__(self, alpha: float = 0.35):
+        self.alpha = alpha
+        self._prev: dict = {}
+
+    def smooth(self, key: str, pts: np.ndarray) -> np.ndarray:
+        if key not in self._prev or self._prev[key].shape != pts.shape:
+            self._prev[key] = pts.astype(np.float32)
+            return pts
+        out = self.alpha * pts + (1.0 - self.alpha) * self._prev[key]
+        self._prev[key] = out
+        return out
+
+    def reset(self):
+        self._prev.clear()
+
+
+class SmoothedLandmarks:
+    """MediaPipe landmark listesi wrapper — smoothed XYZ, orijinal visibility."""
+    class _LM:
+        __slots__ = ('x', 'y', 'z', 'visibility')
+        def __init__(self, x: float, y: float, z: float, vis: float = 1.0):
+            self.x, self.y, self.z, self.visibility = x, y, z, vis
+
+    def __init__(self, orig_lms, smooth_pts: np.ndarray):
+        self.landmark = [
+            SmoothedLandmarks._LM(
+                float(smooth_pts[i, 0]),
+                float(smooth_pts[i, 1]),
+                float(smooth_pts[i, 2]),
+                getattr(orig_lms.landmark[i], 'visibility', 1.0),
+            )
+            for i in range(len(orig_lms.landmark))
+        ]
+
+
+# ══════════════════════════════════════════════════════════════════
 #  OTURUM
 # ══════════════════════════════════════════════════════════════════
 
@@ -255,6 +297,9 @@ class Session:
         self.det_conf    = 0.5   # MediaPipe algılama eşiği
         self.track_conf  = 0.5   # MediaPipe takip eşiği
         self.lm_radius   = 2     # Landmark nokta boyutu (piksel)
+        # EMA stabilizasyon
+        self.ema         = EMAFilter(alpha=0.35)
+        self.smoothing   = True
         # İç durum
         self._log_q: _queue.Queue = _queue.Queue(maxsize=400)
         self._fps_buf = deque(maxlen=30)
@@ -276,6 +321,7 @@ class Session:
         self.hand_r_frames.clear()
         self.frame_count = 0
         self.recording   = False
+        self.ema.reset()
         self.log("Sıfırlandı", "WARN")
 
     def fps(self) -> float:
@@ -346,6 +392,54 @@ def auto_tune_from_profile(profile: dict, holistic: HolisticRef, sess: Session) 
         "jpeg_quality":     jpeg_q,
         "holistic_updated": holistic_updated,
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ÖLÇÜMLER
+# ══════════════════════════════════════════════════════════════════
+
+def calculate_measurements(face_lms, pose_lms, w: int, h: int) -> dict:
+    """Landmark'lardan piksel bazlı antropometrik ölçümler hesaplar."""
+    m: dict = {}
+
+    if face_lms:
+        lms = face_lms.landmark
+        def px(i):
+            return lms[i].x * w, lms[i].y * h
+
+        f234, f454 = px(234), px(454)
+        m['face_width']  = round(math.hypot(f454[0]-f234[0], f454[1]-f234[1]))
+
+        f10, f152 = px(10), px(152)
+        m['face_height'] = round(math.hypot(f152[0]-f10[0], f152[1]-f10[1]))
+
+        if m.get('face_width', 0) > 0:
+            m['face_ratio'] = round(m['face_height'] / m['face_width'], 2)
+
+        f33, f263 = px(33), px(263)
+        m['eye_dist']  = round(math.hypot(f263[0]-f33[0], f263[1]-f33[1]))
+        m['head_tilt'] = round(math.degrees(math.atan2(f263[1]-f33[1], f263[0]-f33[0])), 1)
+
+        f4, f0 = px(4), px(0)
+        m['nose_mouth'] = round(math.hypot(f0[0]-f4[0], f0[1]-f4[1]))
+
+    if pose_lms:
+        lms = pose_lms.landmark
+        def pxp(i):
+            return lms[i].x * w, lms[i].y * h
+        def vis(i):
+            return getattr(lms[i], 'visibility', 0.0)
+
+        if vis(11) > 0.5 and vis(12) > 0.5:
+            p11, p12 = pxp(11), pxp(12)
+            m['shoulder_width'] = round(math.hypot(p12[0]-p11[0], p12[1]-p11[1]))
+            m['shoulder_sym']   = round(abs(p11[1] - p12[1]))
+
+        if vis(23) > 0.5 and vis(24) > 0.5:
+            p23, p24 = pxp(23), pxp(24)
+            m['hip_width'] = round(math.hypot(p24[0]-p23[0], p24[1]-p23[1]))
+
+    return m
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -744,39 +838,54 @@ async def ws_endpoint(ws: WebSocket):
                 res = holistic.process(rgb)
                 rgb.flags.writeable = True
 
-                detected    = False
+                # EMA stabilizasyon — smoothed wrapper'lar oluştur
+                def _smooth(key, mp_lms):
+                    if mp_lms is None:
+                        return None
+                    pts = np.array([[lm.x, lm.y, lm.z] for lm in mp_lms.landmark], dtype=np.float32)
+                    spts = sess.ema.smooth(key, pts) if sess.smoothing else pts
+                    return SmoothedLandmarks(mp_lms, spts)
+
+                face_sm  = _smooth('face',   res.face_landmarks)
+                pose_sm  = _smooth('pose',   res.pose_landmarks)
+                handl_sm = _smooth('hand_l', res.left_hand_landmarks)
+                handr_sm = _smooth('hand_r', res.right_hand_landmarks)
+
+                detected      = False
                 face_crop_b64 = None
 
                 # Yüz
-                if res.face_landmarks and sess.target in ("face", "full"):
+                if face_sm and sess.target in ("face", "full"):
                     detected = True
-                    draw_face(frame, res.face_landmarks, sess.style, sess.active_regions)
+                    draw_face(frame, face_sm, sess.style, sess.active_regions)
                     if sess.recording and not sess.at_frame_limit():
-                        sess.frames_xyz.append(face_lms_to_xyz(res.face_landmarks, w, h))
-                    # Kırpma: annotation öncesi temiz kareden
+                        sess.frames_xyz.append(face_lms_to_xyz(face_sm, w, h))
                     if sess.face_crop_enabled and clean is not None:
                         face_crop_b64 = encode_crop(
-                            clean, res.face_landmarks, w, h,
+                            clean, face_sm, w, h,
                             sess.crop_padding, min(sess.jpeg_quality + 10, 95)
                         )
 
                 # Vücut
-                if res.pose_landmarks and sess.target in ("body", "full"):
+                if pose_sm and sess.target in ("body", "full"):
                     detected = True
-                    draw_pose(frame, res.pose_landmarks, sess.style)
+                    draw_pose(frame, pose_sm, sess.style)
                     if sess.recording and not sess.at_frame_limit():
-                        sess.pose_frames.append(pose_lms_to_xyz(res.pose_landmarks, w, h))
+                        sess.pose_frames.append(pose_lms_to_xyz(pose_sm, w, h))
 
                 # Eller
                 if sess.target in ("body", "full"):
-                    if res.left_hand_landmarks or res.right_hand_landmarks:
+                    if handl_sm or handr_sm:
                         detected = True
-                    draw_hands(frame, res.left_hand_landmarks, res.right_hand_landmarks, sess.style)
+                    draw_hands(frame, handl_sm, handr_sm, sess.style)
                     if sess.recording and not sess.at_frame_limit():
-                        if res.left_hand_landmarks:
-                            sess.hand_l_frames.append(hand_lms_to_xyz(res.left_hand_landmarks, w, h))
-                        if res.right_hand_landmarks:
-                            sess.hand_r_frames.append(hand_lms_to_xyz(res.right_hand_landmarks, w, h))
+                        if handl_sm:
+                            sess.hand_l_frames.append(hand_lms_to_xyz(handl_sm, w, h))
+                        if handr_sm:
+                            sess.hand_r_frames.append(hand_lms_to_xyz(handr_sm, w, h))
+
+                # Anlık ölçümler
+                measurements = calculate_measurements(face_sm, pose_sm, w, h)
 
                 if sess.recording and not sess.at_frame_limit():
                     sess.frame_count += 1
@@ -799,23 +908,26 @@ async def ws_endpoint(ws: WebSocket):
                 resp = {
                     "type": "frame",
                     "data": f"data:image/jpeg;base64,{b64out}",
+                    "measurements": measurements,
                     "stats": {
-                        "recording":   sess.recording,
-                        "frame_count": sess.frame_count,
-                        "face_frames": len(sess.frames_xyz),
-                        "pose_frames": len(sess.pose_frames),
-                        "detected":    detected,
-                        "fps":         fps,
-                        "style":       sess.style,
-                        "target":      sess.target,
-                        "elapsed":     round(time.time()-sess.rec_start_t, 1) if sess.recording else 0,
-                        "at_limit":    sess.at_frame_limit(),
-                        "crop_on":     sess.face_crop_enabled,
-                        "quality":     holistic.complexity,
-                        "preproc":     sess.preprocess.mode,
-                        "det_conf":    holistic.det_conf,
-                        "track_conf":  holistic.track_conf,
-                        "lm_radius":   sess.lm_radius,
+                        "recording":    sess.recording,
+                        "frame_count":  sess.frame_count,
+                        "face_frames":  len(sess.frames_xyz),
+                        "pose_frames":  len(sess.pose_frames),
+                        "detected":     detected,
+                        "fps":          fps,
+                        "style":        sess.style,
+                        "target":       sess.target,
+                        "elapsed":      round(time.time()-sess.rec_start_t, 1) if sess.recording else 0,
+                        "at_limit":     sess.at_frame_limit(),
+                        "crop_on":      sess.face_crop_enabled,
+                        "quality":      holistic.complexity,
+                        "preproc":      sess.preprocess.mode,
+                        "det_conf":     holistic.det_conf,
+                        "track_conf":   holistic.track_conf,
+                        "lm_radius":    sess.lm_radius,
+                        "smoothing":    sess.smoothing,
+                        "smooth_alpha": sess.ema.alpha,
                     }
                 }
                 if face_crop_b64:
@@ -939,6 +1051,14 @@ async def ws_endpoint(ws: WebSocket):
                         sess.track_conf = track
                         if changed:
                             sess.log(f"Güven eşikleri → algılama={det:.2f}, takip={track:.2f}", "OK")
+
+                elif cmd == "set_smoothing":
+                    if isinstance(val, dict):
+                        enabled = bool(val.get("enabled", sess.smoothing))
+                        alpha   = max(0.05, min(0.95, float(val.get("alpha", sess.ema.alpha))))
+                        sess.smoothing   = enabled
+                        sess.ema.alpha   = alpha
+                        sess.log(f"Stabilizasyon → {'AÇIK' if enabled else 'KAPALI'} | alpha={alpha:.2f}", "INFO")
 
                 elif cmd == "auto_optimize":
                     # Mevcut kamera profiline göre tam otomatik ayarlama
