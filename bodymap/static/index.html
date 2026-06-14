@@ -2,71 +2,62 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0a">
 <title>BodyMap</title>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
   --ink:#0a0a0a; --paper:#f5f2ed; --scan:#ff3b00; --map:#00c8ff;
-  --ok:#00e676; --dim:rgba(10,10,10,0.4);
-  --glass:rgba(245,242,237,0.12); --glass2:rgba(10,10,10,0.75);
+  --ok:#00e676; --warn:#ffb800;
+  --glass2:rgba(10,10,10,0.78);
   --mono:'Courier New',monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
 }
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var(--mono);color:var(--paper);touch-action:none}
 
 /* ── SPLASH ── */
-#splash{
-  position:fixed;inset:0;background:var(--ink);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:0;z-index:100;padding:0;
-}
-.splash-inner{
-  width:100%;max-width:380px;padding:32px 24px;
-  display:flex;flex-direction:column;gap:20px;
-}
-.brand{
-  font-size:28px;font-weight:900;letter-spacing:-1px;
-  color:var(--paper);font-family:var(--sans);
-}
+#splash{position:fixed;inset:0;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;overflow-y:auto}
+.splash-inner{width:100%;max-width:400px;padding:28px 22px calc(28px + var(--sb));display:flex;flex-direction:column;gap:18px}
+.brand{font-size:26px;font-weight:900;letter-spacing:-1px;color:var(--paper);font-family:var(--sans)}
 .brand span{color:var(--scan)}
-.brand-sub{font-size:11px;letter-spacing:3px;color:var(--dim);margin-top:2px}
-
-.section-label{font-size:9px;letter-spacing:3px;color:rgba(245,242,237,0.35);margin-bottom:6px}
+.brand-sub{font-size:10px;letter-spacing:3px;color:rgba(245,242,237,0.3);margin-top:2px}
+.slabel{font-size:9px;letter-spacing:3px;color:rgba(245,242,237,0.3);margin-bottom:5px}
 
 /* Hedef seçici */
-.target-row{display:flex;gap:6px}
-.target-btn{
-  flex:1;padding:11px 8px;text-align:center;
-  border:1px solid rgba(245,242,237,0.15);background:transparent;
-  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:11px;
-  cursor:pointer;transition:all .15s;user-select:none;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-}
-.target-btn .t-ico{font-size:20px}
-.target-btn .t-lbl{font-size:10px;letter-spacing:.5px}
-.target-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.08)}
-.target-btn:active{opacity:.6}
+.target-row{display:flex;gap:5px}
+.target-btn{flex:1;padding:10px 6px;border:1px solid rgba(245,242,237,.14);background:transparent;color:rgba(245,242,237,.4);font-family:var(--mono);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .15s;-webkit-user-select:none;user-select:none;min-height:64px}
+.target-btn .ico{font-size:18px}
+.target-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,.08)}
+
+/* Kalite seçici */
+.qual-row{display:flex;gap:5px}
+.qual-btn{flex:1;padding:9px 4px;border:1px solid rgba(245,242,237,.14);background:transparent;color:rgba(245,242,237,.4);font-family:var(--mono);font-size:10px;cursor:pointer;text-align:center;transition:all .15s;-webkit-user-select:none;user-select:none}
+.qual-btn small{display:block;font-size:8px;color:rgba(245,242,237,.2);margin-top:2px;letter-spacing:.3px}
+.qual-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,.06)}
+.qual-btn.on small{color:rgba(0,200,255,.5)}
 
 /* Kamera seçici */
-.cam-row{display:flex;gap:6px}
-.cam-btn{
-  flex:1;padding:10px 8px;
-  border:1px solid rgba(245,242,237,0.15);background:transparent;
-  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:10px;
-  cursor:pointer;transition:all .15s;text-align:center;user-select:none;
-}
-.cam-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.06)}
-.cam-btn:active{opacity:.6}
+#camSection{display:flex;flex-direction:column;gap:6px}
+.face-row{display:flex;gap:5px}
+.cam-btn{flex:1;padding:9px 6px;border:1px solid rgba(245,242,237,.14);background:transparent;color:rgba(245,242,237,.4);font-family:var(--mono);font-size:10px;cursor:pointer;text-align:center;transition:all .15s;-webkit-user-select:none;user-select:none}
+.cam-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,.06)}
+/* Kamera listesi */
+#camListWrap{display:none;flex-direction:column;gap:3px;max-height:140px;overflow-y:auto}
+#camListWrap.vis{display:flex}
+.cam-item{padding:9px 10px;border:1px solid rgba(245,242,237,.1);background:transparent;color:rgba(245,242,237,.5);font-family:var(--mono);font-size:10px;cursor:pointer;text-align:left;transition:all .12s;display:flex;align-items:center;gap:8px;-webkit-user-select:none;user-select:none}
+.cam-item.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,.06)}
+.cam-item .ci-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-item .ci-badge{font-size:8px;letter-spacing:.5px;padding:1px 4px;border:1px solid currentColor;flex-shrink:0}
+/* Kamera info satırı */
+#camInfo{font-size:10px;color:rgba(245,242,237,.28);padding:4px 2px;min-height:16px;display:flex;align-items:center;gap:6px}
+#camInfo span{color:var(--map)}
 
-#startBtn{
-  padding:16px;background:var(--scan);color:var(--paper);border:none;
-  font-family:var(--mono);font-size:13px;letter-spacing:2px;font-weight:bold;
-  cursor:pointer;transition:opacity .15s;
-}
+#startBtn{padding:15px;background:var(--scan);color:var(--paper);border:none;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:bold;cursor:pointer;transition:opacity .15s;min-height:52px}
 #startBtn:disabled{opacity:.3;cursor:not-allowed}
-#startBtn:active{opacity:.8}
 #sErr{font-size:11px;color:var(--scan);min-height:14px}
 
 /* ── KAMERA / ÇIKTI ── */
@@ -74,209 +65,187 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 #camOut{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
 #threeWrap{position:fixed;inset:0;display:none}
 
+/* ── YÜZ KIRPMA PiP ── */
+#cropPip{
+  position:fixed;top:calc(var(--st)+60px);right:calc(var(--sr)+14px);
+  width:130px;display:none;z-index:30;
+  border:1px solid rgba(0,200,255,.5);background:rgba(0,0,0,.8);
+  cursor:move;touch-action:none;
+}
+#cropPip.vis{display:block}
+#cropPip img{width:100%;display:block;aspect-ratio:1/1;object-fit:cover}
+#cropPipBar{display:flex;align-items:center;padding:3px 5px;gap:4px}
+#cropPipLabel{font-size:9px;letter-spacing:1px;color:var(--map);flex:1}
+#cropPipFull{font-size:12px;cursor:pointer;color:rgba(245,242,237,.5);padding:2px 4px}
+#cropPipClose{font-size:12px;cursor:pointer;color:rgba(245,242,237,.4);padding:2px 4px}
+/* Tam ekran yüz kırpma */
+#cropFull{position:fixed;inset:0;background:#000;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center}
+#cropFull.vis{display:flex}
+#cropFullImg{max-width:100%;max-height:calc(100vh - 60px);object-fit:contain}
+#cropFullClose{position:fixed;top:calc(var(--st)+12px);right:calc(var(--sr)+14px);padding:6px 12px;background:var(--glass2);border:1px solid rgba(245,242,237,.2);color:var(--paper);font-family:var(--mono);font-size:11px;cursor:pointer;z-index:61}
+/* Kırpma kontrol slider */
+#cropControls{position:fixed;bottom:calc(var(--sb)+100px);right:calc(var(--sr)+14px);display:none;flex-direction:column;align-items:flex-end;gap:4px;z-index:29}
+#cropControls.vis{display:flex}
+#paddingLabel{font-size:9px;color:rgba(245,242,237,.35);letter-spacing:1px}
+#paddingSlider{-webkit-appearance:none;appearance:none;width:80px;height:3px;background:rgba(245,242,237,.15);outline:none;border-radius:1px}
+#paddingSlider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--map);cursor:pointer}
+
 /* ── ÜST ŞERİT ── */
-#topBar{
-  position:fixed;top:0;left:0;right:0;
-  padding:calc(var(--st) + 8px) 14px 8px;
-  background:linear-gradient(to bottom,rgba(0,0,0,.72),transparent);
-  display:none;align-items:center;gap:10px;z-index:20;pointer-events:none;
-}
+#topBar{position:fixed;top:0;left:0;right:0;padding:calc(var(--st)+6px) calc(var(--sr)+14px) 6px calc(var(--sl)+14px);background:linear-gradient(to bottom,rgba(0,0,0,.72),transparent);display:none;align-items:center;gap:8px;z-index:20;pointer-events:none}
 #topBar.vis{display:flex}
-#modePill{
-  font-size:10px;letter-spacing:2px;font-weight:bold;
-  color:var(--map);padding:3px 8px;border:1px solid rgba(0,200,255,0.3);
-  background:rgba(0,200,255,0.08);
-}
-.stat{font-size:10px;color:rgba(245,242,237,0.38);display:flex;flex-direction:column;gap:1px}
-.stat .v{font-size:12px;color:var(--paper)}
+#modePill{font-size:9px;letter-spacing:2px;font-weight:bold;color:var(--map);padding:3px 7px;border:1px solid rgba(0,200,255,.3);background:rgba(0,200,255,.08)}
+.stat{font-size:9px;color:rgba(245,242,237,.35);display:flex;flex-direction:column;gap:1px}
+.stat .v{font-size:11px;color:var(--paper)}
 .stat .v.ok{color:var(--ok)}.stat .v.bad{color:var(--scan)}
 #connDot{width:7px;height:7px;border-radius:50%;background:var(--scan);margin-left:auto;flex-shrink:0}
 #connDot.live{background:var(--ok);box-shadow:0 0 5px var(--ok)}
 
-/* Limit uyarısı */
-#limitBadge{
-  position:fixed;top:calc(var(--st)+46px);left:50%;transform:translateX(-50%);
-  display:none;align-items:center;gap:5px;
-  padding:3px 10px;background:rgba(255,180,0,0.9);
-  font-size:10px;letter-spacing:1px;z-index:25;color:#000;white-space:nowrap;
-}
+/* Limit badge */
+#limitBadge{position:fixed;top:calc(var(--st)+44px);left:50%;transform:translateX(-50%);display:none;align-items:center;gap:5px;padding:3px 10px;background:rgba(255,180,0,.92);font-size:10px;letter-spacing:1px;z-index:25;color:#000;white-space:nowrap}
 #limitBadge.vis{display:flex}
 
-/* Kayıt göstergesi */
-#recBadge{
-  position:fixed;top:calc(var(--st)+10px);right:50px;
-  display:none;align-items:center;gap:6px;
-  padding:4px 10px;background:rgba(255,59,0,0.9);
-  font-size:11px;letter-spacing:1px;z-index:25;
-}
+/* Kayıt badge */
+#recBadge{position:fixed;top:calc(var(--st)+8px);right:calc(var(--sr)+52px);display:none;align-items:center;gap:6px;padding:4px 10px;background:rgba(255,59,0,.9);font-size:11px;letter-spacing:1px;z-index:25}
 #recBadge.vis{display:flex}
 #recDot{width:7px;height:7px;border-radius:50%;background:#fff;animation:blink .8s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 
-/* ── VİEW GEÇİŞ ── */
-#viewRow{
-  position:fixed;top:calc(var(--st)+10px);right:14px;
-  display:none;gap:4px;z-index:25;
-}
+/* View geçiş */
+#viewRow{position:fixed;top:calc(var(--st)+8px);right:calc(var(--sr)+14px);display:none;gap:4px;z-index:25}
 #viewRow.vis{display:flex}
-.vBtn{
-  padding:5px 9px;border:1px solid rgba(245,242,237,0.2);
-  background:var(--glass2);color:rgba(245,242,237,0.45);
-  font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;user-select:none;
-}
+.vBtn{padding:5px 9px;border:1px solid rgba(245,242,237,.2);background:var(--glass2);color:rgba(245,242,237,.42);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;-webkit-user-select:none;user-select:none;min-width:40px;text-align:center}
 .vBtn.on{border-color:var(--map);color:var(--map)}
-.vBtn:active{opacity:.55}
 
-/* ── STİL ŞERIDI (kaydırılabilir) ── */
-#styleBar{
-  position:fixed;bottom:calc(var(--sb)+88px);left:0;right:0;
-  display:none;z-index:20;
-}
+/* Stil şeridi */
+#styleBar{position:fixed;bottom:calc(var(--sb)+86px);left:0;right:0;display:none;z-index:20}
 #styleBar.vis{display:block}
-#styleScroll{
-  display:flex;gap:5px;padding:0 14px;overflow-x:auto;scrollbar-width:none;
-}
+#styleScroll{display:flex;gap:5px;padding:0 calc(var(--sl)+14px);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 #styleScroll::-webkit-scrollbar{display:none}
-.sBtn{
-  flex-shrink:0;padding:6px 12px;
-  border:1px solid rgba(245,242,237,0.18);background:rgba(0,0,0,.5);
-  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:10px;
-  letter-spacing:.5px;cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;
-}
-.sBtn:active{opacity:.6}
-.sBtn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.1)}
+.sBtn{flex-shrink:0;padding:6px 12px;border:1px solid rgba(245,242,237,.16);background:rgba(0,0,0,.55);color:rgba(245,242,237,.42);font-family:var(--mono);font-size:10px;letter-spacing:.5px;cursor:pointer;white-space:nowrap;transition:all .15s;-webkit-user-select:none;user-select:none;min-height:32px}
+.sBtn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,.1)}
 
-/* ── ALT BAR ── */
-#bottomBar{
-  position:fixed;bottom:0;left:0;right:0;padding-bottom:var(--sb);
-  background:linear-gradient(to top,rgba(0,0,0,.8),transparent);
-  display:none;z-index:20;
-}
+/* Zoom şeridi (kamera destekliyorsa) */
+#zoomBar{position:fixed;bottom:calc(var(--sb)+126px);left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;z-index:20;background:var(--glass2);padding:5px 12px;border:1px solid rgba(245,242,237,.1)}
+#zoomBar.vis{display:flex}
+#zoomLabel{font-size:9px;color:rgba(245,242,237,.4);letter-spacing:1px}
+#zoomSlider{-webkit-appearance:none;appearance:none;width:110px;height:3px;background:rgba(245,242,237,.15);outline:none}
+#zoomSlider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--map);cursor:pointer}
+#zoomVal{font-size:9px;color:var(--map);min-width:24px;text-align:right}
+
+/* Alt bar */
+#bottomBar{position:fixed;bottom:0;left:0;right:0;padding-bottom:var(--sb);background:linear-gradient(to top,rgba(0,0,0,.82),transparent);display:none;z-index:20}
 #bottomBar.vis{display:block}
-#actionRow{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 14px 14px}
-
-/* Ana kayıt butonu */
-#recBtn{
-  width:72px;height:72px;border-radius:50%;
-  border:3px solid var(--paper);background:transparent;
-  cursor:pointer;position:relative;transition:transform .1s;flex-shrink:0;user-select:none;
-}
-#recBtn::after{
-  content:'';position:absolute;inset:6px;border-radius:50%;
-  background:var(--scan);transition:all .25s;
-}
-#recBtn.recording::after{border-radius:6px;inset:18px;background:var(--scan)}
-#recBtn:active{transform:scale(.91)}
-
-.actBtn{
-  padding:10px 14px;border:1px solid rgba(245,242,237,0.2);
-  background:rgba(0,0,0,.5);color:rgba(245,242,237,0.6);
-  font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;
-  text-align:center;user-select:none;flex-shrink:0;
-}
-.actBtn:active{opacity:.55}
+#actionRow{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 14px 12px}
+#recBtn{width:70px;height:70px;border-radius:50%;border:3px solid var(--paper);background:transparent;cursor:pointer;position:relative;transition:transform .1s;flex-shrink:0;-webkit-user-select:none;user-select:none}
+#recBtn::after{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--scan);transition:all .25s}
+#recBtn.recording::after{border-radius:6px;inset:17px}
+#recBtn:active{transform:scale(.9)}
+.actBtn{padding:10px 12px;border:1px solid rgba(245,242,237,.18);background:rgba(0,0,0,.5);color:rgba(245,242,237,.58);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;text-align:center;-webkit-user-select:none;user-select:none;flex-shrink:0;min-height:44px}
 .actBtn.green{border-color:var(--ok);color:var(--ok)}
 .actBtn.danger{border-color:rgba(255,59,0,.4);color:var(--scan)}
 
-/* ── SOL ALT BUTONLAR ── */
-#leftBtns{
-  position:fixed;bottom:calc(var(--sb)+96px);left:14px;
-  display:none;flex-direction:column;gap:5px;z-index:25;
-}
+/* Sol butonlar */
+#leftBtns{position:fixed;bottom:calc(var(--sb)+94px);left:calc(var(--sl)+14px);display:none;flex-direction:column;gap:5px;z-index:25}
 #leftBtns.vis{display:flex}
-.floatBtn{
-  padding:6px 10px;background:var(--glass2);
-  border:1px solid rgba(245,242,237,0.18);color:rgba(245,242,237,.45);
-  font-family:var(--mono);font-size:10px;cursor:pointer;user-select:none;
-}
-.floatBtn:active{opacity:.55}
-.floatBtn.snap{border-color:rgba(0,200,255,0.4);color:var(--map)}
+.floatBtn{padding:7px 10px;background:var(--glass2);border:1px solid rgba(245,242,237,.16);color:rgba(245,242,237,.42);font-family:var(--mono);font-size:10px;cursor:pointer;-webkit-user-select:none;user-select:none;min-height:34px;display:flex;align-items:center}
+.floatBtn.snap{border-color:rgba(0,200,255,.35);color:var(--map)}
+.floatBtn.crop-on{border-color:var(--ok);color:var(--ok)}
+.floatBtn.torch-on{border-color:var(--warn);color:var(--warn)}
 
 /* ── ÇEKMECE ── */
 #dBg{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:49;display:none;transition:background .25s}
 #dBg.open{display:block;background:rgba(0,0,0,.55)}
-#drawer{
-  position:fixed;left:0;right:0;bottom:0;height:72vh;
-  background:#0c0c0c;border-top:1px solid rgba(245,242,237,.08);
-  z-index:50;display:flex;flex-direction:column;
-  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
-  border-radius:14px 14px 0 0;overflow:hidden;
-}
+#drawer{position:fixed;left:0;right:0;bottom:0;height:74vh;background:#0c0c0c;border-top:1px solid rgba(245,242,237,.07);z-index:50;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);border-radius:14px 14px 0 0;overflow:hidden}
 #drawer.open{transform:translateY(0)}
-#dHandle{display:flex;align-items:center;justify-content:center;padding:10px 0 5px;cursor:pointer;flex-shrink:0}
-#dHandle .grip{width:36px;height:3px;background:rgba(245,242,237,.18);border-radius:2px}
-#dTabs{display:flex;border-bottom:1px solid rgba(245,242,237,.07);flex-shrink:0}
-.dTab{flex:1;padding:9px 4px;text-align:center;font-size:10px;letter-spacing:1px;color:rgba(245,242,237,.3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+#dHandle{display:flex;align-items:center;justify-content:center;padding:10px 0 4px;cursor:pointer;flex-shrink:0}
+#dHandle .grip{width:36px;height:3px;background:rgba(245,242,237,.16);border-radius:2px}
+#dTabs{display:flex;border-bottom:1px solid rgba(245,242,237,.07);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+#dTabs::-webkit-scrollbar{display:none}
+.dTab{flex:1;min-width:48px;padding:8px 3px;text-align:center;font-size:9px;letter-spacing:1px;color:rgba(245,242,237,.28);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;-webkit-user-select:none;user-select:none;white-space:nowrap}
 .dTab.on{color:var(--map);border-bottom-color:var(--map)}
 .dPage{display:none;flex:1;overflow:hidden;flex-direction:column}
 .dPage.on{display:flex}
 
 /* LOG */
-#logList{flex:1;overflow-y:auto;padding:8px 12px;font-size:11px;line-height:1.7;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+#logList{flex:1;overflow-y:auto;padding:8px 12px;font-size:11px;line-height:1.75;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent;-webkit-overflow-scrolling:touch}
 .lRow{display:flex;gap:7px;margin-bottom:1px}
 .lTs{color:rgba(245,242,237,.2);flex-shrink:0;font-size:10px;padding-top:1px}
 .lLv{flex-shrink:0;width:46px;font-size:10px;font-weight:bold}
 .lMsg{color:var(--paper);font-size:11px;word-break:break-word}
-.INFO{color:#4fc3ff}.OK{color:var(--ok)}.WARN{color:#ffb800}.ERROR{color:var(--scan)}.SCAN{color:#e040fb}.EXPORT{color:#4fc3ff}.SYSTEM{color:rgba(245,242,237,.5)}
-#logFoot{display:flex;gap:14px;padding:7px 12px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.28);flex-shrink:0}
+.INFO{color:#4fc3ff}.OK{color:var(--ok)}.WARN{color:var(--warn)}.ERROR{color:var(--scan)}.SCAN{color:#e040fb}.EXPORT{color:#4fc3ff}.SYSTEM{color:rgba(245,242,237,.45)}
+#logFoot{display:flex;gap:12px;padding:7px 12px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.25);flex-shrink:0;align-items:center}
 #logFoot span{color:var(--paper)}
-#logClear{margin-left:auto;padding:2px 8px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:10px;cursor:pointer}
+#logClear{margin-left:auto;padding:4px 9px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.28);font-family:var(--mono);font-size:10px;cursor:pointer;min-height:28px}
 
 /* BÖLGE */
-#regionWrap{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+#regionWrap{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
 #regionGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.rItem{display:flex;align-items:center;gap:7px;padding:9px 9px;border:1px solid rgba(245,242,237,.1);cursor:pointer;transition:all .15s;user-select:none}
+.rItem{display:flex;align-items:center;gap:6px;padding:9px 8px;border:1px solid rgba(245,242,237,.09);cursor:pointer;transition:all .15s;-webkit-user-select:none;user-select:none;min-height:40px}
 .rItem.on{border-color:currentColor;background:rgba(245,242,237,.04)}
-.rDot{width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:.28;transition:opacity .15s}
+.rDot{width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:.26;transition:opacity .15s}
 .rItem.on .rDot{opacity:1}
 .rName{font-size:10px;flex:1}
-.rItem:not(.on) .rName{color:rgba(245,242,237,.3)}
+.rItem:not(.on) .rName{color:rgba(245,242,237,.28)}
 #rFoot{display:flex;gap:5px;padding:7px 10px;border-top:1px solid rgba(245,242,237,.06);flex-shrink:0}
-.rCtrl{flex:1;padding:10px;border:1px solid rgba(245,242,237,.14);background:transparent;color:rgba(245,242,237,.42);font-family:var(--mono);font-size:11px;cursor:pointer}
-.rCtrl:active{opacity:.55}
+.rCtrl{flex:1;padding:10px;border:1px solid rgba(245,242,237,.13);background:transparent;color:rgba(245,242,237,.38);font-family:var(--mono);font-size:11px;cursor:pointer;min-height:42px}
 .rCtrl.apply{border-color:var(--map);color:var(--map)}
 
 /* EXPORT */
 #expInner{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#expNote{padding:10px 12px;font-size:11px;color:rgba(245,242,237,.38);border-bottom:1px solid rgba(245,242,237,.06);flex-shrink:0;line-height:1.6}
-#expList{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+#expNote{padding:10px 12px;font-size:11px;color:rgba(245,242,237,.35);border-bottom:1px solid rgba(245,242,237,.06);flex-shrink:0;line-height:1.7}
+#expList{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
 .eItem{display:flex;align-items:center;justify-content:space-between;padding:10px 8px;border:1px solid rgba(245,242,237,.08);margin-bottom:5px}
 .eItem a{color:var(--map);text-decoration:none;font-size:12px}
-.eItem a:active{text-decoration:underline}
-.eMeta{font-size:10px;color:rgba(245,242,237,.3);margin-top:2px}
-.eSize{font-size:10px;color:rgba(245,242,237,.28);flex-shrink:0;margin-left:10px}
-#refExpBtn{margin:0 10px 10px;padding:9px;border:1px solid rgba(245,242,237,.1);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:11px;cursor:pointer;flex-shrink:0}
-#refExpBtn:active{opacity:.55}
+.eMeta{font-size:10px;color:rgba(245,242,237,.28);margin-top:2px}
+.eSize{font-size:10px;color:rgba(245,242,237,.25);flex-shrink:0;margin-left:10px}
+#refExpBtn{margin:0 10px 10px;padding:10px;border:1px solid rgba(245,242,237,.1);background:transparent;color:rgba(245,242,237,.28);font-family:var(--mono);font-size:11px;cursor:pointer;flex-shrink:0;min-height:42px}
 
-/* SNAPSHOT galeri */
-#snapPage{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#snapGrid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
-.snapThumb{position:relative;aspect-ratio:16/9;background:#111;border:1px solid rgba(245,242,237,.1);overflow:hidden;cursor:pointer}
+/* SNAP */
+#snapGrid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(2,1fr);gap:5px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.snapThumb{position:relative;aspect-ratio:1;background:#111;border:1px solid rgba(245,242,237,.09);overflow:hidden}
 .snapThumb img{width:100%;height:100%;object-fit:cover;display:block}
-.snapThumb .sdl{
-  position:absolute;bottom:4px;right:4px;padding:3px 6px;
-  background:rgba(0,0,0,.7);color:var(--map);font-size:9px;letter-spacing:.5px;
-  border:1px solid rgba(0,200,255,.3);text-decoration:none;
-}
-.snapEmpty{padding:16px;font-size:11px;color:rgba(245,242,237,.28);text-align:center}
-#snapFoot{padding:7px 10px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.28);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.snapThumb .sdl{position:absolute;bottom:4px;right:4px;padding:2px 5px;background:rgba(0,0,0,.7);color:var(--map);font-size:9px;border:1px solid rgba(0,200,255,.3);text-decoration:none}
+.snapEmpty{padding:16px;font-size:11px;color:rgba(245,242,237,.25);text-align:center;grid-column:1/-1}
+#snapFoot{padding:7px 10px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.25);display:flex;align-items:center;gap:8px;flex-shrink:0}
 #snapCount{color:var(--paper)}
-#snapClear{margin-left:auto;padding:4px 10px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:10px;cursor:pointer}
+#snapClear{margin-left:auto;padding:4px 9px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.28);font-family:var(--mono);font-size:10px;cursor:pointer;min-height:28px}
+
+/* KAM TAB */
+#kamPage{flex:1;overflow-y:auto;padding:10px 12px;scrollbar-width:thin;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px}
+.kam-section{border:1px solid rgba(245,242,237,.08);padding:10px}
+.kam-title{font-size:9px;letter-spacing:2px;color:rgba(245,242,237,.3);margin-bottom:8px}
+.kam-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(245,242,237,.04)}
+.kam-row:last-child{border-bottom:none}
+.kam-key{font-size:10px;color:rgba(245,242,237,.35)}
+.kam-val{font-size:10px;color:var(--paper);text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kam-val.ok{color:var(--ok)}
+.kam-val.warn{color:var(--warn)}
+.kam-val.map{color:var(--map)}
+/* Padding slider in KAM tab */
+#kamCropSlider{width:100%;-webkit-appearance:none;appearance:none;height:4px;background:rgba(245,242,237,.15);outline:none;margin-top:6px}
+#kamCropSlider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--map);cursor:pointer}
 
 /* ── TOAST ── */
-#toast{
-  position:fixed;top:calc(var(--st)+62px);left:50%;
-  transform:translateX(-50%) translateY(-6px);
-  background:var(--glass2);border:1px solid rgba(245,242,237,.18);
-  color:var(--paper);font-size:11px;padding:7px 18px;
-  z-index:90;opacity:0;transition:opacity .2s,transform .2s;
-  pointer-events:none;white-space:nowrap;
-}
+#toast{position:fixed;top:calc(var(--st)+60px);left:50%;transform:translateX(-50%) translateY(-6px);background:var(--glass2);border:1px solid rgba(245,242,237,.16);color:var(--paper);font-size:11px;padding:7px 16px;z-index:90;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;max-width:calc(100vw - 40px);text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.ok{border-color:var(--ok);color:var(--ok)}
 #toast.err{border-color:var(--scan);color:var(--scan)}
 #toast.info{border-color:var(--map);color:var(--map)}
-#toast.warn{border-color:#ffb800;color:#ffb800}
+#toast.warn{border-color:var(--warn);color:var(--warn)}
+
+/* Landscape uyumluluğu */
+@media (orientation:landscape) and (max-height:500px){
+  .splash-inner{padding-top:16px;gap:12px}
+  .brand{font-size:20px}
+  #styleBar{bottom:calc(var(--sb)+78px)}
+  #bottomBar #actionRow{padding:4px 14px 8px}
+  #recBtn{width:60px;height:60px}
+  #leftBtns{bottom:calc(var(--sb)+82px)}
+}
+/* Büyük ekran */
+@media (min-width:640px){
+  #snapGrid{grid-template-columns:repeat(3,1fr)}
+}
 </style>
 </head>
 <body>
@@ -286,30 +255,40 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <div class="splash-inner">
   <div>
    <div class="brand">Body<span>Map</span></div>
-   <div class="brand-sub">HARITALAMA ARACI</div>
+   <div class="brand-sub">MEDİAPİPE HARITALAMA ARACI</div>
   </div>
 
+  <!-- HEDEF -->
   <div>
-   <div class="section-label">HEDEF</div>
+   <div class="slabel">HEDEF</div>
    <div class="target-row">
-    <button class="target-btn on" data-t="face" id="tFace">
-     <span class="t-ico">👤</span><span class="t-lbl">YÜZ</span>
-    </button>
-    <button class="target-btn" data-t="body" id="tBody">
-     <span class="t-ico">🧍</span><span class="t-lbl">VÜCUT</span>
-    </button>
-    <button class="target-btn" data-t="full" id="tFull">
-     <span class="t-ico">✦</span><span class="t-lbl">TAM</span>
-    </button>
+    <button class="target-btn on" data-t="face"><span class="ico">👤</span>YÜZ</button>
+    <button class="target-btn"    data-t="body"><span class="ico">🧍</span>VÜCUT</button>
+    <button class="target-btn"    data-t="full"><span class="ico">✦</span>TAM</button>
    </div>
   </div>
 
+  <!-- İŞLEME KALİTESİ -->
   <div>
-   <div class="section-label">KAMERA</div>
-   <div class="cam-row">
-    <button class="cam-btn on" data-f="user"        id="cFront">🤳 Ön</button>
-    <button class="cam-btn"   data-f="environment"  id="cBack" >📷 Arka</button>
+   <div class="slabel">İŞLEME KALİTESİ</div>
+   <div class="qual-row">
+    <button class="qual-btn" data-q="0">HIZLI<small>Düşük gecikme</small></button>
+    <button class="qual-btn on" data-q="1">DENGELİ<small>Önerilen</small></button>
+    <button class="qual-btn" data-q="2">YÜKSEK<small>Daha hassas</small></button>
    </div>
+  </div>
+
+  <!-- KAMERA -->
+  <div id="camSection">
+   <div class="slabel">KAMERA</div>
+   <div class="face-row">
+    <button class="cam-btn on" data-f="user">🤳 Ön</button>
+    <button class="cam-btn"   data-f="environment">📷 Arka</button>
+   </div>
+   <!-- Kamera listesi (permission sonrası dolar) -->
+   <div id="camListWrap"></div>
+   <!-- Seçili kamera bilgisi -->
+   <div id="camInfo">Kamera seçilmedi</div>
   </div>
 
   <button id="startBtn">BAŞLAT</button>
@@ -322,6 +301,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 <img   id="camOut" alt="">
 <div   id="threeWrap"><canvas id="threeCanvas" style="width:100%;height:100%"></canvas></div>
 
+<!-- YÜZ KIRPMA PiP -->
+<div id="cropPip">
+ <div id="cropPipBar">
+  <span id="cropPipLabel">YÜZ KES</span>
+  <span id="cropPipFull" title="Tam ekran">⛶</span>
+  <span id="cropPipClose" title="Kapat">✕</span>
+ </div>
+ <img id="cropImg" alt="">
+</div>
+
+<!-- Tam ekran yüz kırpma -->
+<div id="cropFull">
+ <button id="cropFullClose">✕ KAPAT</button>
+ <img id="cropFullImg" alt="">
+</div>
+
+<!-- Kırpma kenar payı (PiP üzerinde) -->
+<div id="cropControls">
+ <span id="paddingLabel">KAP: <span id="padVal">28</span>%</span>
+ <input type="range" id="paddingSlider" min="5" max="60" value="28" step="1">
+</div>
+
 <!-- ÜST BAR -->
 <div id="topBar">
  <div id="modePill">BÖLGE</div>
@@ -331,10 +332,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <div id="connDot"></div>
 </div>
 
-<!-- LIMIT UYARISI -->
-<div id="limitBadge">⚠ FRAME LIMİTİ DOLDU — EXPORT YADA SIFIRLA</div>
-
-<!-- KAYIT BADGE -->
+<div id="limitBadge">⚠ FRAME LİMİTİ DOLDU</div>
 <div id="recBadge"><div id="recDot"></div><span id="recTime">REC 0s</span></div>
 
 <!-- VİEW GEÇİŞ -->
@@ -343,7 +341,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <button class="vBtn"    id="v3d">3D</button>
 </div>
 
-<!-- STİL ŞERIDI -->
+<!-- STİL ŞERİDİ -->
 <div id="styleBar">
  <div id="styleScroll">
   <button class="sBtn" data-s="wireframe">ÇİZGİLİ</button>
@@ -357,6 +355,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  </div>
 </div>
 
+<!-- ZOOM ŞERİDİ (kamera destekliyorsa görünür) -->
+<div id="zoomBar">
+ <span id="zoomLabel">ZOOM</span>
+ <input type="range" id="zoomSlider" min="1" max="10" step="0.1" value="1">
+ <span id="zoomVal">1×</span>
+</div>
+
 <!-- ALT BAR -->
 <div id="bottomBar">
  <div id="actionRow">
@@ -366,11 +371,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  </div>
 </div>
 
-<!-- SOL ALT BUTONLAR -->
+<!-- SOL BUTONLAR -->
 <div id="leftBtns">
  <button class="floatBtn" id="btnDrawer">LOG ↑</button>
- <button class="floatBtn" id="btnRegion">BÖLGE ↑</button>
  <button class="floatBtn snap" id="btnSnap">📸 SNAP</button>
+ <button class="floatBtn" id="btnCrop">👁 YÜZ KES</button>
+ <button class="floatBtn" id="btnTorch" style="display:none">🔦 TORCH</button>
  <button class="floatBtn" id="btnCamSwitch">KAM ⟳</button>
 </div>
 
@@ -379,20 +385,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 <div id="drawer">
  <div id="dHandle"><div class="grip"></div></div>
  <div id="dTabs">
-  <div class="dTab on"  data-dt="log">LOG</div>
-  <div class="dTab"     data-dt="region">BÖLGE</div>
-  <div class="dTab"     data-dt="export">EXPORT</div>
-  <div class="dTab"     data-dt="snap">SNAP</div>
+  <div class="dTab on" data-dt="log">LOG</div>
+  <div class="dTab" data-dt="region">BÖLGE</div>
+  <div class="dTab" data-dt="export">EXPORT</div>
+  <div class="dTab" data-dt="snap">SNAP</div>
+  <div class="dTab" data-dt="kam">KAM BİLGİ</div>
  </div>
 
  <!-- LOG -->
  <div class="dPage on" id="dp-log">
   <div id="logList"></div>
   <div id="logFoot">
-   OK <span id="lOk">0</span>
-   WARN <span id="lWn">0</span>
-   ERR <span id="lEr">0</span>
-   SCAN <span id="lSc">0</span>
+   OK <span id="lOk">0</span> WARN <span id="lWn">0</span>
+   ERR <span id="lEr">0</span> SCAN <span id="lSc">0</span>
    <button id="logClear">TEMİZLE</button>
   </div>
  </div>
@@ -410,26 +415,62 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <!-- EXPORT -->
  <div class="dPage" id="dp-export">
   <div id="expInner">
-   <div id="expNote">
-    Kayıt durduktan sonra EXPORT tuşuna basın.<br>
-    ZIP içinde OBJ · STL · PLY · JSON · Rapor bulunur.
-   </div>
-   <div id="expList"><p style="padding:12px;font-size:11px;color:rgba(245,242,237,.28)">Henüz export yok.</p></div>
+   <div id="expNote">Kayıt durduktan sonra EXPORT tuşuna basın.<br>ZIP: OBJ · STL · PLY · JSON · Rapor</div>
+   <div id="expList"><p style="padding:12px;font-size:11px;color:rgba(245,242,237,.25)">Henüz export yok.</p></div>
    <button id="refExpBtn">↻ Yenile</button>
   </div>
  </div>
 
- <!-- SNAPSHOT -->
+ <!-- SNAP -->
  <div class="dPage" id="dp-snap">
-  <div id="snapPage">
-   <div id="snapGrid"><p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p></div>
-   <div id="snapFoot">
-    <span>TOPLAM <span id="snapCount">0</span></span>
-    <button id="snapClear">TEMİZLE</button>
+  <div id="snapGrid"><p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p></div>
+  <div id="snapFoot">
+   TOPLAM <span id="snapCount">0</span>
+   <button id="snapClear">TEMİZLE</button>
+  </div>
+ </div>
+
+ <!-- KAM BİLGİ -->
+ <div class="dPage" id="dp-kam">
+  <div id="kamPage">
+   <div class="kam-section" id="kamDevSection">
+    <div class="kam-title">CİHAZ</div>
+    <div class="kam-row"><span class="kam-key">Ad</span><span class="kam-val map" id="kLabel">—</span></div>
+    <div class="kam-row"><span class="kam-key">Çözünürlük</span><span class="kam-val ok" id="kRes">—</span></div>
+    <div class="kam-row"><span class="kam-key">Frame hızı</span><span class="kam-val ok" id="kFps">—</span></div>
+    <div class="kam-row"><span class="kam-key">Yüzleşme</span><span class="kam-val" id="kFacing">—</span></div>
+    <div class="kam-row"><span class="kam-key">Kalite Tieri</span><span class="kam-val" id="kTier">—</span></div>
+   </div>
+   <div class="kam-section" id="kamCapSection">
+    <div class="kam-title">KAPASİTE (maks)</div>
+    <div class="kam-row"><span class="kam-key">Maks çözünürlük</span><span class="kam-val" id="kMaxRes">—</span></div>
+    <div class="kam-row"><span class="kam-key">Maks fps</span><span class="kam-val" id="kMaxFps">—</span></div>
+    <div class="kam-row"><span class="kam-key">Zoom</span><span class="kam-val" id="kZoom">—</span></div>
+    <div class="kam-row"><span class="kam-key">Torch/Flaş</span><span class="kam-val" id="kTorch">—</span></div>
+    <div class="kam-row"><span class="kam-key">Arka plan ayırma</span><span class="kam-val" id="kSeg">—</span></div>
+   </div>
+   <div class="kam-section">
+    <div class="kam-title">İŞLEME</div>
+    <div class="kam-row"><span class="kam-key">Model kalitesi</span><span class="kam-val" id="kQuality">Dengeli</span></div>
+    <div class="kam-row"><span class="kam-key">JPEG kalitesi</span><span class="kam-val" id="kJpeg">75</span></div>
+    <div class="kam-row"><span class="kam-key">Gönderim aralığı</span><span class="kam-val" id="kInterval">80ms</span></div>
+   </div>
+   <div class="kam-section">
+    <div class="kam-title">YÜZ KIRPMA AYARI</div>
+    <div class="kam-row"><span class="kam-key">Kenar payı</span><span class="kam-val" id="kPadding">28%</span></div>
+    <input type="range" id="kamCropSlider" min="5" max="60" value="28" step="1">
+   </div>
+   <div class="kam-section">
+    <div class="kam-title">TARAYICI</div>
+    <div class="kam-row"><span class="kam-key">User Agent</span><span class="kam-val" id="kUA" style="font-size:9px">—</span></div>
+    <div class="kam-row"><span class="kam-key">Platform</span><span class="kam-val" id="kPlatform">—</span></div>
+    <div class="kam-row"><span class="kam-key">Ekran</span><span class="kam-val" id="kScreen">—</span></div>
+    <div class="kam-row"><span class="kam-key">GPU</span><span class="kam-val" id="kGpu" style="font-size:9px;max-width:160px">—</span></div>
    </div>
   </div>
  </div>
-</div>
+
+</div><!-- /drawer -->
 
 <div id="toast"></div>
 
@@ -439,84 +480,59 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
    VERİ
 ══════════════════════════════════════════ */
 const REGIONS = {
-  "Sol Kaş":          "#b450ff",
-  "Sağ Kaş":          "#b450ff",
-  "Sol Göz":          "#ffdc00",
-  "Sağ Göz":          "#ffdc00",
-  "Sol Kirpik Hattı": "#00e5ff",
-  "Sağ Kirpik Hattı": "#00e5ff",
-  "Burun":            "#4488ff",
-  "Burun Köprüsü":    "#88aaff",
-  "Üst Dudak":        "#8833ff",
-  "Alt Dudak":        "#aa22cc",
-  "Sol Yanak":        "#cc9900",
-  "Sağ Yanak":        "#cc9900",
-  "Çene":             "#44cccc",
-  "Yüz Oval":         "#00ff64",
-  "Saç Çizgisi":      "#cc44ff",
+  "Sol Kaş":"#b450ff","Sağ Kaş":"#b450ff","Sol Göz":"#ffdc00","Sağ Göz":"#ffdc00",
+  "Sol Kirpik Hattı":"#00e5ff","Sağ Kirpik Hattı":"#00e5ff","Burun":"#4488ff",
+  "Burun Köprüsü":"#88aaff","Üst Dudak":"#8833ff","Alt Dudak":"#aa22cc",
+  "Sol Yanak":"#cc9900","Sağ Yanak":"#cc9900","Çene":"#44cccc",
+  "Yüz Oval":"#00ff64","Saç Çizgisi":"#cc44ff",
 };
 const RKEYS = Object.keys(REGIONS);
 
 /* ══════════════════════════════════════════
    DURUM
 ══════════════════════════════════════════ */
-let ws=null, stream=null;
-let facing='user', target='face', curStyle='regions';
-let activeRegs=new Set(RKEYS);
-let connected=false, recording=false;
-let showPcd=false;
-let logC={OK:0,WARN:0,ERROR:0,SCAN:0};
-let sendIv=null, toastTimer=null;
-let recTimer=null, recSec=0;
-let snapshots=[];
+const $   = id => document.getElementById(id);
+let ws=null, stream=null, videoTrack=null;
+let facing='user', target='face', curStyle='regions', quality=1;
+let selectedDeviceId = null;
+let activeRegs       = new Set(RKEYS);
+let connected=false, recording=false, showPcd=false;
+let cropEnabled=false, torchOn=false, torchSupported=false;
+let logC = {OK:0,WARN:0,ERROR:0,SCAN:0};
+let sendIv=null, toastTimer=null, recTimer=null, recSec=0;
+let snapshots=[], sendInterval=80, jpegQuality=0.75;
+let camCapabilities = {}, camSettings = {};
+let cameras = [];
 
 /* ══════════════════════════════════════════
    THREE.JS
 ══════════════════════════════════════════ */
-let scene, camera, renderer, pcdMesh;
-
+let scene,camera3,renderer,pcdMesh;
 function initThree(){
-  const canvas = document.getElementById('threeCanvas');
-  scene    = new THREE.Scene();
-  camera   = new THREE.PerspectiveCamera(55, canvas.clientWidth/canvas.clientHeight, 0.1, 10000);
-  camera.position.set(0,0,250);
-  renderer = new THREE.WebGLRenderer({canvas,alpha:true,antialias:false});
+  const canvas=$('threeCanvas');
+  scene   = new THREE.Scene();
+  camera3 = new THREE.PerspectiveCamera(55,canvas.clientWidth/canvas.clientHeight,0.1,10000);
+  camera3.position.set(0,0,250);
+  renderer= new THREE.WebGLRenderer({canvas,alpha:true,antialias:false});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   renderer.setSize(canvas.clientWidth,canvas.clientHeight);
   scene.add(new THREE.AmbientLight(0xffffff,.7));
-
-  let drag=false,lx=0,ly=0,rx=0,ry=0,dist=250;
-  canvas.addEventListener('mousedown', e=>{drag=true;lx=e.clientX;ly=e.clientY});
-  canvas.addEventListener('mousemove', e=>{if(!drag)return;ry+=(e.clientX-lx)*.5;rx+=(e.clientY-ly)*.5;lx=e.clientX;ly=e.clientY});
-  canvas.addEventListener('mouseup',   ()=>drag=false);
-  canvas.addEventListener('wheel',     e=>{dist=Math.max(30,dist+e.deltaY*.4)});
-  let pDist=0;
-  canvas.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY}
-    if(e.touches.length===2) pDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-  },{passive:true});
-  canvas.addEventListener('touchmove', e=>{
-    if(e.touches.length===1&&drag){ry+=(e.touches[0].clientX-lx)*.5;rx+=(e.touches[0].clientY-ly)*.5;lx=e.touches[0].clientX;ly=e.touches[0].clientY}
-    if(e.touches.length===2){const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);dist=Math.max(30,dist-(nd-pDist)*.5);pDist=nd;}
-  },{passive:true});
-  canvas.addEventListener('touchend',  ()=>drag=false,{passive:true});
-  window.addEventListener('resize',()=>{camera.aspect=canvas.clientWidth/canvas.clientHeight;camera.updateProjectionMatrix();renderer.setSize(canvas.clientWidth,canvas.clientHeight)});
-
-  (function loop(){
-    requestAnimationFrame(loop);
-    if(!showPcd)return;
-    const phi=rx*Math.PI/180,the=ry*Math.PI/180;
-    camera.position.set(dist*Math.sin(the)*Math.cos(phi),dist*Math.sin(phi),dist*Math.cos(the)*Math.cos(phi));
-    camera.lookAt(0,0,0);
-    renderer.render(scene,camera);
-  })();
+  let drag=false,lx=0,ly=0,rx=0,ry=0,dist=250,pDist=0;
+  canvas.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY});
+  canvas.addEventListener('mousemove',e=>{if(!drag)return;ry+=(e.clientX-lx)*.5;rx+=(e.clientY-ly)*.5;lx=e.clientX;ly=e.clientY});
+  canvas.addEventListener('mouseup',()=>drag=false);
+  canvas.addEventListener('wheel',e=>{dist=Math.max(30,dist+e.deltaY*.4)});
+  canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY}if(e.touches.length===2)pDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)},{passive:true});
+  canvas.addEventListener('touchmove',e=>{if(e.touches.length===1&&drag){ry+=(e.touches[0].clientX-lx)*.5;rx+=(e.touches[0].clientY-ly)*.5;lx=e.touches[0].clientX;ly=e.touches[0].clientY}if(e.touches.length===2){const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);dist=Math.max(30,dist-(nd-pDist)*.5);pDist=nd}},{passive:true});
+  canvas.addEventListener('touchend',()=>drag=false,{passive:true});
+  window.addEventListener('resize',()=>{camera3.aspect=canvas.clientWidth/canvas.clientHeight;camera3.updateProjectionMatrix();renderer.setSize(canvas.clientWidth,canvas.clientHeight)});
+  (function loop(){requestAnimationFrame(loop);if(!showPcd)return;const phi=rx*Math.PI/180,the=ry*Math.PI/180;camera3.position.set(dist*Math.sin(the)*Math.cos(phi),dist*Math.sin(phi),dist*Math.cos(the)*Math.cos(phi));camera3.lookAt(0,0,0);renderer.render(scene,camera3)})();
 }
 
 function updatePcd(points,colors){
-  if(pcdMesh){scene.remove(pcdMesh);pcdMesh.geometry.dispose();pcdMesh.material.dispose();}
+  if(pcdMesh){scene.remove(pcdMesh);pcdMesh.geometry.dispose();pcdMesh.material.dispose()}
   const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(points.flat());
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(points.flat()),3));
   let mat;
   if(colors&&colors.length===points.length){
     const col=new Float32Array(colors.length*3);
@@ -531,7 +547,163 @@ function updatePcd(points,colors){
 }
 
 /* ══════════════════════════════════════════
-   SPLASH — SEÇİM
+   KAMERA YÖNETİMİ
+══════════════════════════════════════════ */
+async function requestPermissionAndEnumerate(){
+  // Önce izin al (kısa süre aç-kapat)
+  let tmpS;
+  try{
+    tmpS = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:false});
+    tmpS.getTracks().forEach(t=>t.stop());
+  }catch(e){
+    throw new Error('Kamera izni reddedildi: ' + e.message);
+  }
+  // Kameraları listele
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cameras = devices.filter(d=>d.kind==='videoinput');
+  if(!cameras.length) throw new Error('Hiç kamera bulunamadı');
+
+  // Ön/arka seçime göre varsayılan kamerayı belirle
+  if(!selectedDeviceId){
+    if(cameras.length===1){
+      selectedDeviceId = cameras[0].deviceId;
+    }
+    // Birden fazla varsa ilk uygun olanı seç (label'dan çek)
+  }
+  return cameras;
+}
+
+function renderCameraList(cams){
+  const wrap = $('camListWrap');
+  if(cams.length <= 1){
+    wrap.classList.remove('vis');
+    return;
+  }
+  wrap.classList.add('vis');
+  wrap.innerHTML='';
+  cams.forEach((cam,i)=>{
+    const label = cam.label || `Kamera ${i+1}`;
+    const isBack = label.toLowerCase().includes('back') || label.toLowerCase().includes('arka') || label.toLowerCase().includes('environment') || label.toLowerCase().includes('rear');
+    const btn = document.createElement('button');
+    btn.className='cam-item';
+    btn.dataset.id = cam.deviceId;
+    btn.innerHTML=`<span class="ci-name">${esc(label)}</span><span class="ci-badge">${isBack?'ARKA':'ÖN'}</span>`;
+    btn.addEventListener('click',()=>{
+      selectedDeviceId = cam.deviceId;
+      document.querySelectorAll('.cam-item').forEach(x=>x.classList.remove('on'));
+      btn.classList.add('on');
+      $('camInfo').innerHTML = `Seçildi: <span>${esc(label)}</span>`;
+    });
+    if(i===0) btn.classList.add('on');
+    wrap.appendChild(btn);
+  });
+  // İlk kamerayı seç
+  if(!selectedDeviceId) selectedDeviceId = cams[0].deviceId;
+  $('camInfo').innerHTML = `${cams.length} kamera bulundu — listeden seçin`;
+}
+
+async function openCamera(deviceId, facingMode){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  const constraints = {
+    video:{
+      facingMode: deviceId ? undefined : facingMode,
+      deviceId: deviceId ? {exact: deviceId} : undefined,
+      width: {ideal:1920}, height:{ideal:1080},
+      frameRate: {ideal:30, max:60},
+    },
+    audio:false
+  };
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
+  $('video').srcObject = stream;
+  await $('video').play();
+  videoTrack = stream.getVideoTracks()[0];
+}
+
+async function readCameraSpecs(){
+  if(!videoTrack) return;
+  const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+  const caps     = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+  camSettings    = settings;
+  camCapabilities= caps;
+
+  const w   = settings.width  || 640;
+  const h   = settings.height || 480;
+  const fps = Math.round(settings.frameRate || 30);
+  const fm  = settings.facingMode || '?';
+  const label = videoTrack.label || 'Bilinmiyor';
+
+  // Kalite tieri belirle
+  const maxDim = Math.max(w, h);
+  const tier   = maxDim >= 1440 ? 'high' : maxDim >= 720 ? 'medium' : 'low';
+
+  // Gönderim aralığı ve JPEG kalitesi uyarla
+  if(tier === 'high')  { sendInterval=60;  jpegQuality=0.82; }
+  if(tier === 'medium'){ sendInterval=80;  jpegQuality=0.75; }
+  if(tier === 'low')   { sendInterval=100; jpegQuality=0.65; }
+
+  // Zoom desteği
+  const hasZoom  = !!(caps.zoom);
+  const hasTorch = !!(caps.torch);
+  torchSupported = hasTorch;
+
+  // Torch butonu
+  $('btnTorch').style.display = hasTorch ? 'flex' : 'none';
+
+  // Zoom slider
+  if(hasZoom){
+    const zs = $('zoomSlider');
+    zs.min   = caps.zoom.min ?? 1;
+    zs.max   = caps.zoom.max ?? 10;
+    zs.step  = caps.zoom.step ?? 0.1;
+    zs.value = settings.zoom ?? caps.zoom.min ?? 1;
+    $('zoomBar').classList.add('vis');
+  }
+
+  // GPU bilgisi
+  let gpuInfo = '—';
+  try{
+    const gl = document.createElement('canvas').getContext('webgl');
+    const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    if(dbg) gpuInfo = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+  }catch(_){}
+
+  // KAM sekmesini doldur
+  $('kLabel').textContent   = label;
+  $('kRes').textContent     = `${w} × ${h}`;
+  $('kFps').textContent     = `${fps} fps`;
+  $('kFacing').textContent  = fm==='user' ? 'Ön kamera' : fm==='environment' ? 'Arka kamera' : fm;
+  $('kTier').textContent    = tier.toUpperCase();
+  $('kTier').className      = 'kam-val ' + (tier==='high'?'ok':tier==='medium'?'map':'warn');
+  $('kMaxRes').textContent  = caps.width?.max ? `${caps.width.max} × ${caps.height?.max}` : '—';
+  $('kMaxFps').textContent  = caps.frameRate?.max ? `${caps.frameRate.max} fps` : '—';
+  $('kZoom').textContent    = hasZoom ? `${caps.zoom.min}× — ${caps.zoom.max}× (adım ${caps.zoom.step})` : 'Desteklenmiyor';
+  $('kTorch').textContent   = hasTorch ? '✓ Var' : 'Yok';
+  $('kTorch').className     = 'kam-val ' + (hasTorch?'ok':'');
+  $('kSeg').textContent     = caps.backgroundSegmentationMask ? '✓ Var' : 'Yok';
+  $('kJpeg').textContent    = `${Math.round(jpegQuality*100)}%`;
+  $('kInterval').textContent= `${sendInterval}ms`;
+  $('kUA').textContent      = navigator.userAgent.substring(0,80)+'…';
+  $('kPlatform').textContent= navigator.platform || navigator.userAgentData?.platform || '—';
+  $('kScreen').textContent  = `${screen.width}×${screen.height} @${Math.round(devicePixelRatio*100)/100}x`;
+  $('kGpu').textContent     = gpuInfo;
+
+  // Sunucuya bildir
+  const profile = {
+    label, width:w, height:h, frameRate:fps,
+    facingMode:fm, tier, hasZoom, hasTorch,
+    maxWidth: caps.width?.max, maxHeight: caps.height?.max,
+    maxFrameRate: caps.frameRate?.max,
+  };
+  cmd('camera_profile', profile);
+
+  // Güncelleme aralığını ayarla
+  if(sendIv) startSend();
+
+  return tier;
+}
+
+/* ══════════════════════════════════════════
+   SPLASH — SEÇİMLER
 ══════════════════════════════════════════ */
 document.querySelectorAll('.target-btn').forEach(b=>{
   b.addEventListener('click',()=>{
@@ -539,85 +711,194 @@ document.querySelectorAll('.target-btn').forEach(b=>{
     document.querySelectorAll('.target-btn').forEach(x=>x.classList.toggle('on',x===b));
   });
 });
+document.querySelectorAll('.qual-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    quality=parseInt(b.dataset.q);
+    document.querySelectorAll('.qual-btn').forEach(x=>x.classList.toggle('on',x===b));
+  });
+});
 document.querySelectorAll('.cam-btn').forEach(b=>{
   b.addEventListener('click',()=>{
     facing=b.dataset.f;
+    selectedDeviceId=null;
     document.querySelectorAll('.cam-btn').forEach(x=>x.classList.toggle('on',x===b));
+    $('camInfo').textContent='Kamera seçilmedi';
+    $('camListWrap').classList.remove('vis');
+    $('camListWrap').innerHTML='';
+    cameras=[];
+    // Tekrar enumerate et
+    requestPermissionAndEnumerate().then(cams=>renderCameraList(cams)).catch(()=>{});
   });
 });
 
 /* ══════════════════════════════════════════
    BAŞLAT
 ══════════════════════════════════════════ */
-const $=id=>document.getElementById(id);
-
-$('startBtn').addEventListener('click',async()=>{
-  $('startBtn').disabled=true;$('sErr').textContent='';
+$('startBtn').addEventListener('click', async()=>{
+  const btn = $('startBtn');
+  btn.disabled=true; btn.textContent='KAMERALAR ARANYOR…'; $('sErr').textContent='';
   try{
-    await openCamera();
+    const cams = await requestPermissionAndEnumerate();
+    renderCameraList(cams);
+    // Kamera seçilmemişse ilk uygununu al
+    if(!selectedDeviceId) selectedDeviceId = cams[0].deviceId;
+    btn.textContent='AÇILIYOR…';
+    await openCamera(selectedDeviceId, facing);
     $('splash').style.display='none';
     ['topBar','styleBar','bottomBar','leftBtns','viewRow'].forEach(id=>$(id).classList.add('vis'));
     connectWS();
-    cmd('set_target',target);
-    cmd('set_style',curStyle);
-    cmd('set_regions',Array.from(activeRegs));
+    const tier = await readCameraSpecs();
+    toast(`Kamera: ${tier.toUpperCase()} kalite tier`, 'info');
   }catch(e){
-    $('sErr').textContent='Kamera açılamadı: '+e.message;
-    $('startBtn').disabled=false;
+    $('sErr').textContent=e.message;
+    btn.disabled=false; btn.textContent='BAŞLAT';
   }
 });
 
-async function openCamera(){
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({
-    video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:false
-  });
-  $('video').srcObject=stream; await $('video').play();
-}
+// Splash yüklenince kamera iznini arka planda iste
+(async()=>{
+  try{
+    const cams = await requestPermissionAndEnumerate();
+    renderCameraList(cams);
+  }catch(_){}
+})();
 
 async function switchCam(){
-  facing=facing==='user'?'environment':'user';
-  try{await openCamera();toast('Kamera değiştirildi','ok');}
-  catch{toast('Değiştirilemedi','err');}
+  if(!cameras.length){ facing=facing==='user'?'environment':'user'; }
+  else{
+    const idx = cameras.findIndex(c=>c.deviceId===selectedDeviceId);
+    const next = cameras[(idx+1) % cameras.length];
+    selectedDeviceId = next.deviceId;
+  }
+  try{
+    await openCamera(selectedDeviceId, facing);
+    await readCameraSpecs();
+    toast('Kamera değiştirildi','ok');
+    if(window.navigator.vibrate) window.navigator.vibrate(40);
+  }catch{ toast('Değiştirilemedi','err'); }
 }
 $('btnCamSwitch').addEventListener('click',switchCam);
 
 /* ══════════════════════════════════════════
-   WEBSOCKEt — ws:// veya wss:// otomatik
+   TORCH
+══════════════════════════════════════════ */
+$('btnTorch').addEventListener('click', async()=>{
+  if(!videoTrack || !torchSupported) return;
+  torchOn = !torchOn;
+  try{
+    await videoTrack.applyConstraints({advanced:[{torch:torchOn}]});
+    $('btnTorch').classList.toggle('torch-on', torchOn);
+    $('btnTorch').textContent = torchOn ? '🔦 AÇIK' : '🔦 TORCH';
+    toast(torchOn ? 'Torch açık':'Torch kapalı', 'info');
+  }catch{ toast('Torch çalışmadı','err'); }
+});
+
+/* ══════════════════════════════════════════
+   ZOOM
+══════════════════════════════════════════ */
+$('zoomSlider').addEventListener('input', async e=>{
+  const v = parseFloat(e.target.value);
+  $('zoomVal').textContent = v.toFixed(1)+'×';
+  if(!videoTrack) return;
+  try{ await videoTrack.applyConstraints({advanced:[{zoom:v}]}); }catch(_){}
+});
+
+/* ══════════════════════════════════════════
+   YÜZ KIRPMA — PiP
+══════════════════════════════════════════ */
+$('btnCrop').addEventListener('click',()=>{
+  cropEnabled=!cropEnabled;
+  cmd('toggle_crop', cropEnabled);
+  $('btnCrop').classList.toggle('crop-on', cropEnabled);
+  $('btnCrop').textContent = cropEnabled ? '👁 YÜZ KES ●' : '👁 YÜZ KES';
+  $('cropPip').classList.toggle('vis', cropEnabled);
+  $('cropControls').classList.toggle('vis', cropEnabled);
+  toast(cropEnabled ? 'Yüz kırpma açık':'Yüz kırpma kapalı','info');
+});
+
+$('cropPipClose').addEventListener('click',()=>{
+  cropEnabled=false;
+  cmd('toggle_crop',false);
+  $('btnCrop').classList.remove('crop-on');
+  $('btnCrop').textContent='👁 YÜZ KES';
+  $('cropPip').classList.remove('vis');
+  $('cropControls').classList.remove('vis');
+});
+$('cropPipFull').addEventListener('click',()=>{
+  $('cropFull').classList.add('vis');
+});
+$('cropFullClose').addEventListener('click',()=>{
+  $('cropFull').classList.remove('vis');
+});
+
+// PiP sürükle (mouse)
+(()=>{
+  const pip=$('cropPip'); let dragging=false,ox=0,oy=0;
+  $('cropPipBar').addEventListener('mousedown',e=>{
+    dragging=true; const r=pip.getBoundingClientRect();
+    ox=e.clientX-r.left; oy=e.clientY-r.top;
+    pip.style.right='auto'; pip.style.bottom='auto';
+  });
+  document.addEventListener('mousemove',e=>{if(!dragging)return;pip.style.left=(e.clientX-ox)+'px';pip.style.top=(e.clientY-oy)+'px'});
+  document.addEventListener('mouseup',()=>dragging=false);
+  // Touch sürükle
+  $('cropPipBar').addEventListener('touchstart',e=>{
+    dragging=true; const r=pip.getBoundingClientRect();
+    ox=e.touches[0].clientX-r.left; oy=e.touches[0].clientY-r.top;
+    pip.style.right='auto'; pip.style.bottom='auto';
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{if(!dragging)return;pip.style.left=(e.touches[0].clientX-ox)+'px';pip.style.top=(e.touches[0].clientY-oy)+'px'},{passive:true});
+  document.addEventListener('touchend',()=>dragging=false,{passive:true});
+})();
+
+// Kırpma kenar payı slider
+$('paddingSlider').addEventListener('input',e=>{
+  const v=parseInt(e.target.value);
+  $('padVal').textContent=v; $('kPadding').textContent=v+'%';
+  $('kamCropSlider').value=v;
+  cmd('set_crop_padding', v/100);
+});
+$('kamCropSlider').addEventListener('input',e=>{
+  const v=parseInt(e.target.value);
+  $('paddingSlider').value=v; $('padVal').textContent=v; $('kPadding').textContent=v+'%';
+  cmd('set_crop_padding', v/100);
+});
+
+/* ══════════════════════════════════════════
+   WEBSOCKEt
 ══════════════════════════════════════════ */
 const WS_URL=`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
 
 function connectWS(){
   ws=new WebSocket(WS_URL);
-  ws.onopen   =()=>{
-    connected=true;
-    $('connDot').classList.add('live');
+  ws.onopen=()=>{
+    connected=true; $('connDot').classList.add('live');
     startSend();
-    // Yeniden bağlandığında mevcut ayarları gönder
+    // Mevcut ayarları gönder
     cmd('set_target',target);
     cmd('set_style',curStyle);
     cmd('set_regions',Array.from(activeRegs));
+    cmd('set_quality',quality);
   };
-  ws.onclose  =()=>{
-    connected=false;
-    $('connDot').classList.remove('live');
+  ws.onclose=()=>{
+    connected=false; $('connDot').classList.remove('live');
     clearInterval(sendIv);
     setTimeout(connectWS,2500);
   };
-  ws.onerror  =()=>{};
+  ws.onerror=()=>{};
   ws.onmessage=onMsg;
 }
 
-const cap2d=document.createElement('canvas').getContext('2d'),capC=cap2d.canvas;
+const cap2d=document.createElement('canvas').getContext('2d'), capC=cap2d.canvas;
 function startSend(){
   clearInterval(sendIv);
   sendIv=setInterval(()=>{
     if(!ws||ws.readyState!==1) return;
     const v=$('video'); if(v.readyState<2) return;
-    capC.width=v.videoWidth||640;capC.height=v.videoHeight||480;
+    capC.width=v.videoWidth||640; capC.height=v.videoHeight||480;
     cap2d.drawImage(v,0,0,capC.width,capC.height);
-    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',.75)}));
-  },80);
+    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',jpegQuality)}));
+  }, sendInterval);
 }
 
 function onMsg(e){
@@ -625,28 +906,30 @@ function onMsg(e){
   if(m.type==='frame'){
     $('camOut').src=m.data;
     applyStats(m.stats);
-    // Snapshot geldi mi?
-    if(m.snapshot){
-      addSnapshot(m.snapshot);
+    if(m.face_crop && cropEnabled){
+      $('cropImg').src=m.face_crop;
+      $('cropFullImg').src=m.face_crop;
     }
-  } else if(m.type==='log'){
+    if(m.snapshot) addSnapshot(m.snapshot);
+  }else if(m.type==='log'){
     addLog(m.msg,m.level,m.ts);
-  } else if(m.type==='pointcloud'){
+  }else if(m.type==='pointcloud'){
     if(!scene) initThree();
     updatePcd(m.points,m.colors);
-  } else if(m.type==='export_done'){
+  }else if(m.type==='export_done'){
     toast('ZIP hazır — indiriliyor!','ok');
     addLog(`Export: ${m.name} (${m.size_kb} KB)`,'OK',ts());
-    // Otomatik indir
     const a=document.createElement('a');
-    a.href=m.url;a.download=m.name;document.body.appendChild(a);a.click();a.remove();
-    loadExports();
-    openDrawer('export');
+    a.href=m.url; a.download=m.name; document.body.appendChild(a); a.click(); a.remove();
+    loadExports(); openDrawer('export');
+  }else if(m.type==='cam_adapted'){
+    $('kJpeg').textContent=m.jpeg_quality+'%';
+    addLog(`Kamera tier ${m.tier.toUpperCase()} — JPEG %${m.jpeg_quality}`,'SYSTEM',ts());
   }
 }
 
-function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
-function cmd(c,v){send({type:'cmd',cmd:c,value:v});}
+function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+function cmd(c,v){ send({type:'cmd',cmd:c,value:v}); }
 
 /* ══════════════════════════════════════════
    STATİSTİK
@@ -658,22 +941,20 @@ function applyStats(s){
   const fEl=$('sFace');
   fEl.textContent=s.detected?'✓':'✗';
   fEl.className='v '+(s.detected?'ok':'bad');
-  $('modePill').textContent=s.style?.toUpperCase()||'—';
-
-  // Frame limit uyarısı
-  $('limitBadge').classList.toggle('vis', !!s.at_limit);
+  $('modePill').textContent=(s.style||curStyle).toUpperCase();
+  $('limitBadge').classList.toggle('vis',!!s.at_limit);
+  $('kQuality').textContent=['Hızlı','Dengeli','Yüksek'][s.quality??1];
 
   if(s.recording!==recording){
     recording=s.recording;
     $('recBtn').classList.toggle('recording',recording);
     $('recBadge').classList.toggle('vis',recording);
     if(recording){
-      recSec=0;
-      clearInterval(recTimer);
+      recSec=0; clearInterval(recTimer);
       recTimer=setInterval(()=>{recSec++;$('recTime').textContent=`REC ${recSec}s`;},1000);
-    } else {
+      if(window.navigator.vibrate) window.navigator.vibrate([30,20,30]);
+    }else{
       clearInterval(recTimer);
-      // Sunucudan limit dolu geldiyse uyar
       if(s.at_limit) toast('Frame limiti doldu — EXPORT yap!','warn');
     }
   }
@@ -683,36 +964,15 @@ function applyStats(s){
    BUTONLAR
 ══════════════════════════════════════════ */
 $('recBtn').addEventListener('click',()=>{
-  if(!recording){
-    cmd('start_rec');
-    toast('Kayıt başladı','info');
-  } else {
-    cmd('stop_rec');
-    toast('Kayıt durdu','ok');
-  }
+  if(!recording){ cmd('start_rec'); toast('Kayıt başladı','info'); }
+  else           { cmd('stop_rec');  toast('Kayıt durdu','ok');    }
 });
-
-$('btnExport').addEventListener('click',()=>{
-  cmd('export');
-  toast('Export hazırlanıyor…','info');
-  openDrawer('export');
-});
-
+$('btnExport').addEventListener('click',()=>{ cmd('export'); toast('Export hazırlanıyor…','info'); openDrawer('export'); });
 $('btnReset').addEventListener('click',()=>{
-  if(confirm('Tüm kayıt verisi silinsin mi?')){
-    cmd('reset');
-    toast('Sıfırlandı','ok');
-    $('limitBadge').classList.remove('vis');
-  }
+  if(confirm('Tüm kayıt verisi silinsin mi?')){ cmd('reset'); toast('Sıfırlandı','ok'); $('limitBadge').classList.remove('vis'); }
 });
+$('btnSnap').addEventListener('click',()=>{ cmd('snapshot'); toast('Snapshot alınıyor…','info'); });
 
-// Snapshot butonu
-$('btnSnap').addEventListener('click',()=>{
-  cmd('snapshot');
-  toast('Snapshot alınıyor…','info');
-});
-
-// Stil seçici
 document.querySelectorAll('.sBtn').forEach(b=>{
   b.addEventListener('click',()=>{
     curStyle=b.dataset.s;
@@ -722,7 +982,6 @@ document.querySelectorAll('.sBtn').forEach(b=>{
   });
 });
 
-// View toggle
 $('vCam').addEventListener('click',()=>setView(false));
 $('v3d') .addEventListener('click',()=>setView(true));
 function setView(pcd){
@@ -734,49 +993,57 @@ function setView(pcd){
   if(pcd&&!scene) initThree();
 }
 
-// Çekmece butonları
 $('btnDrawer').addEventListener('click',()=>openDrawer('log'));
-$('btnRegion').addEventListener('click',()=>openDrawer('region'));
 $('refExpBtn').addEventListener('click',loadExports);
-
-// Log temizle
 $('logClear').addEventListener('click',()=>{
   $('logList').innerHTML='';
   logC={OK:0,WARN:0,ERROR:0,SCAN:0};
-  $('lOk').textContent=$('lWn').textContent=$('lEr').textContent=$('lSc').textContent='0';
+  ['lOk','lWn','lEr','lSc'].forEach(id=>$(id).textContent='0');
 });
+$('snapClear').addEventListener('click',()=>{snapshots=[];renderSnapGrid();toast('Snapshotlar temizlendi','ok');});
 
-// Snapshot temizle
-$('snapClear').addEventListener('click',()=>{
-  snapshots=[];
-  renderSnapGrid();
-  toast('Snapshotlar temizlendi','ok');
-});
-
-// Klavye
+// Klavye kısayolları
 document.addEventListener('keydown',e=>{
-  if(!connected||e.target.tagName==='INPUT') return;
+  if(!connected||e.target.tagName==='INPUT'||e.target.tagName==='RANGE') return;
   const k=e.key.toLowerCase();
   if(k===' '){e.preventDefault();$('recBtn').click();}
   else if(k==='e') $('btnExport').click();
   else if(k==='p'||k==='s') $('btnSnap').click();
-  else if(k==='r') {if(e.ctrlKey){e.preventDefault();$('btnReset').click();}}
+  else if(k==='c') $('btnCrop').click();
   else if(k==='3') setView(!showPcd);
+  else if(k==='r'&&e.ctrlKey){e.preventDefault();$('btnReset').click();}
 });
+
+// Stil değiştirme swipe (mobil)
+(()=>{
+  let tx=0;
+  const styles=['wireframe','dots','filled','regions','depth','xray','thermal','skeleton'];
+  document.addEventListener('touchstart',e=>{
+    if(e.target.closest('#drawer')||e.target.closest('#cropPip')||e.target.closest('button')) return;
+    tx=e.touches[0].clientX;
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(e.target.closest('#drawer')||e.target.closest('#cropPip')||e.target.closest('button')) return;
+    const dx=e.changedTouches[0].clientX-tx;
+    if(Math.abs(dx)<60) return;
+    const ci=styles.indexOf(curStyle);
+    const next=styles[(ci+(dx<0?1:-1)+styles.length)%styles.length];
+    const btn=document.querySelector(`.sBtn[data-s="${next}"]`);
+    if(btn) btn.click();
+  },{passive:true});
+})();
 
 /* ══════════════════════════════════════════
    ÇEKMECE
 ══════════════════════════════════════════ */
 let dOpen=false;
 function openDrawer(tab){
-  $('dBg').classList.add('open');
-  $('drawer').classList.add('open');
-  dOpen=true;
-  if(tab)switchDTab(tab);
-  if(tab==='export')loadExports();
+  $('dBg').classList.add('open'); $('drawer').classList.add('open'); dOpen=true;
+  if(tab) switchDTab(tab);
+  if(tab==='export') loadExports();
 }
-function closeDrawer(){$('dBg').classList.remove('open');$('drawer').classList.remove('open');dOpen=false;}
-$('dBg')   .addEventListener('click',closeDrawer);
+function closeDrawer(){ $('dBg').classList.remove('open'); $('drawer').classList.remove('open'); dOpen=false; }
+$('dBg').addEventListener('click',closeDrawer);
 $('dHandle').addEventListener('click',closeDrawer);
 document.querySelectorAll('.dTab').forEach(t=>t.addEventListener('click',()=>switchDTab(t.dataset.dt)));
 function switchDTab(id){
@@ -785,50 +1052,46 @@ function switchDTab(id){
   if(id==='export') loadExports();
 }
 let tyS=0;
-$('drawer').addEventListener('touchstart',e=>{tyS=e.touches[0].clientY;},{passive:true});
-$('drawer').addEventListener('touchend',  e=>{if(e.changedTouches[0].clientY-tyS>60)closeDrawer();},{passive:true});
+$('drawer').addEventListener('touchstart',e=>{tyS=e.touches[0].clientY},{passive:true});
+$('drawer').addEventListener('touchend',e=>{if(e.changedTouches[0].clientY-tyS>60) closeDrawer()},{passive:true});
 
 /* ══════════════════════════════════════════
    LOG
 ══════════════════════════════════════════ */
 function addLog(msg,level,t){
-  if(level in logC)logC[level]++;
-  const r=document.createElement('div');r.className='lRow';
+  if(level in logC) logC[level]++;
+  const r=document.createElement('div'); r.className='lRow';
   r.innerHTML=`<span class="lTs">${t}</span><span class="lLv ${level}">${level}</span><span class="lMsg">${esc(msg)}</span>`;
   $('logList').appendChild(r);
-  while($('logList').children.length>300)$('logList').removeChild($('logList').firstChild);
+  while($('logList').children.length>300) $('logList').removeChild($('logList').firstChild);
   $('logList').scrollTop=$('logList').scrollHeight;
-  $('lOk').textContent=logC.OK;$('lWn').textContent=logC.WARN;$('lEr').textContent=logC.ERROR;$('lSc').textContent=logC.SCAN;
+  $('lOk').textContent=logC.OK; $('lWn').textContent=logC.WARN;
+  $('lEr').textContent=logC.ERROR; $('lSc').textContent=logC.SCAN;
 }
-function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
-function ts(){return new Date().toLocaleTimeString('tr-TR',{hour12:false})+'.'+String(new Date().getMilliseconds()).padStart(3,'0');}
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function ts(){ return new Date().toLocaleTimeString('tr-TR',{hour12:false})+'.'+String(new Date().getMilliseconds()).padStart(3,'0'); }
 
 /* ══════════════════════════════════════════
    SNAPSHOT
 ══════════════════════════════════════════ */
 function addSnapshot(dataUrl){
-  const now=new Date();
-  snapshots.unshift({url:dataUrl,time:now.toLocaleTimeString('tr-TR',{hour12:false})});
-  if(snapshots.length>30) snapshots.pop(); // Max 30 snap bellek tut
+  snapshots.unshift({url:dataUrl,time:new Date().toLocaleTimeString('tr-TR',{hour12:false})});
+  if(snapshots.length>30) snapshots.pop();
   renderSnapGrid();
   toast('Snapshot kaydedildi','ok');
+  if(window.navigator.vibrate) window.navigator.vibrate(50);
 }
-
 function renderSnapGrid(){
   const grid=$('snapGrid');
   $('snapCount').textContent=snapshots.length;
-  if(!snapshots.length){
-    grid.innerHTML='<p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p>';
-    return;
-  }
+  if(!snapshots.length){ grid.innerHTML='<p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p>'; return; }
   grid.innerHTML='';
   snapshots.forEach((s,i)=>{
-    const div=document.createElement('div');div.className='snapThumb';
-    const img=document.createElement('img');img.src=s.url;img.loading='lazy';
+    const div=document.createElement('div'); div.className='snapThumb';
+    const img=document.createElement('img'); img.src=s.url; img.loading='lazy';
     const a=document.createElement('a');
-    a.className='sdl';a.textContent='⬇ İNDİR';
-    a.href=s.url;a.download=`bodymap_snap_${i+1}.png`;
-    div.appendChild(img);div.appendChild(a);
+    a.className='sdl'; a.textContent='⬇'; a.href=s.url; a.download=`bodymap_snap_${i+1}.png`;
+    div.appendChild(img); div.appendChild(a);
     grid.appendChild(div);
   });
 }
@@ -839,14 +1102,14 @@ function renderSnapGrid(){
 const rGrid=$('regionGrid');
 RKEYS.forEach(name=>{
   const el=document.createElement('div');
-  el.className='rItem on';el.dataset.name=name;el.style.color=REGIONS[name];
+  el.className='rItem on'; el.dataset.name=name; el.style.color=REGIONS[name];
   el.innerHTML=`<div class="rDot" style="background:${REGIONS[name]}"></div><div class="rName">${name}</div>`;
-  el.addEventListener('click',()=>{const on=el.classList.toggle('on');if(on)activeRegs.add(name);else activeRegs.delete(name);});
+  el.addEventListener('click',()=>{ const on=el.classList.toggle('on'); if(on) activeRegs.add(name); else activeRegs.delete(name); });
   rGrid.appendChild(el);
 });
-$('rAll') .addEventListener('click',()=>{document.querySelectorAll('.rItem').forEach(x=>{x.classList.add('on');activeRegs.add(x.dataset.name);});});
-$('rNone').addEventListener('click',()=>{document.querySelectorAll('.rItem').forEach(x=>{x.classList.remove('on');activeRegs.delete(x.dataset.name);});});
-$('rApply').addEventListener('click',()=>{cmd('set_regions',Array.from(activeRegs));toast(`${activeRegs.size} bölge aktif`,'ok');closeDrawer();});
+$('rAll') .addEventListener('click',()=>{ document.querySelectorAll('.rItem').forEach(x=>{ x.classList.add('on'); activeRegs.add(x.dataset.name); }); });
+$('rNone').addEventListener('click',()=>{ document.querySelectorAll('.rItem').forEach(x=>{ x.classList.remove('on'); activeRegs.delete(x.dataset.name); }); });
+$('rApply').addEventListener('click',()=>{ cmd('set_regions',Array.from(activeRegs)); toast(`${activeRegs.size} bölge aktif`,'ok'); closeDrawer(); });
 
 /* ══════════════════════════════════════════
    EXPORT LİSTESİ
@@ -855,24 +1118,25 @@ async function loadExports(){
   const el=$('expList');
   try{
     const d=await(await fetch('/list_exports')).json();
-    if(!d.exports.length){el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(245,242,237,.28)">Henüz export yok.</p>';return;}
+    if(!d.exports.length){ el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(245,242,237,.25)">Henüz export yok.</p>'; return; }
     el.innerHTML='';
     d.exports.forEach(ex=>{
-      const div=document.createElement('div');div.className='eItem';
+      const div=document.createElement('div'); div.className='eItem';
       div.innerHTML=`<div><a href="${esc(ex.url)}" download="${esc(ex.name)}">${esc(ex.name)}</a><div class="eMeta">ZIP · OBJ · PLY · JSON</div></div><span class="eSize">${ex.size_kb} KB</span>`;
       el.appendChild(div);
     });
-  }catch{el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(255,59,0,.35)">Alınamadı.</p>';}
+  }catch{ el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(255,59,0,.3)">Alınamadı.</p>'; }
 }
 loadExports();
 
 /* ══════════════════════════════════════════
    TOAST
 ══════════════════════════════════════════ */
-const toastEl=$('toast');
 function toast(msg,type=''){
-  toastEl.textContent=msg;toastEl.className='show '+type;
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toastEl.className='';},2400);
+  const el=$('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ el.className=''; },2500);
 }
 </script>
 </body>
