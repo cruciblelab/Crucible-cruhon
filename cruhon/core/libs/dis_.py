@@ -14,7 +14,10 @@ Peek inside compiled Python functions and code objects.
   @dis.stack_size[fn]             → max stack size needed
   @dis.consts[fn]                 → tuple of constants used
   @dis.names[fn]                  → tuple of global names referenced
+  @dis.varnames[fn]               → tuple of local variable names
   @dis.code[fn]                   → the underlying code object
+  @dis.code_info[fn]              → detailed formatted code info string
+  @dis.opname[opcode]             → mnemonic name for an opcode number
 """
 from ..registry import register_lib, register_lib_call
 
@@ -38,12 +41,16 @@ def register():
 
     # ── Info ──────────────────────────────────────────────────
     register_lib_call("dis", "stack_size",
-        lambda a: f"{a[0].__code__ if hasattr(a[0], '__code__') else a[0]}.co_stacksize"
-        if False else
         lambda a: f"(getattr({a[0]}, '__code__', {a[0]})).co_stacksize")
     register_lib_call("dis", "consts",
         lambda a: f"(getattr({a[0]}, '__code__', {a[0]})).co_consts")
     register_lib_call("dis", "names",
         lambda a: f"(getattr({a[0]}, '__code__', {a[0]})).co_names")
+    register_lib_call("dis", "varnames",
+        lambda a: f"(getattr({a[0]}, '__code__', {a[0]})).co_varnames")
     register_lib_call("dis", "code",
         lambda a: f"(getattr({a[0]}, '__code__', {a[0]}))")
+    register_lib_call("dis", "code_info",
+        lambda a: f"{_DI}.code_info({a[0]})")
+    register_lib_call("dis", "opname",
+        lambda a: f"{_DI}.opname[{a[0]}]")

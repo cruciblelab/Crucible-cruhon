@@ -23,6 +23,11 @@ Read and write .ini / .cfg files with sections and key-value pairs.
 ━━━ WRITE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @configparser.set[cfg; section; key; value] → set a key
   @configparser.add_section[cfg; section]     → add a section
+  @configparser.remove_section[cfg; section]  → delete a whole section
+  @configparser.remove_key[cfg; section; key] → delete a single key
+  @configparser.read_dict[cfg; data]          → load from a nested dict
+  @configparser.to_dict[cfg]                  → whole config as nested dict
+  @configparser.has_section[cfg; section]     → bool
   @configparser.save[cfg; path]               → write to a file
   @configparser.dumps[cfg]                    → serialise to a string
 """
@@ -72,6 +77,16 @@ def register():
         lambda a: f"{a[0]}.set({a[1]}, {a[2]}, str({a[3]}))")
     register_lib_call("configparser", "add_section",
         lambda a: f"{a[0]}.add_section({a[1]})")
+    register_lib_call("configparser", "remove_section",
+        lambda a: f"{a[0]}.remove_section({a[1]})")
+    register_lib_call("configparser", "remove_key",
+        lambda a: f"{a[0]}.remove_option({a[1]}, {a[2]})")
+    register_lib_call("configparser", "read_dict",
+        lambda a: f"(lambda _c, _d: (_c.read_dict(_d), _c)[1])({a[0]}, {a[1]})")
+    register_lib_call("configparser", "to_dict",
+        lambda a: f"(lambda _c: {{_s: dict(_c.items(_s)) for _s in _c.sections()}})({a[0]})")
+    register_lib_call("configparser", "has_section",
+        lambda a: f"{a[0]}.has_section({a[1]})")
     register_lib_call("configparser", "save",
         lambda a: (
             f"(lambda _c, _p: (lambda _f: (_c.write(_f), _f.close()))(open(_p, 'w')))({a[0]}, {a[1]})"

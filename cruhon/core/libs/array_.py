@@ -24,6 +24,26 @@ Typecodes: 'b'/'B' int8, 'h'/'H' int16, 'i'/'I' int32, 'l'/'L' int32+,
   @array.length[arr]              → number of elements
   @array.sum[arr]                 → sum of elements
   @array.min[arr] @array.max[arr] → extremes
+  @array.index[arr; x]            → first position of x
+  @array.count_of[arr; x]         → how many times x occurs
+  @array.get[arr; i]              → element at index i
+  @array.slice[arr; i; j]         → sub-array arr[i:j]
+
+━━━ MUTATE (returns the same array) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @array.append[arr; x]           → append x
+  @array.extend[arr; seq]         → append every item of seq
+  @array.insert[arr; i; x]        → insert x at index i
+  @array.pop[arr]                 → remove & return last element
+  @array.pop[arr; i]              → remove & return element i
+  @array.remove[arr; x]          → remove first occurrence of x
+  @array.set[arr; i; x]           → assign arr[i] = x
+  @array.reverse[arr]             → reverse in place
+  @array.concat[a; b]             → new array a + b
+  @array.byteswap[arr]            → swap byte order in place
+
+━━━ FILES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @array.to_file[arr; path]       → write raw bytes to a file
+  @array.from_file[typecode; path; n] → read n items from a file
 """
 from ..registry import register_lib, register_lib_call
 
@@ -76,3 +96,56 @@ def register():
 
     register_lib_call("array", "max",
         lambda a: f"max({a[0]})")
+
+    register_lib_call("array", "index",
+        lambda a: f"{a[0]}.index({a[1]})")
+
+    register_lib_call("array", "count_of",
+        lambda a: f"{a[0]}.count({a[1]})")
+
+    register_lib_call("array", "get",
+        lambda a: f"{a[0]}[{a[1]}]")
+
+    register_lib_call("array", "slice",
+        lambda a: f"{a[0]}[{a[1]}:{a[2]}]")
+
+    # ── Mutate (return the array for chaining) ────────────────
+    register_lib_call("array", "append",
+        lambda a: f"(lambda _a, _x: (_a.append(_x), _a)[1])({a[0]}, {a[1]})")
+
+    register_lib_call("array", "extend",
+        lambda a: f"(lambda _a, _s: (_a.extend(_s), _a)[1])({a[0]}, {a[1]})")
+
+    register_lib_call("array", "insert",
+        lambda a: f"(lambda _a, _i, _x: (_a.insert(_i, _x), _a)[1])({a[0]}, {a[1]}, {a[2]})")
+
+    register_lib_call("array", "pop",
+        lambda a: f"{a[0]}.pop({a[1]})" if len(a) > 1 else f"{a[0]}.pop()")
+
+    register_lib_call("array", "remove",
+        lambda a: f"(lambda _a, _x: (_a.remove(_x), _a)[1])({a[0]}, {a[1]})")
+
+    register_lib_call("array", "set",
+        lambda a: f"(lambda _a, _i, _x: (_a.__setitem__(_i, _x), _a)[1])({a[0]}, {a[1]}, {a[2]})")
+
+    register_lib_call("array", "reverse",
+        lambda a: f"(lambda _a: (_a.reverse(), _a)[1])({a[0]})")
+
+    register_lib_call("array", "concat",
+        lambda a: f"({a[0]} + {a[1]})")
+
+    register_lib_call("array", "byteswap",
+        lambda a: f"(lambda _a: (_a.byteswap(), _a)[1])({a[0]})")
+
+    # ── Files ─────────────────────────────────────────────────
+    register_lib_call("array", "to_file",
+        lambda a: (
+            f"(lambda _a, _p: (lambda _f: (_a.tofile(_f), _f.close())[1])(open(_p, 'wb')))({a[0]}, {a[1]})"
+        ))
+
+    register_lib_call("array", "from_file",
+        lambda a: (
+            f"(lambda _t, _p, _n: (lambda _a: (lambda _f: (_a.fromfile(_f, _n), _f.close(), _a)[2])"
+            f"(open(_p, 'rb')))({_AR}(_t)))({a[0]}, {a[1]}, {a[2]})"
+        ))
+

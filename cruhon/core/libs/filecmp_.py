@@ -15,6 +15,9 @@ Check whether files are identical and diff entire directory trees.
   @filecmp.diff_files[a; b]       → files present in both dirs that differ
   @filecmp.left_only[a; b]        → files only in directory a
   @filecmp.right_only[a; b]       → files only in directory b
+  @filecmp.common[a; b]           → names present in both directories
+  @filecmp.compare[a; b; names]   → (match, mismatch, errors) for given names
+  @filecmp.clear_cache[]          → clear the comparison cache
 """
 from ..registry import register_lib, register_lib_call
 
@@ -41,3 +44,9 @@ def register():
         lambda a: f"{_FC}.dircmp({a[0]}, {a[1]}).left_only")
     register_lib_call("filecmp", "right_only",
         lambda a: f"{_FC}.dircmp({a[0]}, {a[1]}).right_only")
+    register_lib_call("filecmp", "common",
+        lambda a: f"{_FC}.dircmp({a[0]}, {a[1]}).common")
+    register_lib_call("filecmp", "compare",
+        lambda a: f"{_FC}.cmpfiles({a[0]}, {a[1]}, {a[2]})")
+    register_lib_call("filecmp", "clear_cache",
+        lambda a: f"{_FC}.clear_cache()")

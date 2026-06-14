@@ -78,7 +78,7 @@ def register():
 
     # ── Trig / Hyperbolic ─────────────────────────────────────
     for _fn in ("sin", "cos", "tan", "asin", "acos", "atan",
-                "sinh", "cosh", "tanh"):
+                "sinh", "cosh", "tanh", "asinh", "acosh", "atanh"):
         register_lib_call("cmath", _fn,
             (lambda name: (lambda a: f"{_CM}.{name}({a[0]})"))(_fn))
 

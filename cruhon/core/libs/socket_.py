@@ -24,6 +24,28 @@ all without @raw.
   @socket.is_open[host; port]     → bool: can we connect to host:port
   @socket.is_open[host; port; t]  → with a timeout
   @socket.free_port[]             → an unused local TCP port number
+
+━━━ SERVER (TCP) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @socket.tcp[]                   → a fresh unconnected TCP socket
+  @socket.server[port]            → listening socket bound to all interfaces
+  @socket.server[host; port]      → listening socket on a specific host
+  @socket.bind[sock; host; port]  → bind a socket to an address
+  @socket.listen[sock]            → start listening (default backlog)
+  @socket.listen[sock; backlog]   → listen with a backlog size
+  @socket.accept[sock]            → (connection, address) for next client
+
+━━━ UDP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @socket.udp[]                   → a UDP (datagram) socket
+  @socket.send_to[sock; data; host; port] → send a datagram
+  @socket.recv_from[sock; n]      → (data, sender_address)
+
+━━━ OPTIONS / INFO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @socket.set_timeout[sock; secs] → set a socket timeout (None = blocking)
+  @socket.reuse[sock]             → enable SO_REUSEADDR
+  @socket.local[sock]             → this socket's own (host, port)
+  @socket.peer[sock]              → the connected peer's (host, port)
+  @socket.shutdown[sock]          → disable further sends and receives
+  @socket.file[sock]              → a file-like wrapper over the socket
 """
 from ..registry import register_lib, register_lib_call
 
@@ -72,3 +94,43 @@ def register():
             f"(lambda _s: (_s.bind(('', 0)), _s.getsockname()[1], _s.close())[1])"
             f"({_SK}.socket({_SK}.AF_INET, {_SK}.SOCK_STREAM))"
         ))
+
+    # ── Server (TCP) ──────────────────────────────────────────
+    register_lib_call("socket", "tcp",
+        lambda a: f"{_SK}.socket({_SK}.AF_INET, {_SK}.SOCK_STREAM)")
+    register_lib_call("socket", "server",
+        lambda a: (
+            f"(lambda _h, _p: (lambda _s: (_s.setsockopt({_SK}.SOL_SOCKET, {_SK}.SO_REUSEADDR, 1), "
+            f"_s.bind((_h, _p)), _s.listen(), _s)[3])({_SK}.socket()))({a[0]}, {a[1]})"
+            if len(a) > 1 else
+            f"(lambda _p: (lambda _s: (_s.setsockopt({_SK}.SOL_SOCKET, {_SK}.SO_REUSEADDR, 1), "
+            f"_s.bind(('', _p)), _s.listen(), _s)[3])({_SK}.socket()))({a[0]})"
+        ))
+    register_lib_call("socket", "bind",
+        lambda a: f"{a[0]}.bind(({a[1]}, {a[2]}))")
+    register_lib_call("socket", "listen",
+        lambda a: f"{a[0]}.listen({a[1]})" if len(a) > 1 else f"{a[0]}.listen()")
+    register_lib_call("socket", "accept",
+        lambda a: f"{a[0]}.accept()")
+
+    # ── UDP ───────────────────────────────────────────────────
+    register_lib_call("socket", "udp",
+        lambda a: f"{_SK}.socket({_SK}.AF_INET, {_SK}.SOCK_DGRAM)")
+    register_lib_call("socket", "send_to",
+        lambda a: f"{a[0]}.sendto({a[1]}, ({a[2]}, {a[3]}))")
+    register_lib_call("socket", "recv_from",
+        lambda a: f"{a[0]}.recvfrom({a[1]})")
+
+    # ── Options / Info ────────────────────────────────────────
+    register_lib_call("socket", "set_timeout",
+        lambda a: f"{a[0]}.settimeout({a[1]})")
+    register_lib_call("socket", "reuse",
+        lambda a: f"{a[0]}.setsockopt({_SK}.SOL_SOCKET, {_SK}.SO_REUSEADDR, 1)")
+    register_lib_call("socket", "local",
+        lambda a: f"{a[0]}.getsockname()")
+    register_lib_call("socket", "peer",
+        lambda a: f"{a[0]}.getpeername()")
+    register_lib_call("socket", "shutdown",
+        lambda a: f"{a[0]}.shutdown({_SK}.SHUT_RDWR)")
+    register_lib_call("socket", "file",
+        lambda a: f"{a[0]}.makefile({a[1]})" if len(a) > 1 else f"{a[0]}.makefile('rwb')")
