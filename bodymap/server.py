@@ -538,16 +538,20 @@ def detect_pose_match(face_lms, pose_lms,
         return matched, conf, "Hazır ✓" if matched else "Elleri daha yukarı kaldır"
 
     elif target_id == "left_side":
-        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
-        rv, lv = pv(12), pv(11)
-        matched = rv > 0.7 and lv < 0.5
-        return matched, rv * 0.6 + (0.3 if lv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sola dön"
-
-    elif target_id == "right_side":
+        # Sol profil: kişinin sol omzu (lm[11]) kameraya dönük → görünür,
+        # sağ omzu (lm[12]) arkada → görünmez
         if not pose_lms: return False, 0.0, "Vücut görünmüyor"
         lv, rv = pv(11), pv(12)
         matched = lv > 0.7 and rv < 0.5
-        return matched, lv * 0.6 + (0.3 if rv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sağa dön"
+        return matched, lv * 0.6 + (0.3 if rv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sola dön"
+
+    elif target_id == "right_side":
+        # Sağ profil: kişinin sağ omzu (lm[12]) kameraya dönük → görünür,
+        # sol omzu (lm[11]) arkada → görünmez
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        rv, lv = pv(12), pv(11)
+        matched = rv > 0.7 and lv < 0.5
+        return matched, rv * 0.6 + (0.3 if lv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sağa dön"
 
     elif target_id == "face_up":
         if not face_lms: return False, 0.0, "Yüz görünmüyor"
