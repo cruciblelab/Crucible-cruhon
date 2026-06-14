@@ -27,6 +27,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import struct
 
 import cv2
 import mediapipe as mp
@@ -117,6 +118,7 @@ STYLES = {
     "xray":      {"name": "X-Ray",        "desc": "Yarı saydam tarama"},
     "thermal":   {"name": "Termal",       "desc": "Isı haritası"},
     "skeleton":  {"name": "İskelet",      "desc": "Kemik bağlantıları"},
+    "mold":      {"name": "Renksiz Kalıp","desc": "Siyah zemin, beyaz tel kafes"},
 }
 
 TARGETS = {
@@ -320,6 +322,12 @@ class Session:
         self.guided_pose_idx  = 0
         self.pose_hold_frames = 0
         self.pose_complete    = False
+        # Kalibrasyon (px → cm dönüşümü)
+        self.px_per_cm: float = 0.0
+        self.calib_shoulder_cm: float = 0.0
+        # Ölçüm geçmişi (export için ortalama)
+        self._avg_measurements: dict = {}
+        self._meas_accum: list = []
         # İç durum
         self._log_q: _queue.Queue = _queue.Queue(maxsize=400)
         self._fps_buf = deque(maxlen=30)
@@ -424,7 +432,7 @@ def auto_tune_from_profile(profile: dict, holistic: HolisticRef, sess: Session) 
 #  ÖLÇÜMLER
 # ══════════════════════════════════════════════════════════════════
 
-def calculate_measurements(face_lms, pose_lms, w: int, h: int) -> dict:
+def calculate_measurements(face_lms, pose_lms, w: int, h: int, px_per_cm: float = 0.0) -> dict:
     """Landmark'lardan piksel bazlı antropometrik ölçümler hesaplar."""
     m: dict = {}
 
@@ -465,6 +473,10 @@ def calculate_measurements(face_lms, pose_lms, w: int, h: int) -> dict:
             p23, p24 = pxp(23), pxp(24)
             m['hip_width'] = round(math.hypot(p24[0]-p23[0], p24[1]-p23[1]))
 
+    if px_per_cm > 0:
+        for key in ('face_width', 'face_height', 'eye_dist', 'shoulder_width', 'hip_width', 'nose_mouth'):
+            if key in m:
+                m[f'{key}_cm'] = round(m[key] / px_per_cm, 1)
     return m
 
 
@@ -570,6 +582,140 @@ def detect_pose_match(face_lms, pose_lms,
     return False, 0.0, "Bilinmeyen poz"
 
 
+def is_quality_frame(face_lms, pose_lms) -> bool:
+    """Kalitesi düşük frame'leri filtrele — bulanık/görünmez landmark'lar"""
+    if face_lms is None and pose_lms is None:
+        return False
+    if face_lms is not None:
+        vis = [getattr(lm, 'visibility', 1.0) for lm in face_lms.landmark[:30]
+               if hasattr(lm, 'visibility')]
+        if vis and np.mean(vis) < 0.45:
+            return False
+    if pose_lms is not None:
+        key = [getattr(pose_lms.landmark[i], 'visibility', 0.0) for i in [0, 11, 12]]
+        if np.mean(key) < 0.35:
+            return False
+    return True
+
+
+def build_wireframe_obj(pts_3d: np.ndarray, connections) -> str:
+    """Renksiz tel kafes OBJ — yalnızca kenarlar, renk/yüzey yok (kalıp/şablon)"""
+    lines = [
+        "# BodyMap Wireframe — Yüz Kafesi Kalıbı",
+        "# Renksiz tel örgü: sadece kenarlar ve noktalar",
+        f"# Vertex: {len(pts_3d)}",
+    ]
+    for x, y, z in pts_3d:
+        lines.append(f"v {x:.6f} {y:.6f} {z:.6f}")
+    seen = set()
+    for a, b in connections:
+        edge = (min(a, b), max(a, b))
+        if edge not in seen:
+            seen.add(edge)
+            lines.append(f"l {a+1} {b+1}")
+    lines.append(f"# Kenar sayısı: {len(seen)}")
+    return "\n".join(lines)
+
+
+def build_html_report(session: "Session", export_name: str) -> str:
+    """Tarayıcıda açılıp PDF olarak kaydedilebilen HTML rapor"""
+    from datetime import datetime as _dt
+    now = _dt.now().strftime("%d.%m.%Y %H:%M")
+
+    # Ölçüm özeti
+    meas_rows = ""
+    if hasattr(session, '_avg_measurements') and session._avg_measurements:
+        labels = {
+            'face_width': 'Yüz Genişliği', 'face_height': 'Yüz Yüksekliği',
+            'eye_dist': 'Göz Arası Mesafe', 'head_tilt': 'Baş Eğim Açısı',
+            'face_ratio': 'Yüz Oranı', 'shoulder_width': 'Omuz Genişliği',
+            'hip_width': 'Kalça Genişliği', 'shoulder_sym': 'Omuz Simetrisi',
+            'nose_mouth': 'Burun-Ağız Mesafesi',
+        }
+        for k, v in session._avg_measurements.items():
+            if k.endswith('_cm'):
+                continue
+            label = labels.get(k, k)
+            cm_v = session._avg_measurements.get(f'{k}_cm')
+            unit = '°' if 'tilt' in k else ('' if 'ratio' in k else ' px')
+            cm_str = f'<td class="cm">{cm_v} cm</td>' if cm_v is not None else '<td class="cm">—</td>'
+            meas_rows += f'<tr><td>{label}</td><td>{v}{unit}</td>{cm_str}</tr>'
+
+    calib_note = ""
+    if hasattr(session, 'px_per_cm') and session.px_per_cm > 0:
+        calib_note = f'<p class="calib">Kalibrasyon: {session.px_per_cm:.1f} px/cm (omuz referansı)</p>'
+    else:
+        calib_note = '<p class="calib warn">Kalibrasyon yapılmadı — cm değerleri mevcut değil</p>'
+
+    scan_mode_label = {"free": "Serbest", "360": "360° Döngüsel", "guided": "Poz Rehberli"}.get(session.scan_mode, session.scan_mode)
+    coverage = ""
+    if session.scan_mode == "360" and session.covered_sectors:
+        pct = len(session.covered_sectors) / 12 * 100
+        coverage = f'<p>360° Kapsam: {pct:.0f}% ({len(session.covered_sectors)}/12 sektör)</p>'
+
+    return f"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>BodyMap Tarama Raporu — {now}</title>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:#f8f8f8;color:#111;padding:32px}}
+  h1{{font-size:22px;font-weight:900;letter-spacing:-0.5px;margin-bottom:4px}}
+  h1 span{{color:#ff3b00}}
+  .subtitle{{font-size:11px;color:#888;letter-spacing:2px;margin-bottom:24px}}
+  .section{{background:#fff;border:1px solid #e0e0e0;padding:16px 20px;margin-bottom:16px}}
+  .section h2{{font-size:12px;letter-spacing:2px;color:#888;margin-bottom:12px;font-weight:600}}
+  .meta-grid{{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}}
+  .meta-item{{font-size:12px}}.meta-item .label{{color:#888;font-size:10px}}
+  table{{width:100%;border-collapse:collapse;font-size:12px}}
+  th{{text-align:left;font-size:10px;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #e0e0e0;font-weight:600}}
+  td{{padding:8px 8px;border-bottom:1px solid #f0f0f0}}
+  td.cm{{color:#00a8d4;font-weight:600}}
+  .calib{{font-size:11px;color:#555;padding:8px 0 0}}
+  .calib.warn{{color:#ff6b00}}
+  .foot{{font-size:10px;color:#bbb;text-align:center;margin-top:24px}}
+  @media print{{body{{background:#fff;padding:20px}}}}
+</style>
+</head>
+<body>
+<h1>Body<span>Map</span></h1>
+<div class="subtitle">TARAMA RAPORU</div>
+
+<div class="section">
+  <h2>TARAMA BİLGİSİ</h2>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="label">TARİH</div>{now}</div>
+    <div class="meta-item"><div class="label">DOSYA</div>{export_name}</div>
+    <div class="meta-item"><div class="label">HEDEF</div>{TARGETS.get(session.target, {{}}).get('name', session.target)}</div>
+    <div class="meta-item"><div class="label">STİL</div>{STYLES.get(session.style, {{}}).get('name', session.style)}</div>
+    <div class="meta-item"><div class="label">TARAMA MODU</div>{scan_mode_label}</div>
+    <div class="meta-item"><div class="label">TOPLAM FRAME</div>{session.frame_count}</div>
+    <div class="meta-item"><div class="label">YÜZ FRAME</div>{len(session.frames_xyz)}</div>
+    <div class="meta-item"><div class="label">VÜCUT FRAME</div>{len(session.pose_frames)}</div>
+  </div>
+  {coverage}
+  {calib_note}
+</div>
+
+<div class="section">
+  <h2>ÖLÇÜMLER</h2>
+  {'<table><thead><tr><th>ÖLÇÜM</th><th>PİKSEL</th><th>SANTIMETRE</th></tr></thead><tbody>' + meas_rows + '</tbody></table>' if meas_rows else '<p style="color:#aaa;font-size:12px">Ölçüm verisi yok — kayıt sırasında yüz/vücut algılanmalı</p>'}
+</div>
+
+<div class="section">
+  <h2>KAMERA PROFİLİ</h2>
+  <div class="meta-grid">
+    {''.join(f'<div class="meta-item"><div class="label">{k.upper()}</div>{v}</div>' for k,v in session.camera_profile.items()) if session.camera_profile else '<div style="color:#aaa;font-size:12px">Profil bilgisi yok</div>'}
+  </div>
+</div>
+
+<div class="foot">BodyMap — RGB Kamera Tabanlı 3D Haritalama &nbsp;|&nbsp; {now}</div>
+</body>
+</html>"""
+
+
 # ══════════════════════════════════════════════════════════════════
 #  YÜZ KIRPMA
 # ══════════════════════════════════════════════════════════════════
@@ -619,6 +765,16 @@ def draw_face(frame: np.ndarray, face_lms, style: str, active_regions: list):
     z    = _z_norm(face_lms.landmark)
     tess = list(mp_face_mesh.FACEMESH_TESSELATION)
     cont = list(mp_face_mesh.FACEMESH_CONTOURS)
+
+    if style == "mold":
+        # Siyah arka plana beyaz tel kafes — renksiz kalıp görünümü
+        frame[:] = (0, 0, 0)
+        for a, b in tess:
+            if a < len(pts) and b < len(pts):
+                cv2.line(frame, tuple(pts[a]), tuple(pts[b]), (220, 220, 220), 1, cv2.LINE_AA)
+        for pt in pts:
+            cv2.circle(frame, tuple(pt), 1, (180, 180, 180), -1)
+        return
 
     if style == "wireframe":
         for a, b in tess:
@@ -880,6 +1036,24 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
             trimesh.PointCloud(vertices=ph).export(str(out / f"{side}.ply"))
             log_cb(f"{side}.ply hazır", "OK")
 
+    # Tel kafes OBJ (renksiz kalıp/şablon)
+    if session.frames_xyz and HAS_TRIMESH:
+        try:
+            pts_med = np.median(np.stack(session.frames_xyz), axis=0)
+            pts_med -= pts_med.mean(axis=0)
+            tess_conn = list(mp_face_mesh.FACEMESH_TESSELATION)
+            wf_text = build_wireframe_obj(pts_med, tess_conn)
+            with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
+                f.write(wf_text)
+            # Kontur versiyonu da ekle
+            cont_conn = list(mp_face_mesh.FACEMESH_CONTOURS)
+            wf_cont = build_wireframe_obj(pts_med, cont_conn)
+            with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
+                f.write(wf_cont)
+            log_cb(f"face_wireframe.obj + face_contour.obj (kalıp formatı)", "OK")
+        except Exception as e:
+            log_cb(f"Wireframe export hatası: {e}", "WARN")
+
     json_path = out / "landmarks.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(build_json_export(session), f, ensure_ascii=False, indent=2)
@@ -903,6 +1077,31 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         for fp in sorted(out.iterdir()):
             f.write(f"  {fp.name:30s} {fp.stat().st_size//1024:5d} KB\n")
         f.write("\nNOT: RGB kamera kullanıldı. Koordinatlar görecelidir.\n")
+        if session.px_per_cm > 0:
+            f.write(f"\nKALİBRASYON: {session.px_per_cm:.2f} px/cm\n")
+            f.write(f"  Omuz referans: {session.calib_shoulder_cm:.1f} cm\n")
+        f.write("\nYENİ DOSYALAR:\n")
+        f.write("  face_wireframe.obj  → Renksiz tel kafes (Blender/MeshLab)\n")
+        f.write("  face_contour.obj    → Yüz kontur hattı\n")
+        f.write("  rapor.html          → Tarayıcıda aç, PDF olarak kaydet\n")
+
+    # HTML rapor (tarayıcıda PDF olarak kaydedilebilir)
+    try:
+        # Ortalama ölçümleri hesapla
+        if session._meas_accum:
+            all_keys = set(k for m in session._meas_accum for k in m)
+            avg_m = {}
+            for k in all_keys:
+                vals = [m[k] for m in session._meas_accum if k in m and isinstance(m[k], (int, float))]
+                if vals:
+                    avg_m[k] = round(sum(vals) / len(vals), 1)
+            session._avg_measurements = avg_m
+        html_content = build_html_report(session, name)
+        with open(out / "rapor.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+        log_cb("rapor.html (tarayıcıda aç → PDF kaydet)", "OK")
+    except Exception as e:
+        log_cb(f"HTML rapor hatası: {e}", "WARN")
 
     zip_path = EXPORT_DIR / f"{name}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -1034,8 +1233,8 @@ async def ws_endpoint(ws: WebSocket):
                         detected = True
                     draw_hands(frame, handl_sm, handr_sm, sess.style)
 
-                # Kayıt — ortak blok
-                if sess.recording and not sess.at_frame_limit():
+                # Kayıt — ortak blok (kalite filtresi uygula)
+                if sess.recording and not sess.at_frame_limit() and is_quality_frame(face_sm, pose_sm):
                     # IMU sektör takibi (360° mod)
                     if imu_yaw is not None:
                         sector = int(imu_yaw / 30) % 12
@@ -1089,7 +1288,10 @@ async def ws_endpoint(ws: WebSocket):
                         }
 
                 # Anlık ölçümler
-                measurements = calculate_measurements(face_sm, pose_sm, w, h)
+                measurements = calculate_measurements(face_sm, pose_sm, w, h, sess.px_per_cm)
+                # Ölçüm geçmişine ekle (recording iken)
+                if sess.recording and measurements:
+                    sess._meas_accum.append(measurements)
 
                 if sess.recording and not sess.at_frame_limit():
                     sess.frame_count += 1
@@ -1179,6 +1381,12 @@ async def ws_endpoint(ws: WebSocket):
                             tmp.target        = sess.target
                             tmp.style         = sess.style
                             tmp.camera_profile = dict(sess.camera_profile)
+                            tmp.scan_mode      = sess.scan_mode
+                            tmp.covered_sectors = set(sess.covered_sectors)
+                            tmp.px_per_cm      = sess.px_per_cm
+                            tmp.calib_shoulder_cm = sess.calib_shoulder_cm
+                            tmp._meas_accum    = list(sess._meas_accum)
+                            tmp._avg_measurements = {}
                             zip_path = build_export(tmp, sess.log)
                             if zip_path:
                                 try:
@@ -1270,6 +1478,23 @@ async def ws_endpoint(ws: WebSocket):
                     sess.pose_hold_frames = 0
                     sess.pose_complete    = False
                     sess.log("Poz sırası sıfırlandı", "INFO")
+
+                elif cmd == "set_calibration":
+                    # val: {shoulder_cm: float} — omuz genişliği referansı
+                    if isinstance(val, dict):
+                        sc = float(val.get("shoulder_cm", 0))
+                        sw_px = float(val.get("shoulder_px", 0))
+                        if sc > 0 and sw_px > 0:
+                            sess.px_per_cm = sw_px / sc
+                            sess.calib_shoulder_cm = sc
+                            sess.log(f"Kalibrasyon: {sc}cm = {sw_px:.0f}px → {sess.px_per_cm:.2f} px/cm", "OK")
+                            await ws.send_text(json.dumps({
+                                "type": "calibration_done",
+                                "px_per_cm": sess.px_per_cm,
+                                "shoulder_cm": sc,
+                            }))
+                        else:
+                            sess.log("Kalibrasyon verisi geçersiz", "WARN")
 
                 elif cmd == "set_smoothing":
                     if isinstance(val, dict):

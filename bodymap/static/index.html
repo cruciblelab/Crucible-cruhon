@@ -100,6 +100,25 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 #connDot{width:7px;height:7px;border-radius:50%;background:var(--scan);margin-left:auto;flex-shrink:0}
 #connDot.live{background:var(--ok);box-shadow:0 0 5px var(--ok)}
 
+/* ── KALİBRASYON MODALI ── */
+#calibModal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+#calibModal.vis{display:flex}
+#calibBox{background:#111;border:1px solid rgba(0,200,255,.3);padding:24px;max-width:340px;width:100%;display:flex;flex-direction:column;gap:14px}
+#calibBox h3{font-size:13px;letter-spacing:2px;color:var(--map)}
+#calibBox p{font-size:11px;color:rgba(245,242,237,.5);line-height:1.7}
+#calibInput{padding:10px;background:rgba(245,242,237,.05);border:1px solid rgba(245,242,237,.2);color:var(--paper);font-family:var(--mono);font-size:14px;width:100%;text-align:center}
+#calibInput:focus{outline:none;border-color:var(--map)}
+.calibBtns{display:flex;gap:8px}
+.calibBtns button{flex:1;padding:10px;border:1px solid rgba(245,242,237,.2);background:transparent;color:rgba(245,242,237,.5);font-family:var(--mono);font-size:11px;cursor:pointer;min-height:40px}
+#calibOk{border-color:var(--map)!important;color:var(--map)!important}
+#calibStatus{font-size:10px;letter-spacing:1px;color:var(--ok);min-height:14px}
+/* Kalibrasyon durumu göstergesi */
+#calibBadge{position:fixed;top:calc(var(--st)+8px);left:calc(var(--sl)+14px);display:none;align-items:center;gap:5px;padding:3px 8px;background:rgba(0,200,255,.12);border:1px solid rgba(0,200,255,.3);font-size:9px;letter-spacing:1px;color:var(--map);z-index:25}
+#calibBadge.vis{display:flex}
+/* Kalite uyarısı */
+#qualWarn{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;padding:8px 16px;background:rgba(255,59,0,.85);font-size:11px;letter-spacing:1px;color:#fff;z-index:30;pointer-events:none;text-align:center}
+#qualWarn.vis{display:flex;flex-direction:column;gap:3px}
+
 /* Limit badge */
 #limitBadge{position:fixed;top:calc(var(--st)+44px);left:50%;transform:translateX(-50%);display:none;align-items:center;gap:5px;padding:3px 10px;background:rgba(255,180,0,.92);font-size:10px;letter-spacing:1px;z-index:25;color:#000;white-space:nowrap}
 #limitBadge.vis{display:flex}
@@ -454,6 +473,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
   <button class="sBtn" data-s="xray">X-RAY</button>
   <button class="sBtn" data-s="thermal">TERMAL</button>
   <button class="sBtn" data-s="skeleton">İSKELET</button>
+  <button class="sBtn" data-s="mold">◻ KALIP</button>
  </div>
 </div>
 
@@ -521,6 +541,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <div class="dPage" id="dp-export">
   <div id="expInner">
    <div id="expNote">Kayıt durduktan sonra EXPORT tuşuna basın.<br>ZIP: OBJ · STL · PLY · JSON · Rapor</div>
+   <button class="actBtn" onclick="openCalib()" style="font-size:10px;padding:8px 10px;margin-bottom:6px;width:100%">◈ KALİBRASYON (px→cm)</button>
    <div id="expList"><p style="padding:12px;font-size:11px;color:rgba(245,242,237,.25)">Henüz export yok.</p></div>
    <button id="refExpBtn">↻ Yenile</button>
   </div>
@@ -653,6 +674,25 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 
 </div><!-- /drawer -->
 
+<!-- KALİBRASYON MODALI -->
+<div id="calibModal">
+  <div id="calibBox">
+    <h3>◈ KALİBRASYON</h3>
+    <p>Omuz genişliğinizi santimetre cinsinden girin.<br>Sistem piksel→cm oranını otomatik hesaplar ve tüm ölçümler gerçek boyutlarda gösterilir.</p>
+    <p style="color:rgba(0,200,255,.6);font-size:10px">ÖRNEK: Omuz genişliğiniz yaklaşık 42–48 cm arasındadır. Ölçmek için omuzdan omuza şerit metre kullanın.</p>
+    <input id="calibInput" type="number" min="20" max="80" step="0.5" placeholder="örn: 44" inputmode="decimal">
+    <div id="calibStatus"></div>
+    <div class="calibBtns">
+      <button onclick="closeCalib()">İPTAL</button>
+      <button id="calibOk" onclick="doCalibrate()">KALİBRE ET ✓</button>
+    </div>
+  </div>
+</div>
+<!-- KALİBRASYON BADGE -->
+<div id="calibBadge">◈ KALİBRE</div>
+<!-- KALİTE UYARISI -->
+<div id="qualWarn"><span id="qualWarnMsg"></span></div>
+
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -688,6 +728,12 @@ let videoRecording=false, videoChunks=[], mediaRecorder=null;
 let measAccum=[], scanHistory=[null,null];
 let scanMode='free', imuYaw=null, imuPitch=null, imuRoll=null, imuAvailable=false;
 let coveredSectors=new Set();
+let pxPerCm = 0;
+let lastShoulderPx = 0;
+let blurFrameCount = 0;
+let lightFrameCount = 0;
+let frameCount = 0;
+const BLUR_WARN_THRESHOLD = 10; // 10 consecutive blurry frames
 const recCanvas=document.createElement('canvas'), recCtx=recCanvas.getContext('2d');
 const _recImgEl=new Image();
 _recImgEl.onload=()=>{ if(videoRecording) recCtx.drawImage(_recImgEl,0,0,recCanvas.width,recCanvas.height); };
@@ -810,8 +856,11 @@ async function openCamera(deviceId, facingMode){
     video:{
       facingMode: deviceId ? undefined : facingMode,
       deviceId: deviceId ? {exact: deviceId} : undefined,
-      width: {ideal:1920}, height:{ideal:1080},
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
       frameRate: {ideal:30, max:60},
+      focusMode: { ideal: 'continuous' },
+      exposureMode: { ideal: 'continuous' },
     },
     audio:false
   };
@@ -1050,6 +1099,79 @@ async function autoOptimize(){
   addLog(hwMsg, 'OK', ts());
 }
 
+// ── BLUR & IŞIK DEĞERLENDİRMESİ ──
+function assessFrameQuality(ctx, w, h) {
+    // Küçük sample ile hız kazanımı
+    const sW = Math.min(w, 160), sH = Math.min(h, 120);
+    const imgData = ctx.getImageData(0, 0, sW, sH);
+    const d = imgData.data;
+    let brightness = 0, count = 0;
+    for (let i = 0; i < d.length; i += 16) { // her 4. piksel
+        brightness += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+        count++;
+    }
+    brightness /= count;
+
+    // Laplacian variance (basit blur tahmini)
+    const gray = new Float32Array(sW * sH);
+    for (let y = 0; y < sH; y++) for (let x = 0; x < sW; x++) {
+        const i = (y * sW + x) * 4;
+        gray[y * sW + x] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    }
+    let lapSum = 0, lapCount = 0;
+    for (let y = 1; y < sH-1; y++) for (let x = 1; x < sW-1; x++) {
+        const lap = Math.abs(
+            -gray[(y-1)*sW+x] - gray[(y+1)*sW+x] - gray[y*sW+x-1] - gray[y*sW+x+1]
+            + 4 * gray[y*sW+x]
+        );
+        lapSum += lap; lapCount++;
+    }
+    const sharpness = lapCount > 0 ? lapSum / lapCount : 0;
+
+    return { brightness, sharpness,
+             tooBlurry: sharpness < 3.0,
+             tooDark: brightness < 50,
+             tooBright: brightness > 220 };
+}
+
+function showQualWarn(msg) {
+    const el = document.getElementById('qualWarn');
+    document.getElementById('qualWarnMsg').textContent = msg;
+    el.classList.add('vis');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('vis'), 2500);
+}
+
+// ── KALİBRASYON ──
+function openCalib() {
+    document.getElementById('calibModal').classList.add('vis');
+    document.getElementById('calibInput').focus();
+}
+function closeCalib() {
+    document.getElementById('calibModal').classList.remove('vis');
+}
+function doCalibrate() {
+    const sc = parseFloat(document.getElementById('calibInput').value);
+    if (isNaN(sc) || sc < 20 || sc > 80) {
+        document.getElementById('calibStatus').textContent = 'Geçersiz değer (20–80 cm arası)';
+        document.getElementById('calibStatus').style.color = 'var(--scan)';
+        return;
+    }
+    // Sunucuya son ölçülen omuz pixel genişliğini gönder
+    if (lastShoulderPx < 10) {
+        document.getElementById('calibStatus').textContent = 'Önce kameraya omuz görünür şekilde girin';
+        document.getElementById('calibStatus').style.color = 'var(--warn)';
+        return;
+    }
+    cmd('set_calibration', { shoulder_cm: sc, shoulder_px: lastShoulderPx });
+    pxPerCm = lastShoulderPx / sc;
+    document.getElementById('calibStatus').textContent = `✓ ${sc}cm = ${lastShoulderPx.toFixed(0)}px → ${pxPerCm.toFixed(1)} px/cm`;
+    document.getElementById('calibStatus').style.color = 'var(--ok)';
+    document.getElementById('calibBadge').classList.add('vis');
+    document.getElementById('calibBadge').textContent = `◈ ${pxPerCm.toFixed(1)} px/cm`;
+    setTimeout(closeCalib, 1500);
+}
+
 /* ══════════════════════════════════════════
    IMU (GYROSCOPE)
 ══════════════════════════════════════════ */
@@ -1168,8 +1290,11 @@ function renderMeasPanel(m){
   if(!m||!Object.keys(m).length){panel.classList.remove('vis');return;}
   const keys=['face_width','eye_dist','head_tilt','shoulder_width'];
   const rows=keys.filter(k=>m[k]!=null).map(k=>{
-    const v=m[k], unit=MEAS_UNITS[k]||'';
-    const warn=k==='head_tilt'&&Math.abs(v)>8;
+    const cmKey = k + '_cm';
+    const hasCm = m[cmKey] != null;
+    const v = hasCm ? m[cmKey] : m[k];
+    const unit = hasCm ? ' cm' : (MEAS_UNITS[k]||'');
+    const warn=k==='head_tilt'&&Math.abs(m[k])>8;
     return `<div class="meas-row"><span class="meas-key">${MEAS_LABELS[k]}</span><span class="meas-val${warn?' warn':''}">${v}${unit}</span></div>`;
   }).join('');
   if(!rows){panel.classList.remove('vis');return;}
@@ -1532,6 +1657,14 @@ function startSend(){
     capC.width=v.videoWidth||640; capC.height=v.videoHeight||480;
     cap2d.drawImage(v,0,0,capC.width,capC.height);
     const orientation=imuAvailable?{yaw:imuYaw,pitch:imuPitch,roll:imuRoll}:null;
+    frameCount++;
+    // Frame kalite kontrolü (her 5 frame'de bir)
+    if (frameCount % 5 === 0) {
+        const q = assessFrameQuality(cap2d, capC.width, capC.height);
+        if (q.tooDark) showQualWarn('⚠ Ortam karanlık — ışığı artır');
+        else if (q.tooBright) showQualWarn('⚠ Çok parlak — güneşten uzaklaş');
+        else if (q.tooBlurry) showQualWarn('⚠ Görüntü bulanık — telefonu tuttur');
+    }
     ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',jpegQuality),orientation}));
   }, sendInterval);
 }
@@ -1544,6 +1677,10 @@ function onMsg(e){
     applyStats(m.stats);
     if(m.measurements) renderMeasPanel(m.measurements);
     if(recording&&m.measurements&&Object.keys(m.measurements).length) measAccum.push(m.measurements);
+    // Omuz genişliğini kalibrasyona hazır tut
+    if (m.measurements && m.measurements.shoulder_width) {
+        lastShoulderPx = m.measurements.shoulder_width;
+    }
     if(m.covered_sectors){ coveredSectors=new Set(m.covered_sectors); if(scanMode==='360') renderCoverageRing(); }
     if(m.pose_status && scanMode==='guided') renderPoseGuide(m.pose_status);
     if(m.face_crop && cropEnabled){
@@ -1556,6 +1693,11 @@ function onMsg(e){
   }else if(m.type==='pointcloud'){
     if(!scene) initThree();
     updatePcd(m.points,m.colors);
+  }else if(m.type==='calibration_done'){
+    pxPerCm = m.px_per_cm;
+    document.getElementById('calibBadge').classList.add('vis');
+    document.getElementById('calibBadge').textContent = `◈ ${pxPerCm.toFixed(1)} px/cm`;
+    toast(`Kalibrasyon: ${m.shoulder_cm}cm referans — ${pxPerCm.toFixed(1)} px/cm`);
   }else if(m.type==='export_done'){
     toast('ZIP hazır — indiriliyor!','ok');
     addLog(`Export: ${m.name} (${m.size_kb} KB)`,'OK',ts());
