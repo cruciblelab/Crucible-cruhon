@@ -299,6 +299,31 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 /* Stabilizasyon slider */
 #smoothAlphaSlider{-webkit-appearance:none;appearance:none;flex:1;height:3px;background:rgba(245,242,237,.15);outline:none}
 #smoothAlphaSlider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ok);cursor:pointer}
+
+/* ── 360° KAPSAMA HALKA ── */
+#coverageWrap{position:fixed;top:calc(var(--st)+54px);left:calc(var(--sl)+14px);display:none;flex-direction:column;align-items:center;gap:2px;z-index:19;pointer-events:none}
+#coverageWrap.vis{display:flex}
+#coverageRing{filter:drop-shadow(0 0 4px rgba(0,200,255,.25))}
+#coverageTxt{font-size:9px;color:var(--map);letter-spacing:1px;text-align:center}
+#coverageGoal{font-size:8px;color:rgba(245,242,237,.3);text-align:center}
+
+/* ── POZ REHBERİ ── */
+#poseGuide{position:fixed;top:calc(var(--st)+54px);left:50%;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;gap:5px;z-index:22;background:rgba(0,0,0,.82);border:1px solid rgba(0,200,255,.3);padding:10px 18px;min-width:200px;max-width:280px;text-align:center}
+#poseGuide.vis{display:flex}
+#poseIcon{font-size:26px;line-height:1}
+#poseName{font-size:12px;color:var(--map);letter-spacing:1px;font-weight:bold}
+#poseDesc{font-size:10px;color:rgba(245,242,237,.55);line-height:1.5}
+#poseFeedback{font-size:10px;color:rgba(245,242,237,.4);min-height:13px}
+#poseFeedback.ok{color:var(--ok)}
+#poseHoldBar{width:100%;height:4px;background:rgba(245,242,237,.1);border-radius:2px;overflow:hidden}
+#poseHoldFill{height:100%;width:0%;background:var(--ok);border-radius:2px;transition:width .12s}
+#poseCounter{font-size:9px;color:rgba(245,242,237,.3);letter-spacing:1px}
+#poseComplete{display:none;font-size:11px;color:var(--ok);letter-spacing:1px;margin-top:2px}
+#poseComplete.vis{display:block}
+
+/* Tarama modu butonu */
+.floatBtn.mode-360{border-color:rgba(0,200,255,.45);color:var(--map)}
+.floatBtn.mode-guided{border-color:rgba(0,230,118,.45);color:var(--ok)}
 </style>
 </head>
 <body>
@@ -376,6 +401,24 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 <!-- Anlık ölçüm paneli -->
 <div id="measPanel"></div>
 
+<!-- 360° Kapsama halkası -->
+<div id="coverageWrap">
+ <svg id="coverageRing" width="84" height="84" viewBox="0 0 84 84"></svg>
+ <div id="coverageTxt">0/12</div>
+ <div id="coverageGoal">En az 8/12 hedef</div>
+</div>
+
+<!-- Poz Rehberi -->
+<div id="poseGuide">
+ <div id="poseIcon">🧍</div>
+ <div id="poseName">Hazırlanıyor…</div>
+ <div id="poseDesc">Kayda başlayınca rehber başlar</div>
+ <div id="poseFeedback"></div>
+ <div id="poseHoldBar"><div id="poseHoldFill"></div></div>
+ <div id="poseCounter">0 / 7</div>
+ <div id="poseComplete">✓ TAMAMLANDI — EXPORT yapın!</div>
+</div>
+
 <!-- Kırpma kenar payı (PiP üzerinde) -->
 <div id="cropControls">
  <span id="paddingLabel">KAP: <span id="padVal">28</span>%</span>
@@ -435,6 +478,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
  <button class="floatBtn" id="btnDrawer">LOG ↑</button>
  <button class="floatBtn snap" id="btnSnap">📸 SNAP</button>
  <button class="floatBtn vrec" id="btnVideoRec">🎥 VİDEO</button>
+ <button class="floatBtn" id="btnScanMode">⊕ SERBEST</button>
  <button class="floatBtn" id="btnCrop">👁 YÜZ KES</button>
  <button class="floatBtn" id="btnTorch" style="display:none">🔦 TORCH</button>
  <button class="floatBtn" id="btnCamSwitch">KAM ⟳</button>
@@ -642,6 +686,8 @@ let camCapabilities = {}, camSettings = {};
 let cameras = [];
 let videoRecording=false, videoChunks=[], mediaRecorder=null;
 let measAccum=[], scanHistory=[null,null];
+let scanMode='free', imuYaw=null, imuPitch=null, imuRoll=null, imuAvailable=false;
+let coveredSectors=new Set();
 const recCanvas=document.createElement('canvas'), recCtx=recCanvas.getContext('2d');
 const _recImgEl=new Image();
 _recImgEl.onload=()=>{ if(videoRecording) recCtx.drawImage(_recImgEl,0,0,recCanvas.width,recCanvas.height); };
@@ -1005,6 +1051,116 @@ async function autoOptimize(){
 }
 
 /* ══════════════════════════════════════════
+   IMU (GYROSCOPE)
+══════════════════════════════════════════ */
+async function setupIMU(){
+  if(typeof DeviceOrientationEvent==='undefined') return;
+  try{
+    if(typeof DeviceOrientationEvent.requestPermission==='function'){
+      const perm=await DeviceOrientationEvent.requestPermission();
+      if(perm!=='granted'){addLog('IMU izni reddedildi','WARN',ts());return;}
+    }
+    window.addEventListener('deviceorientation',e=>{
+      imuYaw   = e.alpha!=null ? e.alpha   : imuYaw;
+      imuPitch = e.beta !=null ? e.beta    : imuPitch;
+      imuRoll  = e.gamma!=null ? e.gamma   : imuRoll;
+      imuAvailable=true;
+      if(scanMode==='360') renderCoverageRing();
+    },true);
+    addLog('IMU (gyro) aktif','OK',ts());
+    imuAvailable=true;
+  }catch(e){addLog('IMU başlatılamadı: '+e.message,'WARN',ts());}
+}
+
+/* ══════════════════════════════════════════
+   TARAMA MODU
+══════════════════════════════════════════ */
+const SCAN_MODES=['free','360','guided'];
+const SCAN_LABELS={'free':'⊕ SERBEST','360':'◎ 360°','guided':'📍 POZ REHBERİ'};
+function setScanMode(mode){
+  scanMode=mode;
+  cmd('set_scan_mode',mode);
+  const btn=$('btnScanMode');
+  btn.textContent=SCAN_LABELS[mode]||mode;
+  btn.className='floatBtn'+(mode==='360'?' mode-360':mode==='guided'?' mode-guided':'');
+  $('coverageWrap').classList.toggle('vis', mode==='360');
+  $('poseGuide').classList.toggle('vis', mode==='guided');
+  if(mode==='360'&&!imuAvailable) setupIMU();
+  if(mode==='guided') resetPoseGuide();
+  toast(SCAN_LABELS[mode]+' aktif','info');
+}
+
+/* ══════════════════════════════════════════
+   360° KAPSAMA HALKASI
+══════════════════════════════════════════ */
+function sectorArcPath(cx,cy,ri,ro,degS,degE){
+  const r2d=Math.PI/180;
+  const s=degS*r2d, e=degE*r2d;
+  const x1=cx+ro*Math.cos(s),y1=cy+ro*Math.sin(s);
+  const x2=cx+ro*Math.cos(e),y2=cy+ro*Math.sin(e);
+  const x3=cx+ri*Math.cos(e),y3=cy+ri*Math.sin(e);
+  const x4=cx+ri*Math.cos(s),y4=cy+ri*Math.sin(s);
+  return `M${x1} ${y1}A${ro} ${ro} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${ri} ${ri} 0 0 0 ${x4} ${y4}Z`;
+}
+function renderCoverageRing(){
+  const svg=$('coverageRing'); if(!svg) return;
+  const cx=42,cy=42,ro=38,ri=26;
+  svg.innerHTML='';
+  const ns='http://www.w3.org/2000/svg';
+  for(let i=0;i<12;i++){
+    const p=document.createElementNS(ns,'path');
+    p.setAttribute('d',sectorArcPath(cx,cy,ri,ro,i*30-90,(i+1)*30-90));
+    p.setAttribute('fill', coveredSectors.has(i)?'rgba(0,200,255,0.65)':'rgba(245,242,237,0.07)');
+    p.setAttribute('stroke','rgba(0,0,0,0.5)'); p.setAttribute('stroke-width','1');
+    svg.appendChild(p);
+  }
+  if(imuYaw!=null){
+    const a=(imuYaw-90)*Math.PI/180;
+    const ln=document.createElementNS(ns,'line');
+    ln.setAttribute('x1',cx); ln.setAttribute('y1',cy);
+    ln.setAttribute('x2',cx+20*Math.cos(a)); ln.setAttribute('y2',cy+20*Math.sin(a));
+    ln.setAttribute('stroke','#ff3b00'); ln.setAttribute('stroke-width','2.5');
+    ln.setAttribute('stroke-linecap','round'); svg.appendChild(ln);
+  }
+  $('coverageTxt').textContent=coveredSectors.size+'/12';
+  if(coveredSectors.size>=8) $('coverageTxt').style.color='var(--ok)';
+  else if(coveredSectors.size>=4) $('coverageTxt').style.color='var(--warn)';
+  else $('coverageTxt').style.color='var(--map)';
+}
+
+/* ══════════════════════════════════════════
+   POZ REHBERİ
+══════════════════════════════════════════ */
+function renderPoseGuide(s){
+  if(!s) return;
+  $('poseIcon').textContent   = s.icon||'🧍';
+  $('poseName').textContent   = s.name||'—';
+  $('poseDesc').textContent   = s.desc||'';
+  $('poseFeedback').textContent= s.feedback||'';
+  $('poseFeedback').className = s.hold_progress>0.5?'ok':'';
+  $('poseHoldFill').style.width= Math.round((s.hold_progress||0)*100)+'%';
+  $('poseCounter').textContent = (Math.min(s.idx+1,s.total))+' / '+s.total;
+  if(s.just_captured && window.navigator.vibrate) window.navigator.vibrate([50,30,50]);
+  if(s.complete){
+    $('poseIcon').textContent='✓';
+    $('poseName').textContent='TAMAMLANDI';
+    $('poseDesc').textContent='Tüm pozlar alındı.';
+    $('poseFeedback').textContent='';
+    $('poseHoldFill').style.width='100%';
+    $('poseComplete').classList.add('vis');
+    toast('Poz taraması tamamlandı! EXPORT yapın.','ok');
+    if(window.navigator.vibrate) window.navigator.vibrate([80,40,80,40,120]);
+  }
+}
+function resetPoseGuide(){
+  cmd('reset_poses');
+  $('poseIcon').textContent='🧍'; $('poseName').textContent='Hazırlanıyor…';
+  $('poseDesc').textContent='Kayda başlayınca rehber başlar';
+  $('poseFeedback').textContent=''; $('poseHoldFill').style.width='0%';
+  $('poseCounter').textContent='0 / 7'; $('poseComplete').classList.remove('vis');
+}
+
+/* ══════════════════════════════════════════
    ÖLÇÜM PANELİ
 ══════════════════════════════════════════ */
 function renderMeasPanel(m){
@@ -1213,6 +1369,14 @@ $('zoomSlider').addEventListener('input', async e=>{
 });
 
 /* ══════════════════════════════════════════
+   TARAMA MODU BUTONU
+══════════════════════════════════════════ */
+$('btnScanMode').addEventListener('click',()=>{
+  const cur=SCAN_MODES.indexOf(scanMode);
+  setScanMode(SCAN_MODES[(cur+1)%SCAN_MODES.length]);
+});
+
+/* ══════════════════════════════════════════
    VİDEO KAYIT BUTONU
 ══════════════════════════════════════════ */
 $('btnVideoRec').addEventListener('click',()=>{
@@ -1367,7 +1531,8 @@ function startSend(){
     const v=$('video'); if(v.readyState<2) return;
     capC.width=v.videoWidth||640; capC.height=v.videoHeight||480;
     cap2d.drawImage(v,0,0,capC.width,capC.height);
-    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',jpegQuality)}));
+    const orientation=imuAvailable?{yaw:imuYaw,pitch:imuPitch,roll:imuRoll}:null;
+    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',jpegQuality),orientation}));
   }, sendInterval);
 }
 
@@ -1379,6 +1544,8 @@ function onMsg(e){
     applyStats(m.stats);
     if(m.measurements) renderMeasPanel(m.measurements);
     if(recording&&m.measurements&&Object.keys(m.measurements).length) measAccum.push(m.measurements);
+    if(m.covered_sectors){ coveredSectors=new Set(m.covered_sectors); if(scanMode==='360') renderCoverageRing(); }
+    if(m.pose_status && scanMode==='guided') renderPoseGuide(m.pose_status);
     if(m.face_crop && cropEnabled){
       $('cropImg').src=m.face_crop;
       $('cropFullImg').src=m.face_crop;
@@ -1440,7 +1607,9 @@ function applyStats(s){
     $('recBtn').classList.toggle('recording',recording);
     $('recBadge').classList.toggle('vis',recording);
     if(recording){
-      measAccum=[];
+      measAccum=[]; coveredSectors=new Set();
+      if(scanMode==='360') renderCoverageRing();
+      if(scanMode==='guided') $('poseComplete').classList.remove('vis');
       recSec=0; clearInterval(recTimer);
       recTimer=setInterval(()=>{recSec++;$('recTime').textContent=`REC ${recSec}s`;},1000);
       if(window.navigator.vibrate) window.navigator.vibrate([30,20,30]);
@@ -1507,6 +1676,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='e') $('btnExport').click();
   else if(k==='p'||k==='s') $('btnSnap').click();
   else if(k==='v') $('btnVideoRec').click();
+  else if(k==='m') $('btnScanMode').click();
   else if(k==='c') $('btnCrop').click();
   else if(k==='3') setView(!showPcd);
   else if(k==='r'&&e.ctrlKey){e.preventDefault();$('btnReset').click();}

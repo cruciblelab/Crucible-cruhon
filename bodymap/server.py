@@ -125,6 +125,18 @@ TARGETS = {
     "full": {"name": "Tam",   "desc": "Yüz + vücut + eller"},
 }
 
+# Poz rehberi adımları
+GUIDED_POSES = [
+    {"id": "stand_normal", "name": "Normal Duruş",  "desc": "Kollar yanlarda, doğrudan kameraya bak", "icon": "🧍"},
+    {"id": "arms_out",     "name": "T Pozu",         "desc": "Kolları yana aç — T şekli oluştur",     "icon": "✈"},
+    {"id": "hands_up",     "name": "Eller Yukarı",   "desc": "Her iki elini yukarı kaldır",            "icon": "🙌"},
+    {"id": "left_side",    "name": "Sol Profil",     "desc": "Sola dön — sol tarafını göster",         "icon": "◀"},
+    {"id": "right_side",   "name": "Sağ Profil",     "desc": "Sağa dön — sağ tarafını göster",        "icon": "▶"},
+    {"id": "face_up",      "name": "Yüzü Yukarı",    "desc": "Çeneyi yukarı kaldır",                   "icon": "▲"},
+    {"id": "face_down",    "name": "Yüzü Aşağı",     "desc": "Başını öne eğ",                          "icon": "▼"},
+]
+POSE_HOLD_FRAMES = 22  # ~2 saniye @ 10–12 fps
+
 HEAT_MAP = cv2.applyColorMap(np.arange(256, dtype=np.uint8).reshape(1,-1), cv2.COLORMAP_JET)[0]
 PLASMA   = cv2.applyColorMap(np.arange(256, dtype=np.uint8).reshape(1,-1), cv2.COLORMAP_PLASMA)[0]
 
@@ -300,6 +312,14 @@ class Session:
         # EMA stabilizasyon
         self.ema         = EMAFilter(alpha=0.35)
         self.smoothing   = True
+        # Multi-view tarama
+        self.scan_mode        = "free"   # "free" | "360" | "guided"
+        self.orientations: list = []     # {yaw,pitch,roll} her kayıtlı frame için
+        self.covered_sectors: set = set()  # 0–11, her biri 30°'lik dilim
+        self.frame_pose_labels: list = []  # her frame'in poz indeksi
+        self.guided_pose_idx  = 0
+        self.pose_hold_frames = 0
+        self.pose_complete    = False
         # İç durum
         self._log_q: _queue.Queue = _queue.Queue(maxsize=400)
         self._fps_buf = deque(maxlen=30)
@@ -322,6 +342,12 @@ class Session:
         self.frame_count = 0
         self.recording   = False
         self.ema.reset()
+        self.orientations.clear()
+        self.covered_sectors.clear()
+        self.frame_pose_labels.clear()
+        self.guided_pose_idx  = 0
+        self.pose_hold_frames = 0
+        self.pose_complete    = False
         self.log("Sıfırlandı", "WARN")
 
     def fps(self) -> float:
@@ -440,6 +466,104 @@ def calculate_measurements(face_lms, pose_lms, w: int, h: int) -> dict:
             m['hip_width'] = round(math.hypot(p24[0]-p23[0], p24[1]-p23[1]))
 
     return m
+
+
+# ══════════════════════════════════════════════════════════════════
+#  MULTI-VIEW HİZALAMA
+# ══════════════════════════════════════════════════════════════════
+
+def kabsch(P: np.ndarray, Q: np.ndarray):
+    """SVD tabanlı optimal rotasyon: P'yi Q'ya hizalar. (R, t) döndürür."""
+    Pc, Qc = P - P.mean(0), Q - Q.mean(0)
+    U, _, Vt = np.linalg.svd(Pc.T @ Qc)
+    d = np.linalg.det(Vt.T @ U.T)
+    R = Vt.T @ np.diag([1.0, 1.0, d]) @ U.T
+    return R, Q.mean(0) - R @ P.mean(0)
+
+
+def align_frames(frames_xyz: list) -> np.ndarray:
+    """Kabsch ile tüm frame'leri frame-0'a hizalayıp tek nokta bulutu yapar."""
+    if not frames_xyz:
+        return np.zeros((0, 3))
+    ref = frames_xyz[0]
+    merged = [ref]
+    for pts in frames_xyz[1:]:
+        if pts.shape != ref.shape:
+            continue
+        try:
+            R, t = kabsch(pts, ref)
+            merged.append((R @ pts.T).T + t)
+        except Exception:
+            merged.append(pts)
+    return np.vstack(merged)
+
+
+def detect_pose_match(face_lms, pose_lms,
+                      target_id: str) -> "tuple[bool, float, str]":
+    """Mevcut landmark'ların hedef poza uyup uymadığını kontrol eder."""
+    if not pose_lms and not face_lms:
+        return False, 0.0, "Algılanamıyor"
+
+    def pv(i):  # visibility
+        return getattr(pose_lms.landmark[i], 'visibility', 0.0) if pose_lms else 0.0
+    def pl(i):  # landmark
+        return pose_lms.landmark[i] if pose_lms else None
+
+    if target_id == "stand_normal":
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        ok = pv(11) > 0.6 and pv(12) > 0.6
+        low = True
+        if pv(15) > 0.4 and pv(16) > 0.4:
+            low = pl(15).y > pl(11).y and pl(16).y > pl(12).y
+        matched = ok and low
+        return matched, 0.85 if matched else 0.2, "Hazır ✓" if matched else "Öne dön, kolları indir"
+
+    elif target_id == "arms_out":
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        if pv(15) < 0.4 or pv(16) < 0.4: return False, 0.1, "Eller görünmüyor"
+        sw  = abs(pl(12).x - pl(11).x)
+        aw  = abs(pl(16).x - pl(15).x)
+        hl  = abs(pl(15).y - pl(11).y) < 0.12
+        hr  = abs(pl(16).y - pl(12).y) < 0.12
+        matched = hl and hr and aw > sw * 1.7
+        return matched, 0.8 if matched else 0.2, "Hazır ✓" if matched else "Kolları omuz hizasına getir ve geniş aç"
+
+    elif target_id == "hands_up":
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        if pv(15) < 0.4 or pv(16) < 0.4: return False, 0.1, "Eller görünmüyor"
+        lu = pl(15).y < pl(11).y - 0.08
+        ru = pl(16).y < pl(12).y - 0.08
+        matched = lu and ru
+        conf = (0.6 if lu else 0.1) + (0.4 if ru else 0.0)
+        return matched, conf, "Hazır ✓" if matched else "Elleri daha yukarı kaldır"
+
+    elif target_id == "left_side":
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        rv, lv = pv(12), pv(11)
+        matched = rv > 0.7 and lv < 0.5
+        return matched, rv * 0.6 + (0.3 if lv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sola dön"
+
+    elif target_id == "right_side":
+        if not pose_lms: return False, 0.0, "Vücut görünmüyor"
+        lv, rv = pv(11), pv(12)
+        matched = lv > 0.7 and rv < 0.5
+        return matched, lv * 0.6 + (0.3 if rv < 0.5 else 0), "Hazır ✓" if matched else "Daha fazla sağa dön"
+
+    elif target_id == "face_up":
+        if not face_lms: return False, 0.0, "Yüz görünmüyor"
+        lm = face_lms.landmark
+        ratio = (lm[1].y - lm[10].y) / max(lm[152].y - lm[10].y, 0.01)
+        matched = ratio < 0.38
+        return matched, max(0.0, 1.0 - ratio * 1.5), "Hazır ✓" if matched else "Çeneyi daha yukarı kaldır"
+
+    elif target_id == "face_down":
+        if not face_lms: return False, 0.0, "Yüz görünmüyor"
+        lm = face_lms.landmark
+        ratio = (lm[1].y - lm[10].y) / max(lm[152].y - lm[10].y, 0.01)
+        matched = ratio > 0.62
+        return matched, max(0.0, ratio), "Hazır ✓" if matched else "Başını daha aşağı eğ"
+
+    return False, 0.0, "Bilinmeyen poz"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -695,6 +819,7 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
 
     if session.frames_xyz and HAS_TRIMESH:
         stacked = np.stack(session.frames_xyz)
+        # Medyan yüz mesh'i (frontal referans)
         pts     = np.median(stacked, axis=0)
         pts    -= pts.mean(axis=0)
         tess    = list(mp_face_mesh.FACEMESH_TESSELATION)
@@ -703,10 +828,36 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         mesh.export(str(out / "face_mesh.obj"))
         mesh.export(str(out / "face_mesh.stl"))
         log_cb(f"Yüz mesh: {len(pts)} vertex, {len(tris)} üçgen", "OK")
-        all_pts = stacked.reshape(-1, 3)
-        all_pts -= all_pts.mean(axis=0)
-        trimesh.PointCloud(vertices=all_pts).export(str(out / "face_pointcloud.ply"))
-        log_cb("face_pointcloud.ply hazır", "OK")
+
+        # Kabsch hizalamalı multi-view nokta bulutu
+        if len(session.frames_xyz) > 5:
+            try:
+                aligned = align_frames(session.frames_xyz)
+                aligned -= aligned.mean(axis=0)
+                trimesh.PointCloud(vertices=aligned).export(str(out / "face_multiview.ply"))
+                log_cb(f"face_multiview.ply: {len(aligned)} nokta (hizalanmış)", "OK")
+            except Exception as e:
+                log_cb(f"Multi-view hizalama atlandı: {e}", "WARN")
+        else:
+            all_pts = stacked.reshape(-1, 3)
+            all_pts -= all_pts.mean(axis=0)
+            trimesh.PointCloud(vertices=all_pts).export(str(out / "face_pointcloud.ply"))
+            log_cb("face_pointcloud.ply hazır", "OK")
+
+        # Poz bazlı ayrı PLY (guided mod)
+        if session.scan_mode == "guided" and session.frame_pose_labels:
+            from collections import defaultdict
+            groups: dict = defaultdict(list)
+            for pts_f, p_idx in zip(session.frames_xyz, session.frame_pose_labels):
+                groups[p_idx].append(pts_f)
+            for p_idx, frames in groups.items():
+                if frames and 0 <= p_idx < len(GUIDED_POSES):
+                    p_name = GUIDED_POSES[p_idx]["id"]
+                    pmed   = np.median(np.stack(frames), axis=0)
+                    pmed  -= pmed.mean(0)
+                    trimesh.PointCloud(vertices=pmed).export(str(out / f"pose_{p_name}.ply"))
+                    log_cb(f"pose_{p_name}.ply ({len(frames)} frame)", "OK")
+
     elif session.frames_xyz:
         log_cb("trimesh yok — OBJ/PLY atlandı. pip install trimesh", "WARN")
 
@@ -828,6 +979,10 @@ async def ws_endpoint(ws: WebSocket):
                 h, w  = frame.shape[:2]
                 fps   = sess.fps()
 
+                # IMU / Oryantasyon verisi
+                orientation = msg.get("orientation") or {}
+                imu_yaw = orientation.get("yaw")
+
                 # Temiz kare: kırpma için (annotation ve preprocessing öncesi)
                 clean = frame.copy() if sess.face_crop_enabled else None
 
@@ -858,8 +1013,6 @@ async def ws_endpoint(ws: WebSocket):
                 if face_sm and sess.target in ("face", "full"):
                     detected = True
                     draw_face(frame, face_sm, sess.style, sess.active_regions)
-                    if sess.recording and not sess.at_frame_limit():
-                        sess.frames_xyz.append(face_lms_to_xyz(face_sm, w, h))
                     if sess.face_crop_enabled and clean is not None:
                         face_crop_b64 = encode_crop(
                             clean, face_sm, w, h,
@@ -870,19 +1023,66 @@ async def ws_endpoint(ws: WebSocket):
                 if pose_sm and sess.target in ("body", "full"):
                     detected = True
                     draw_pose(frame, pose_sm, sess.style)
-                    if sess.recording and not sess.at_frame_limit():
-                        sess.pose_frames.append(pose_lms_to_xyz(pose_sm, w, h))
 
                 # Eller
                 if sess.target in ("body", "full"):
                     if handl_sm or handr_sm:
                         detected = True
                     draw_hands(frame, handl_sm, handr_sm, sess.style)
-                    if sess.recording and not sess.at_frame_limit():
-                        if handl_sm:
-                            sess.hand_l_frames.append(hand_lms_to_xyz(handl_sm, w, h))
-                        if handr_sm:
-                            sess.hand_r_frames.append(hand_lms_to_xyz(handr_sm, w, h))
+
+                # Kayıt — ortak blok
+                if sess.recording and not sess.at_frame_limit():
+                    # IMU sektör takibi (360° mod)
+                    if imu_yaw is not None:
+                        sector = int(imu_yaw / 30) % 12
+                        sess.covered_sectors.add(sector)
+                    sess.orientations.append(orientation)
+                    sess.frame_pose_labels.append(sess.guided_pose_idx)
+
+                    if face_sm and sess.target in ("face", "full"):
+                        sess.frames_xyz.append(face_lms_to_xyz(face_sm, w, h))
+                    if pose_sm and sess.target in ("body", "full"):
+                        sess.pose_frames.append(pose_lms_to_xyz(pose_sm, w, h))
+                    if handl_sm:
+                        sess.hand_l_frames.append(hand_lms_to_xyz(handl_sm, w, h))
+                    if handr_sm:
+                        sess.hand_r_frames.append(hand_lms_to_xyz(handr_sm, w, h))
+
+                # Poz tespiti (guided mod)
+                pose_status = None
+                if sess.scan_mode == "guided" and sess.recording:
+                    idx = sess.guided_pose_idx
+                    if idx < len(GUIDED_POSES):
+                        tgt = GUIDED_POSES[idx]
+                        matched, conf, feedback = detect_pose_match(face_sm, pose_sm, tgt["id"])
+                        if matched:
+                            sess.pose_hold_frames += 1
+                        else:
+                            sess.pose_hold_frames = max(0, sess.pose_hold_frames - 2)
+
+                        just_captured = sess.pose_hold_frames >= POSE_HOLD_FRAMES
+                        if just_captured:
+                            sess.pose_hold_frames = 0
+                            sess.guided_pose_idx  += 1
+                            sess.log(f"Poz tamamlandı: {tgt['name']}", "OK")
+                            if sess.guided_pose_idx >= len(GUIDED_POSES):
+                                sess.recording     = False
+                                sess.pose_complete = True
+                                sess.log("Tüm pozlar tamamlandı! Export yapabilirsiniz.", "OK")
+
+                        cur_idx  = min(sess.guided_pose_idx, len(GUIDED_POSES) - 1)
+                        cur_pose = GUIDED_POSES[cur_idx]
+                        pose_status = {
+                            "idx":          sess.guided_pose_idx,
+                            "total":        len(GUIDED_POSES),
+                            "name":         cur_pose["name"],
+                            "desc":         cur_pose["desc"],
+                            "icon":         cur_pose["icon"],
+                            "hold_progress": min(1.0, sess.pose_hold_frames / POSE_HOLD_FRAMES),
+                            "feedback":     feedback,
+                            "just_captured": just_captured,
+                            "complete":     sess.pose_complete,
+                        }
 
                 # Anlık ölçümler
                 measurements = calculate_measurements(face_sm, pose_sm, w, h)
@@ -934,6 +1134,9 @@ async def ws_endpoint(ws: WebSocket):
                     resp["face_crop"] = face_crop_b64
                 if snap_b64:
                     resp["snapshot"] = snap_b64
+                if pose_status:
+                    resp["pose_status"] = pose_status
+                resp["covered_sectors"] = list(sess.covered_sectors)
 
                 await ws.send_text(json.dumps(resp))
                 await flush()
@@ -1051,6 +1254,18 @@ async def ws_endpoint(ws: WebSocket):
                         sess.track_conf = track
                         if changed:
                             sess.log(f"Güven eşikleri → algılama={det:.2f}, takip={track:.2f}", "OK")
+
+                elif cmd == "set_scan_mode":
+                    if val in ("free", "360", "guided"):
+                        sess.scan_mode = val
+                        label = {"free": "Serbest", "360": "360°", "guided": "Poz Rehberi"}[val]
+                        sess.log(f"Tarama modu → {label}", "INFO")
+
+                elif cmd == "reset_poses":
+                    sess.guided_pose_idx  = 0
+                    sess.pose_hold_frames = 0
+                    sess.pose_complete    = False
+                    sess.log("Poz sırası sıfırlandı", "INFO")
 
                 elif cmd == "set_smoothing":
                     if isinstance(val, dict):
