@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>BodyMap</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ink:#0a0a0a; --paper:#f5f2ed; --scan:#ff3b00; --map:#00c8ff;
+  --ok:#00e676; --dim:rgba(10,10,10,0.4);
+  --glass:rgba(245,242,237,0.12); --glass2:rgba(10,10,10,0.75);
+  --mono:'Courier New',monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var(--mono);color:var(--paper);touch-action:none}
+
+/* ── SPLASH ── */
+#splash{
+  position:fixed;inset:0;background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;z-index:100;padding:0;
+}
+.splash-inner{
+  width:100%;max-width:380px;padding:32px 24px;
+  display:flex;flex-direction:column;gap:20px;
+}
+.brand{
+  font-size:28px;font-weight:900;letter-spacing:-1px;
+  color:var(--paper);font-family:var(--sans);
+}
+.brand span{color:var(--scan)}
+.brand-sub{font-size:11px;letter-spacing:3px;color:var(--dim);margin-top:2px}
+
+.section-label{font-size:9px;letter-spacing:3px;color:rgba(245,242,237,0.35);margin-bottom:6px}
+
+/* Hedef seçici */
+.target-row{display:flex;gap:6px}
+.target-btn{
+  flex:1;padding:11px 8px;text-align:center;
+  border:1px solid rgba(245,242,237,0.15);background:transparent;
+  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:11px;
+  cursor:pointer;transition:all .15s;user-select:none;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.target-btn .t-ico{font-size:20px}
+.target-btn .t-lbl{font-size:10px;letter-spacing:.5px}
+.target-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.08)}
+.target-btn:active{opacity:.6}
+
+/* Kamera seçici */
+.cam-row{display:flex;gap:6px}
+.cam-btn{
+  flex:1;padding:10px 8px;
+  border:1px solid rgba(245,242,237,0.15);background:transparent;
+  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:10px;
+  cursor:pointer;transition:all .15s;text-align:center;user-select:none;
+}
+.cam-btn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.06)}
+.cam-btn:active{opacity:.6}
+
+#startBtn{
+  padding:16px;background:var(--scan);color:var(--paper);border:none;
+  font-family:var(--mono);font-size:13px;letter-spacing:2px;font-weight:bold;
+  cursor:pointer;transition:opacity .15s;
+}
+#startBtn:disabled{opacity:.3;cursor:not-allowed}
+#startBtn:active{opacity:.8}
+#sErr{font-size:11px;color:var(--scan);min-height:14px}
+
+/* ── KAMERA / ÇIKTI ── */
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+#camOut{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+#threeWrap{position:fixed;inset:0;display:none}
+
+/* ── ÜST ŞERİT ── */
+#topBar{
+  position:fixed;top:0;left:0;right:0;
+  padding:calc(var(--st) + 8px) 14px 8px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.72),transparent);
+  display:none;align-items:center;gap:10px;z-index:20;pointer-events:none;
+}
+#topBar.vis{display:flex}
+#modePill{
+  font-size:10px;letter-spacing:2px;font-weight:bold;
+  color:var(--map);padding:3px 8px;border:1px solid rgba(0,200,255,0.3);
+  background:rgba(0,200,255,0.08);
+}
+.stat{font-size:10px;color:rgba(245,242,237,0.38);display:flex;flex-direction:column;gap:1px}
+.stat .v{font-size:12px;color:var(--paper)}
+.stat .v.ok{color:var(--ok)}.stat .v.bad{color:var(--scan)}
+#connDot{width:7px;height:7px;border-radius:50%;background:var(--scan);margin-left:auto;flex-shrink:0}
+#connDot.live{background:var(--ok);box-shadow:0 0 5px var(--ok)}
+
+/* Limit uyarısı */
+#limitBadge{
+  position:fixed;top:calc(var(--st)+46px);left:50%;transform:translateX(-50%);
+  display:none;align-items:center;gap:5px;
+  padding:3px 10px;background:rgba(255,180,0,0.9);
+  font-size:10px;letter-spacing:1px;z-index:25;color:#000;white-space:nowrap;
+}
+#limitBadge.vis{display:flex}
+
+/* Kayıt göstergesi */
+#recBadge{
+  position:fixed;top:calc(var(--st)+10px);right:50px;
+  display:none;align-items:center;gap:6px;
+  padding:4px 10px;background:rgba(255,59,0,0.9);
+  font-size:11px;letter-spacing:1px;z-index:25;
+}
+#recBadge.vis{display:flex}
+#recDot{width:7px;height:7px;border-radius:50%;background:#fff;animation:blink .8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── VİEW GEÇİŞ ── */
+#viewRow{
+  position:fixed;top:calc(var(--st)+10px);right:14px;
+  display:none;gap:4px;z-index:25;
+}
+#viewRow.vis{display:flex}
+.vBtn{
+  padding:5px 9px;border:1px solid rgba(245,242,237,0.2);
+  background:var(--glass2);color:rgba(245,242,237,0.45);
+  font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;user-select:none;
+}
+.vBtn.on{border-color:var(--map);color:var(--map)}
+.vBtn:active{opacity:.55}
+
+/* ── STİL ŞERIDI (kaydırılabilir) ── */
+#styleBar{
+  position:fixed;bottom:calc(var(--sb)+88px);left:0;right:0;
+  display:none;z-index:20;
+}
+#styleBar.vis{display:block}
+#styleScroll{
+  display:flex;gap:5px;padding:0 14px;overflow-x:auto;scrollbar-width:none;
+}
+#styleScroll::-webkit-scrollbar{display:none}
+.sBtn{
+  flex-shrink:0;padding:6px 12px;
+  border:1px solid rgba(245,242,237,0.18);background:rgba(0,0,0,.5);
+  color:rgba(245,242,237,0.45);font-family:var(--mono);font-size:10px;
+  letter-spacing:.5px;cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;
+}
+.sBtn:active{opacity:.6}
+.sBtn.on{border-color:var(--map);color:var(--map);background:rgba(0,200,255,0.1)}
+
+/* ── ALT BAR ── */
+#bottomBar{
+  position:fixed;bottom:0;left:0;right:0;padding-bottom:var(--sb);
+  background:linear-gradient(to top,rgba(0,0,0,.8),transparent);
+  display:none;z-index:20;
+}
+#bottomBar.vis{display:block}
+#actionRow{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 14px 14px}
+
+/* Ana kayıt butonu */
+#recBtn{
+  width:72px;height:72px;border-radius:50%;
+  border:3px solid var(--paper);background:transparent;
+  cursor:pointer;position:relative;transition:transform .1s;flex-shrink:0;user-select:none;
+}
+#recBtn::after{
+  content:'';position:absolute;inset:6px;border-radius:50%;
+  background:var(--scan);transition:all .25s;
+}
+#recBtn.recording::after{border-radius:6px;inset:18px;background:var(--scan)}
+#recBtn:active{transform:scale(.91)}
+
+.actBtn{
+  padding:10px 14px;border:1px solid rgba(245,242,237,0.2);
+  background:rgba(0,0,0,.5);color:rgba(245,242,237,0.6);
+  font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;
+  text-align:center;user-select:none;flex-shrink:0;
+}
+.actBtn:active{opacity:.55}
+.actBtn.green{border-color:var(--ok);color:var(--ok)}
+.actBtn.danger{border-color:rgba(255,59,0,.4);color:var(--scan)}
+
+/* ── SOL ALT BUTONLAR ── */
+#leftBtns{
+  position:fixed;bottom:calc(var(--sb)+96px);left:14px;
+  display:none;flex-direction:column;gap:5px;z-index:25;
+}
+#leftBtns.vis{display:flex}
+.floatBtn{
+  padding:6px 10px;background:var(--glass2);
+  border:1px solid rgba(245,242,237,0.18);color:rgba(245,242,237,.45);
+  font-family:var(--mono);font-size:10px;cursor:pointer;user-select:none;
+}
+.floatBtn:active{opacity:.55}
+.floatBtn.snap{border-color:rgba(0,200,255,0.4);color:var(--map)}
+
+/* ── ÇEKMECE ── */
+#dBg{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:49;display:none;transition:background .25s}
+#dBg.open{display:block;background:rgba(0,0,0,.55)}
+#drawer{
+  position:fixed;left:0;right:0;bottom:0;height:72vh;
+  background:#0c0c0c;border-top:1px solid rgba(245,242,237,.08);
+  z-index:50;display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+  border-radius:14px 14px 0 0;overflow:hidden;
+}
+#drawer.open{transform:translateY(0)}
+#dHandle{display:flex;align-items:center;justify-content:center;padding:10px 0 5px;cursor:pointer;flex-shrink:0}
+#dHandle .grip{width:36px;height:3px;background:rgba(245,242,237,.18);border-radius:2px}
+#dTabs{display:flex;border-bottom:1px solid rgba(245,242,237,.07);flex-shrink:0}
+.dTab{flex:1;padding:9px 4px;text-align:center;font-size:10px;letter-spacing:1px;color:rgba(245,242,237,.3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+.dTab.on{color:var(--map);border-bottom-color:var(--map)}
+.dPage{display:none;flex:1;overflow:hidden;flex-direction:column}
+.dPage.on{display:flex}
+
+/* LOG */
+#logList{flex:1;overflow-y:auto;padding:8px 12px;font-size:11px;line-height:1.7;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+.lRow{display:flex;gap:7px;margin-bottom:1px}
+.lTs{color:rgba(245,242,237,.2);flex-shrink:0;font-size:10px;padding-top:1px}
+.lLv{flex-shrink:0;width:46px;font-size:10px;font-weight:bold}
+.lMsg{color:var(--paper);font-size:11px;word-break:break-word}
+.INFO{color:#4fc3ff}.OK{color:var(--ok)}.WARN{color:#ffb800}.ERROR{color:var(--scan)}.SCAN{color:#e040fb}.EXPORT{color:#4fc3ff}.SYSTEM{color:rgba(245,242,237,.5)}
+#logFoot{display:flex;gap:14px;padding:7px 12px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.28);flex-shrink:0}
+#logFoot span{color:var(--paper)}
+#logClear{margin-left:auto;padding:2px 8px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:10px;cursor:pointer}
+
+/* BÖLGE */
+#regionWrap{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+#regionGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.rItem{display:flex;align-items:center;gap:7px;padding:9px 9px;border:1px solid rgba(245,242,237,.1);cursor:pointer;transition:all .15s;user-select:none}
+.rItem.on{border-color:currentColor;background:rgba(245,242,237,.04)}
+.rDot{width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:.28;transition:opacity .15s}
+.rItem.on .rDot{opacity:1}
+.rName{font-size:10px;flex:1}
+.rItem:not(.on) .rName{color:rgba(245,242,237,.3)}
+#rFoot{display:flex;gap:5px;padding:7px 10px;border-top:1px solid rgba(245,242,237,.06);flex-shrink:0}
+.rCtrl{flex:1;padding:10px;border:1px solid rgba(245,242,237,.14);background:transparent;color:rgba(245,242,237,.42);font-family:var(--mono);font-size:11px;cursor:pointer}
+.rCtrl:active{opacity:.55}
+.rCtrl.apply{border-color:var(--map);color:var(--map)}
+
+/* EXPORT */
+#expInner{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#expNote{padding:10px 12px;font-size:11px;color:rgba(245,242,237,.38);border-bottom:1px solid rgba(245,242,237,.06);flex-shrink:0;line-height:1.6}
+#expList{flex:1;overflow-y:auto;padding:8px 10px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+.eItem{display:flex;align-items:center;justify-content:space-between;padding:10px 8px;border:1px solid rgba(245,242,237,.08);margin-bottom:5px}
+.eItem a{color:var(--map);text-decoration:none;font-size:12px}
+.eItem a:active{text-decoration:underline}
+.eMeta{font-size:10px;color:rgba(245,242,237,.3);margin-top:2px}
+.eSize{font-size:10px;color:rgba(245,242,237,.28);flex-shrink:0;margin-left:10px}
+#refExpBtn{margin:0 10px 10px;padding:9px;border:1px solid rgba(245,242,237,.1);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:11px;cursor:pointer;flex-shrink:0}
+#refExpBtn:active{opacity:.55}
+
+/* SNAPSHOT galeri */
+#snapPage{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#snapGrid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+.snapThumb{position:relative;aspect-ratio:16/9;background:#111;border:1px solid rgba(245,242,237,.1);overflow:hidden;cursor:pointer}
+.snapThumb img{width:100%;height:100%;object-fit:cover;display:block}
+.snapThumb .sdl{
+  position:absolute;bottom:4px;right:4px;padding:3px 6px;
+  background:rgba(0,0,0,.7);color:var(--map);font-size:9px;letter-spacing:.5px;
+  border:1px solid rgba(0,200,255,.3);text-decoration:none;
+}
+.snapEmpty{padding:16px;font-size:11px;color:rgba(245,242,237,.28);text-align:center}
+#snapFoot{padding:7px 10px;border-top:1px solid rgba(245,242,237,.06);font-size:10px;color:rgba(245,242,237,.28);display:flex;align-items:center;gap:8px;flex-shrink:0}
+#snapCount{color:var(--paper)}
+#snapClear{margin-left:auto;padding:4px 10px;border:1px solid rgba(245,242,237,.12);background:transparent;color:rgba(245,242,237,.3);font-family:var(--mono);font-size:10px;cursor:pointer}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;top:calc(var(--st)+62px);left:50%;
+  transform:translateX(-50%) translateY(-6px);
+  background:var(--glass2);border:1px solid rgba(245,242,237,.18);
+  color:var(--paper);font-size:11px;padding:7px 18px;
+  z-index:90;opacity:0;transition:opacity .2s,transform .2s;
+  pointer-events:none;white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:var(--ok);color:var(--ok)}
+#toast.err{border-color:var(--scan);color:var(--scan)}
+#toast.info{border-color:var(--map);color:var(--map)}
+#toast.warn{border-color:#ffb800;color:#ffb800}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+ <div class="splash-inner">
+  <div>
+   <div class="brand">Body<span>Map</span></div>
+   <div class="brand-sub">HARITALAMA ARACI</div>
+  </div>
+
+  <div>
+   <div class="section-label">HEDEF</div>
+   <div class="target-row">
+    <button class="target-btn on" data-t="face" id="tFace">
+     <span class="t-ico">👤</span><span class="t-lbl">YÜZ</span>
+    </button>
+    <button class="target-btn" data-t="body" id="tBody">
+     <span class="t-ico">🧍</span><span class="t-lbl">VÜCUT</span>
+    </button>
+    <button class="target-btn" data-t="full" id="tFull">
+     <span class="t-ico">✦</span><span class="t-lbl">TAM</span>
+    </button>
+   </div>
+  </div>
+
+  <div>
+   <div class="section-label">KAMERA</div>
+   <div class="cam-row">
+    <button class="cam-btn on" data-f="user"        id="cFront">🤳 Ön</button>
+    <button class="cam-btn"   data-f="environment"  id="cBack" >📷 Arka</button>
+   </div>
+  </div>
+
+  <button id="startBtn">BAŞLAT</button>
+  <div id="sErr"></div>
+ </div>
+</div>
+
+<!-- GÖRÜNTÜ -->
+<video id="video" autoplay playsinline muted></video>
+<img   id="camOut" alt="">
+<div   id="threeWrap"><canvas id="threeCanvas" style="width:100%;height:100%"></canvas></div>
+
+<!-- ÜST BAR -->
+<div id="topBar">
+ <div id="modePill">BÖLGE</div>
+ <div class="stat"><div>ALGILAMA</div><div class="v" id="sFace">—</div></div>
+ <div class="stat"><div>FPS</div><div class="v" id="sFps">—</div></div>
+ <div class="stat"><div>FRAME</div><div class="v" id="sFrame">0</div></div>
+ <div id="connDot"></div>
+</div>
+
+<!-- LIMIT UYARISI -->
+<div id="limitBadge">⚠ FRAME LIMİTİ DOLDU — EXPORT YADA SIFIRLA</div>
+
+<!-- KAYIT BADGE -->
+<div id="recBadge"><div id="recDot"></div><span id="recTime">REC 0s</span></div>
+
+<!-- VİEW GEÇİŞ -->
+<div id="viewRow">
+ <button class="vBtn on" id="vCam">KAM</button>
+ <button class="vBtn"    id="v3d">3D</button>
+</div>
+
+<!-- STİL ŞERIDI -->
+<div id="styleBar">
+ <div id="styleScroll">
+  <button class="sBtn" data-s="wireframe">ÇİZGİLİ</button>
+  <button class="sBtn" data-s="dots">NOKTA</button>
+  <button class="sBtn" data-s="filled">KALIP</button>
+  <button class="sBtn on" data-s="regions">BÖLGE</button>
+  <button class="sBtn" data-s="depth">DERİNLİK</button>
+  <button class="sBtn" data-s="xray">X-RAY</button>
+  <button class="sBtn" data-s="thermal">TERMAL</button>
+  <button class="sBtn" data-s="skeleton">İSKELET</button>
+ </div>
+</div>
+
+<!-- ALT BAR -->
+<div id="bottomBar">
+ <div id="actionRow">
+  <button class="actBtn danger" id="btnReset">SIFIRLA</button>
+  <button id="recBtn" title="Kayıt başlat/durdur"></button>
+  <button class="actBtn green" id="btnExport">EXPORT</button>
+ </div>
+</div>
+
+<!-- SOL ALT BUTONLAR -->
+<div id="leftBtns">
+ <button class="floatBtn" id="btnDrawer">LOG ↑</button>
+ <button class="floatBtn" id="btnRegion">BÖLGE ↑</button>
+ <button class="floatBtn snap" id="btnSnap">📸 SNAP</button>
+ <button class="floatBtn" id="btnCamSwitch">KAM ⟳</button>
+</div>
+
+<!-- ÇEKMECE -->
+<div id="dBg"></div>
+<div id="drawer">
+ <div id="dHandle"><div class="grip"></div></div>
+ <div id="dTabs">
+  <div class="dTab on"  data-dt="log">LOG</div>
+  <div class="dTab"     data-dt="region">BÖLGE</div>
+  <div class="dTab"     data-dt="export">EXPORT</div>
+  <div class="dTab"     data-dt="snap">SNAP</div>
+ </div>
+
+ <!-- LOG -->
+ <div class="dPage on" id="dp-log">
+  <div id="logList"></div>
+  <div id="logFoot">
+   OK <span id="lOk">0</span>
+   WARN <span id="lWn">0</span>
+   ERR <span id="lEr">0</span>
+   SCAN <span id="lSc">0</span>
+   <button id="logClear">TEMİZLE</button>
+  </div>
+ </div>
+
+ <!-- BÖLGE -->
+ <div class="dPage" id="dp-region">
+  <div id="regionWrap"><div id="regionGrid"></div></div>
+  <div id="rFoot">
+   <button class="rCtrl" id="rAll">Tümü</button>
+   <button class="rCtrl" id="rNone">Hiçbiri</button>
+   <button class="rCtrl apply" id="rApply">Uygula ✓</button>
+  </div>
+ </div>
+
+ <!-- EXPORT -->
+ <div class="dPage" id="dp-export">
+  <div id="expInner">
+   <div id="expNote">
+    Kayıt durduktan sonra EXPORT tuşuna basın.<br>
+    ZIP içinde OBJ · STL · PLY · JSON · Rapor bulunur.
+   </div>
+   <div id="expList"><p style="padding:12px;font-size:11px;color:rgba(245,242,237,.28)">Henüz export yok.</p></div>
+   <button id="refExpBtn">↻ Yenile</button>
+  </div>
+ </div>
+
+ <!-- SNAPSHOT -->
+ <div class="dPage" id="dp-snap">
+  <div id="snapPage">
+   <div id="snapGrid"><p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p></div>
+   <div id="snapFoot">
+    <span>TOPLAM <span id="snapCount">0</span></span>
+    <button id="snapClear">TEMİZLE</button>
+   </div>
+  </div>
+ </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ══════════════════════════════════════════
+   VERİ
+══════════════════════════════════════════ */
+const REGIONS = {
+  "Sol Kaş":          "#b450ff",
+  "Sağ Kaş":          "#b450ff",
+  "Sol Göz":          "#ffdc00",
+  "Sağ Göz":          "#ffdc00",
+  "Sol Kirpik Hattı": "#00e5ff",
+  "Sağ Kirpik Hattı": "#00e5ff",
+  "Burun":            "#4488ff",
+  "Burun Köprüsü":    "#88aaff",
+  "Üst Dudak":        "#8833ff",
+  "Alt Dudak":        "#aa22cc",
+  "Sol Yanak":        "#cc9900",
+  "Sağ Yanak":        "#cc9900",
+  "Çene":             "#44cccc",
+  "Yüz Oval":         "#00ff64",
+  "Saç Çizgisi":      "#cc44ff",
+};
+const RKEYS = Object.keys(REGIONS);
+
+/* ══════════════════════════════════════════
+   DURUM
+══════════════════════════════════════════ */
+let ws=null, stream=null;
+let facing='user', target='face', curStyle='regions';
+let activeRegs=new Set(RKEYS);
+let connected=false, recording=false;
+let showPcd=false;
+let logC={OK:0,WARN:0,ERROR:0,SCAN:0};
+let sendIv=null, toastTimer=null;
+let recTimer=null, recSec=0;
+let snapshots=[];
+
+/* ══════════════════════════════════════════
+   THREE.JS
+══════════════════════════════════════════ */
+let scene, camera, renderer, pcdMesh;
+
+function initThree(){
+  const canvas = document.getElementById('threeCanvas');
+  scene    = new THREE.Scene();
+  camera   = new THREE.PerspectiveCamera(55, canvas.clientWidth/canvas.clientHeight, 0.1, 10000);
+  camera.position.set(0,0,250);
+  renderer = new THREE.WebGLRenderer({canvas,alpha:true,antialias:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(canvas.clientWidth,canvas.clientHeight);
+  scene.add(new THREE.AmbientLight(0xffffff,.7));
+
+  let drag=false,lx=0,ly=0,rx=0,ry=0,dist=250;
+  canvas.addEventListener('mousedown', e=>{drag=true;lx=e.clientX;ly=e.clientY});
+  canvas.addEventListener('mousemove', e=>{if(!drag)return;ry+=(e.clientX-lx)*.5;rx+=(e.clientY-ly)*.5;lx=e.clientX;ly=e.clientY});
+  canvas.addEventListener('mouseup',   ()=>drag=false);
+  canvas.addEventListener('wheel',     e=>{dist=Math.max(30,dist+e.deltaY*.4)});
+  let pDist=0;
+  canvas.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY}
+    if(e.touches.length===2) pDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  },{passive:true});
+  canvas.addEventListener('touchmove', e=>{
+    if(e.touches.length===1&&drag){ry+=(e.touches[0].clientX-lx)*.5;rx+=(e.touches[0].clientY-ly)*.5;lx=e.touches[0].clientX;ly=e.touches[0].clientY}
+    if(e.touches.length===2){const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);dist=Math.max(30,dist-(nd-pDist)*.5);pDist=nd;}
+  },{passive:true});
+  canvas.addEventListener('touchend',  ()=>drag=false,{passive:true});
+  window.addEventListener('resize',()=>{camera.aspect=canvas.clientWidth/canvas.clientHeight;camera.updateProjectionMatrix();renderer.setSize(canvas.clientWidth,canvas.clientHeight)});
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    if(!showPcd)return;
+    const phi=rx*Math.PI/180,the=ry*Math.PI/180;
+    camera.position.set(dist*Math.sin(the)*Math.cos(phi),dist*Math.sin(phi),dist*Math.cos(the)*Math.cos(phi));
+    camera.lookAt(0,0,0);
+    renderer.render(scene,camera);
+  })();
+}
+
+function updatePcd(points,colors){
+  if(pcdMesh){scene.remove(pcdMesh);pcdMesh.geometry.dispose();pcdMesh.material.dispose();}
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(points.flat());
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  let mat;
+  if(colors&&colors.length===points.length){
+    const col=new Float32Array(colors.length*3);
+    colors.forEach((c,i)=>{col[i*3]=c[0]/255;col[i*3+1]=c[1]/255;col[i*3+2]=c[2]/255});
+    geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+    mat=new THREE.PointsMaterial({size:2,vertexColors:true,sizeAttenuation:false});
+  }else{
+    mat=new THREE.PointsMaterial({size:2,color:0x00c8ff,sizeAttenuation:false});
+  }
+  pcdMesh=new THREE.Points(geo,mat);
+  scene.add(pcdMesh);
+}
+
+/* ══════════════════════════════════════════
+   SPLASH — SEÇİM
+══════════════════════════════════════════ */
+document.querySelectorAll('.target-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    target=b.dataset.t;
+    document.querySelectorAll('.target-btn').forEach(x=>x.classList.toggle('on',x===b));
+  });
+});
+document.querySelectorAll('.cam-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    facing=b.dataset.f;
+    document.querySelectorAll('.cam-btn').forEach(x=>x.classList.toggle('on',x===b));
+  });
+});
+
+/* ══════════════════════════════════════════
+   BAŞLAT
+══════════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+
+$('startBtn').addEventListener('click',async()=>{
+  $('startBtn').disabled=true;$('sErr').textContent='';
+  try{
+    await openCamera();
+    $('splash').style.display='none';
+    ['topBar','styleBar','bottomBar','leftBtns','viewRow'].forEach(id=>$(id).classList.add('vis'));
+    connectWS();
+    cmd('set_target',target);
+    cmd('set_style',curStyle);
+    cmd('set_regions',Array.from(activeRegs));
+  }catch(e){
+    $('sErr').textContent='Kamera açılamadı: '+e.message;
+    $('startBtn').disabled=false;
+  }
+});
+
+async function openCamera(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:false
+  });
+  $('video').srcObject=stream; await $('video').play();
+}
+
+async function switchCam(){
+  facing=facing==='user'?'environment':'user';
+  try{await openCamera();toast('Kamera değiştirildi','ok');}
+  catch{toast('Değiştirilemedi','err');}
+}
+$('btnCamSwitch').addEventListener('click',switchCam);
+
+/* ══════════════════════════════════════════
+   WEBSOCKEt — ws:// veya wss:// otomatik
+══════════════════════════════════════════ */
+const WS_URL=`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
+
+function connectWS(){
+  ws=new WebSocket(WS_URL);
+  ws.onopen   =()=>{
+    connected=true;
+    $('connDot').classList.add('live');
+    startSend();
+    // Yeniden bağlandığında mevcut ayarları gönder
+    cmd('set_target',target);
+    cmd('set_style',curStyle);
+    cmd('set_regions',Array.from(activeRegs));
+  };
+  ws.onclose  =()=>{
+    connected=false;
+    $('connDot').classList.remove('live');
+    clearInterval(sendIv);
+    setTimeout(connectWS,2500);
+  };
+  ws.onerror  =()=>{};
+  ws.onmessage=onMsg;
+}
+
+const cap2d=document.createElement('canvas').getContext('2d'),capC=cap2d.canvas;
+function startSend(){
+  clearInterval(sendIv);
+  sendIv=setInterval(()=>{
+    if(!ws||ws.readyState!==1) return;
+    const v=$('video'); if(v.readyState<2) return;
+    capC.width=v.videoWidth||640;capC.height=v.videoHeight||480;
+    cap2d.drawImage(v,0,0,capC.width,capC.height);
+    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',.75)}));
+  },80);
+}
+
+function onMsg(e){
+  const m=JSON.parse(e.data);
+  if(m.type==='frame'){
+    $('camOut').src=m.data;
+    applyStats(m.stats);
+    // Snapshot geldi mi?
+    if(m.snapshot){
+      addSnapshot(m.snapshot);
+    }
+  } else if(m.type==='log'){
+    addLog(m.msg,m.level,m.ts);
+  } else if(m.type==='pointcloud'){
+    if(!scene) initThree();
+    updatePcd(m.points,m.colors);
+  } else if(m.type==='export_done'){
+    toast('ZIP hazır — indiriliyor!','ok');
+    addLog(`Export: ${m.name} (${m.size_kb} KB)`,'OK',ts());
+    // Otomatik indir
+    const a=document.createElement('a');
+    a.href=m.url;a.download=m.name;document.body.appendChild(a);a.click();a.remove();
+    loadExports();
+    openDrawer('export');
+  }
+}
+
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
+function cmd(c,v){send({type:'cmd',cmd:c,value:v});}
+
+/* ══════════════════════════════════════════
+   STATİSTİK
+══════════════════════════════════════════ */
+function applyStats(s){
+  if(!s) return;
+  $('sFps').textContent=s.fps+' fps';
+  $('sFrame').textContent=s.frame_count;
+  const fEl=$('sFace');
+  fEl.textContent=s.detected?'✓':'✗';
+  fEl.className='v '+(s.detected?'ok':'bad');
+  $('modePill').textContent=s.style?.toUpperCase()||'—';
+
+  // Frame limit uyarısı
+  $('limitBadge').classList.toggle('vis', !!s.at_limit);
+
+  if(s.recording!==recording){
+    recording=s.recording;
+    $('recBtn').classList.toggle('recording',recording);
+    $('recBadge').classList.toggle('vis',recording);
+    if(recording){
+      recSec=0;
+      clearInterval(recTimer);
+      recTimer=setInterval(()=>{recSec++;$('recTime').textContent=`REC ${recSec}s`;},1000);
+    } else {
+      clearInterval(recTimer);
+      // Sunucudan limit dolu geldiyse uyar
+      if(s.at_limit) toast('Frame limiti doldu — EXPORT yap!','warn');
+    }
+  }
+}
+
+/* ══════════════════════════════════════════
+   BUTONLAR
+══════════════════════════════════════════ */
+$('recBtn').addEventListener('click',()=>{
+  if(!recording){
+    cmd('start_rec');
+    toast('Kayıt başladı','info');
+  } else {
+    cmd('stop_rec');
+    toast('Kayıt durdu','ok');
+  }
+});
+
+$('btnExport').addEventListener('click',()=>{
+  cmd('export');
+  toast('Export hazırlanıyor…','info');
+  openDrawer('export');
+});
+
+$('btnReset').addEventListener('click',()=>{
+  if(confirm('Tüm kayıt verisi silinsin mi?')){
+    cmd('reset');
+    toast('Sıfırlandı','ok');
+    $('limitBadge').classList.remove('vis');
+  }
+});
+
+// Snapshot butonu
+$('btnSnap').addEventListener('click',()=>{
+  cmd('snapshot');
+  toast('Snapshot alınıyor…','info');
+});
+
+// Stil seçici
+document.querySelectorAll('.sBtn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    curStyle=b.dataset.s;
+    document.querySelectorAll('.sBtn').forEach(x=>x.classList.toggle('on',x===b));
+    $('modePill').textContent=curStyle.toUpperCase();
+    cmd('set_style',curStyle);
+  });
+});
+
+// View toggle
+$('vCam').addEventListener('click',()=>setView(false));
+$('v3d') .addEventListener('click',()=>setView(true));
+function setView(pcd){
+  showPcd=pcd;
+  $('camOut').style.display=pcd?'none':'block';
+  $('threeWrap').style.display=pcd?'block':'none';
+  $('vCam').classList.toggle('on',!pcd);
+  $('v3d').classList.toggle('on',pcd);
+  if(pcd&&!scene) initThree();
+}
+
+// Çekmece butonları
+$('btnDrawer').addEventListener('click',()=>openDrawer('log'));
+$('btnRegion').addEventListener('click',()=>openDrawer('region'));
+$('refExpBtn').addEventListener('click',loadExports);
+
+// Log temizle
+$('logClear').addEventListener('click',()=>{
+  $('logList').innerHTML='';
+  logC={OK:0,WARN:0,ERROR:0,SCAN:0};
+  $('lOk').textContent=$('lWn').textContent=$('lEr').textContent=$('lSc').textContent='0';
+});
+
+// Snapshot temizle
+$('snapClear').addEventListener('click',()=>{
+  snapshots=[];
+  renderSnapGrid();
+  toast('Snapshotlar temizlendi','ok');
+});
+
+// Klavye
+document.addEventListener('keydown',e=>{
+  if(!connected||e.target.tagName==='INPUT') return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();$('recBtn').click();}
+  else if(k==='e') $('btnExport').click();
+  else if(k==='p'||k==='s') $('btnSnap').click();
+  else if(k==='r') {if(e.ctrlKey){e.preventDefault();$('btnReset').click();}}
+  else if(k==='3') setView(!showPcd);
+});
+
+/* ══════════════════════════════════════════
+   ÇEKMECE
+══════════════════════════════════════════ */
+let dOpen=false;
+function openDrawer(tab){
+  $('dBg').classList.add('open');
+  $('drawer').classList.add('open');
+  dOpen=true;
+  if(tab)switchDTab(tab);
+  if(tab==='export')loadExports();
+}
+function closeDrawer(){$('dBg').classList.remove('open');$('drawer').classList.remove('open');dOpen=false;}
+$('dBg')   .addEventListener('click',closeDrawer);
+$('dHandle').addEventListener('click',closeDrawer);
+document.querySelectorAll('.dTab').forEach(t=>t.addEventListener('click',()=>switchDTab(t.dataset.dt)));
+function switchDTab(id){
+  document.querySelectorAll('.dTab').forEach(x=>x.classList.toggle('on',x.dataset.dt===id));
+  document.querySelectorAll('.dPage').forEach(x=>x.classList.toggle('on',x.id==='dp-'+id));
+  if(id==='export') loadExports();
+}
+let tyS=0;
+$('drawer').addEventListener('touchstart',e=>{tyS=e.touches[0].clientY;},{passive:true});
+$('drawer').addEventListener('touchend',  e=>{if(e.changedTouches[0].clientY-tyS>60)closeDrawer();},{passive:true});
+
+/* ══════════════════════════════════════════
+   LOG
+══════════════════════════════════════════ */
+function addLog(msg,level,t){
+  if(level in logC)logC[level]++;
+  const r=document.createElement('div');r.className='lRow';
+  r.innerHTML=`<span class="lTs">${t}</span><span class="lLv ${level}">${level}</span><span class="lMsg">${esc(msg)}</span>`;
+  $('logList').appendChild(r);
+  while($('logList').children.length>300)$('logList').removeChild($('logList').firstChild);
+  $('logList').scrollTop=$('logList').scrollHeight;
+  $('lOk').textContent=logC.OK;$('lWn').textContent=logC.WARN;$('lEr').textContent=logC.ERROR;$('lSc').textContent=logC.SCAN;
+}
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function ts(){return new Date().toLocaleTimeString('tr-TR',{hour12:false})+'.'+String(new Date().getMilliseconds()).padStart(3,'0');}
+
+/* ══════════════════════════════════════════
+   SNAPSHOT
+══════════════════════════════════════════ */
+function addSnapshot(dataUrl){
+  const now=new Date();
+  snapshots.unshift({url:dataUrl,time:now.toLocaleTimeString('tr-TR',{hour12:false})});
+  if(snapshots.length>30) snapshots.pop(); // Max 30 snap bellek tut
+  renderSnapGrid();
+  toast('Snapshot kaydedildi','ok');
+}
+
+function renderSnapGrid(){
+  const grid=$('snapGrid');
+  $('snapCount').textContent=snapshots.length;
+  if(!snapshots.length){
+    grid.innerHTML='<p class="snapEmpty">Henüz snapshot yok.<br>📸 SNAP butonuna bas.</p>';
+    return;
+  }
+  grid.innerHTML='';
+  snapshots.forEach((s,i)=>{
+    const div=document.createElement('div');div.className='snapThumb';
+    const img=document.createElement('img');img.src=s.url;img.loading='lazy';
+    const a=document.createElement('a');
+    a.className='sdl';a.textContent='⬇ İNDİR';
+    a.href=s.url;a.download=`bodymap_snap_${i+1}.png`;
+    div.appendChild(img);div.appendChild(a);
+    grid.appendChild(div);
+  });
+}
+
+/* ══════════════════════════════════════════
+   BÖLGE SEÇİCİ
+══════════════════════════════════════════ */
+const rGrid=$('regionGrid');
+RKEYS.forEach(name=>{
+  const el=document.createElement('div');
+  el.className='rItem on';el.dataset.name=name;el.style.color=REGIONS[name];
+  el.innerHTML=`<div class="rDot" style="background:${REGIONS[name]}"></div><div class="rName">${name}</div>`;
+  el.addEventListener('click',()=>{const on=el.classList.toggle('on');if(on)activeRegs.add(name);else activeRegs.delete(name);});
+  rGrid.appendChild(el);
+});
+$('rAll') .addEventListener('click',()=>{document.querySelectorAll('.rItem').forEach(x=>{x.classList.add('on');activeRegs.add(x.dataset.name);});});
+$('rNone').addEventListener('click',()=>{document.querySelectorAll('.rItem').forEach(x=>{x.classList.remove('on');activeRegs.delete(x.dataset.name);});});
+$('rApply').addEventListener('click',()=>{cmd('set_regions',Array.from(activeRegs));toast(`${activeRegs.size} bölge aktif`,'ok');closeDrawer();});
+
+/* ══════════════════════════════════════════
+   EXPORT LİSTESİ
+══════════════════════════════════════════ */
+async function loadExports(){
+  const el=$('expList');
+  try{
+    const d=await(await fetch('/list_exports')).json();
+    if(!d.exports.length){el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(245,242,237,.28)">Henüz export yok.</p>';return;}
+    el.innerHTML='';
+    d.exports.forEach(ex=>{
+      const div=document.createElement('div');div.className='eItem';
+      div.innerHTML=`<div><a href="${esc(ex.url)}" download="${esc(ex.name)}">${esc(ex.name)}</a><div class="eMeta">ZIP · OBJ · PLY · JSON</div></div><span class="eSize">${ex.size_kb} KB</span>`;
+      el.appendChild(div);
+    });
+  }catch{el.innerHTML='<p style="padding:12px;font-size:11px;color:rgba(255,59,0,.35)">Alınamadı.</p>';}
+}
+loadExports();
+
+/* ══════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════ */
+const toastEl=$('toast');
+function toast(msg,type=''){
+  toastEl.textContent=msg;toastEl.className='show '+type;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toastEl.className='';},2400);
+}
+</script>
+</body>
+</html>
