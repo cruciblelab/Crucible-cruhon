@@ -16,6 +16,15 @@ cleanly.
   @mmap.find[path; needle]        → byte offset of needle, or -1
   @mmap.contains[path; needle]    → bool
   @mmap.count[path; needle]       → number of occurrences
+
+━━━ WRITABLE MAP (object API) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @mmap.open[path]                → a writable memory-map object (r+)
+  @mmap.get[map; i; j]            → bytes map[i:j]
+  @mmap.put[map; offset; data]    → overwrite bytes at offset (returns map)
+  @mmap.length[map]               → mapped length
+  @mmap.search[map; needle]       → byte offset within the map
+  @mmap.flush[map]                → flush changes back to disk
+  @mmap.close[map]                → close the map
 """
 from ..registry import register_lib, register_lib_call
 
@@ -45,3 +54,25 @@ def register():
         lambda a: f"{_OPEN}({a[0]}, lambda _m: _m.find({a[1]}) != -1)")
     register_lib_call("mmap", "count",
         lambda a: f"{_OPEN}({a[0]}, lambda _m: _m[:].count({a[1]}))")
+
+    # ── Writable map (object API) ─────────────────────────────
+    register_lib_call("mmap", "open",
+        lambda a: (
+            f"(lambda _p: (lambda _f: (lambda _m: (_f.close(), _m)[1])"
+            f"(__import__('mmap').mmap(_f.fileno(), 0)))(open(_p, 'r+b')))({a[0]})"
+        ))
+    register_lib_call("mmap", "get",
+        lambda a: f"{a[0]}[{a[1]}:{a[2]}]")
+    register_lib_call("mmap", "put",
+        lambda a: (
+            f"(lambda _m, _o, _d: (_m.__setitem__(slice(_o, _o + len(_d)), _d), _m)[1])"
+            f"({a[0]}, {a[1]}, {a[2]})"
+        ))
+    register_lib_call("mmap", "length",
+        lambda a: f"len({a[0]})")
+    register_lib_call("mmap", "search",
+        lambda a: f"{a[0]}.find({a[1]})")
+    register_lib_call("mmap", "flush",
+        lambda a: f"{a[0]}.flush()")
+    register_lib_call("mmap", "close",
+        lambda a: f"{a[0]}.close()")

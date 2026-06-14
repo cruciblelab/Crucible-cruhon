@@ -20,6 +20,9 @@ Look up signal numbers/names and send or schedule signals.
 ━━━ SEND / SCHEDULE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @signal.send[num]               → raise a signal in this process
   @signal.alarm[seconds]          → schedule SIGALRM after N seconds (Unix)
+  @signal.set_timer[seconds]      → start a real-time interval timer (SIGALRM)
+  @signal.get_timer[]             → (value, interval) of the real-time timer
+  @signal.pause[]                 → block until a signal is received (Unix)
 """
 from ..registry import register_lib, register_lib_call
 
@@ -54,3 +57,9 @@ def register():
         lambda a: f"{_SG}.raise_signal({a[0]})")
     register_lib_call("signal", "alarm",
         lambda a: f"{_SG}.alarm({a[0]})")
+    register_lib_call("signal", "set_timer",
+        lambda a: f"{_SG}.setitimer({_SG}.ITIMER_REAL, {a[0]})")
+    register_lib_call("signal", "get_timer",
+        lambda a: f"{_SG}.getitimer({_SG}.ITIMER_REAL)")
+    register_lib_call("signal", "pause",
+        lambda a: f"{_SG}.pause()")

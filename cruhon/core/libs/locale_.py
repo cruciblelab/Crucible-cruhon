@@ -14,8 +14,12 @@ Format numbers and currency, and parse locale-formatted strings.
   @locale.number[n]               → group-formatted integer ("1,234,567")
   @locale.decimal[n]              → group-formatted float
   @locale.currency[n]             → currency string for the current locale
+  @locale.currency_intl[n]        → international currency string (with code)
   @locale.atof[s]                 → parse a locale float string
   @locale.atoi[s]                 → parse a locale integer string
+  @locale.delocalize[s]           → strip locale formatting to a plain number
+  @locale.normalize[name]         → normalise a locale name ("en" → "en_US…")
+  @locale.format[n]               → locale-aware str() of a number
 """
 from ..registry import register_lib, register_lib_call
 
@@ -44,3 +48,11 @@ def register():
         lambda a: f"{_LC}.atof({a[0]})")
     register_lib_call("locale", "atoi",
         lambda a: f"{_LC}.atoi({a[0]})")
+    register_lib_call("locale", "currency_intl",
+        lambda a: f"{_LC}.currency({a[0]}, international=True)")
+    register_lib_call("locale", "delocalize",
+        lambda a: f"{_LC}.delocalize({a[0]})")
+    register_lib_call("locale", "normalize",
+        lambda a: f"{_LC}.normalize({a[0]})")
+    register_lib_call("locale", "format",
+        lambda a: f"{_LC}.str({a[0]})")

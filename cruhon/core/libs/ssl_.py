@@ -16,7 +16,14 @@ Create SSL contexts, wrap sockets, and inspect server certificates.
 ━━━ CERTIFICATES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @ssl.server_cert[host; port]    → PEM certificate string of a server
   @ssl.cert_dict[host; port]      → parsed certificate dict of a server
+  @ssl.pem_to_der[pem]            → convert a PEM certificate to DER bytes
   @ssl.verify_paths[]             → default CA file/dir locations
+
+━━━ CONFIGURE A CONTEXT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @ssl.load_ca[ctx; cafile]       → trust certificates from a CA file
+  @ssl.set_ciphers[ctx; ciphers]  → restrict the cipher suite
+  @ssl.ciphers[ctx]               → list of enabled cipher dicts
+  @ssl.check_hostname[ctx; on]    → toggle hostname verification
 """
 from ..registry import register_lib, register_lib_call
 
@@ -52,5 +59,17 @@ def register():
             f"(lambda _h, _p: (lambda _c: _c.wrap_socket({_SK}.create_connection((_h, _p)), "
             f"server_hostname=_h).getpeercert())({_SS}.create_default_context()))({a[0]}, {a[1]})"
         ))
+    register_lib_call("ssl", "pem_to_der",
+        lambda a: f"{_SS}.PEM_cert_to_DER_cert({a[0]})")
     register_lib_call("ssl", "verify_paths",
         lambda a: f"{_SS}.get_default_verify_paths()")
+
+    # ── Configure a context ───────────────────────────────────
+    register_lib_call("ssl", "load_ca",
+        lambda a: f"(lambda _c, _f: (_c.load_verify_locations(_f), _c)[1])({a[0]}, {a[1]})")
+    register_lib_call("ssl", "set_ciphers",
+        lambda a: f"(lambda _c, _s: (_c.set_ciphers(_s), _c)[1])({a[0]}, {a[1]})")
+    register_lib_call("ssl", "ciphers",
+        lambda a: f"{a[0]}.get_ciphers()")
+    register_lib_call("ssl", "check_hostname",
+        lambda a: f"(lambda _c, _b: (setattr(_c, 'check_hostname', _b), _c)[1])({a[0]}, {a[1]})")

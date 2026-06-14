@@ -18,6 +18,9 @@ Map between file extensions and MIME types.
 ━━━ REGISTRY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @mimetypes.add[mime; ext]       → register a custom type → extension map
   @mimetypes.types[]              → the full extension → type mapping
+  @mimetypes.suffix_map[]         → suffix aliases (".tgz" → ".tar.gz")
+  @mimetypes.encodings_map[]      → extension → encoding (".gz" → "gzip")
+  @mimetypes.init[]               → (re)initialise the known type database
 """
 from ..registry import register_lib, register_lib_call
 
@@ -48,3 +51,9 @@ def register():
         lambda a: f"{_MT}.add_type({a[0]}, {a[1]})")
     register_lib_call("mimetypes", "types",
         lambda a: f"(lambda: ({_MT}.init(), {_MT}.types_map)[1])()")
+    register_lib_call("mimetypes", "suffix_map",
+        lambda a: f"(lambda: ({_MT}.init(), {_MT}.suffix_map)[1])()")
+    register_lib_call("mimetypes", "encodings_map",
+        lambda a: f"(lambda: ({_MT}.init(), {_MT}.encodings_map)[1])()")
+    register_lib_call("mimetypes", "init",
+        lambda a: f"{_MT}.init()")

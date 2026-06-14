@@ -17,6 +17,9 @@ readable text, and inspect the call stack.
 ━━━ STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @traceback.stack[]              → list of formatted stack frames
   @traceback.print_stack[]        → print current stack to stderr
+  @traceback.extract[]            → StackSummary of the current call stack
+  @traceback.frames[e]            → extracted frames (FrameSummary list) of e
+  @traceback.format_frames[summary] → formatted lines from a StackSummary
 """
 from ..registry import register_lib, register_lib_call
 
@@ -47,3 +50,9 @@ def register():
         lambda a: f"{_TB}.format_stack()")
     register_lib_call("traceback", "print_stack",
         lambda a: f"{_TB}.print_stack()")
+    register_lib_call("traceback", "extract",
+        lambda a: f"{_TB}.extract_stack()")
+    register_lib_call("traceback", "frames",
+        lambda a: f"(lambda _e: {_TB}.extract_tb(_e.__traceback__))({a[0]})")
+    register_lib_call("traceback", "format_frames",
+        lambda a: f"{_TB}.format_list({a[0]})")
