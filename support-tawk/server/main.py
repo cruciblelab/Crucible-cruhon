@@ -1,8 +1,10 @@
 from __future__ import annotations
+import asyncio
 import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 # Allow running from the support-tawk directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -13,18 +15,35 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from server.config import config
-from server.database import database, Agent, init_db
+from server.database import database, Agent, Conversation, Message, init_db
 from server.auth import hash_password
 from server.routes.chat import router as chat_router
 from server.routes.admin import router as admin_router
 from server.routes.files import router as files_router
 
 
+async def _cleanup_loop():
+    while True:
+        await asyncio.sleep(86400)  # günde bir
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=7)
+            old_ids = [c.id for c in Conversation.select(Conversation.id)
+                       .where(Conversation.status == "closed", Conversation.closed_at < cutoff)]
+            if old_ids:
+                Message.delete().where(Message.conversation_id.in_(old_ids)).execute()
+                Conversation.delete().where(Conversation.id.in_(old_ids)).execute()
+                print(f"[Support Tawk] {len(old_ids)} eski konuşma silindi")
+        except Exception as e:
+            print(f"[Support Tawk] Temizlik hatası: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _seed_admin()
+    task = asyncio.create_task(_cleanup_loop())
     yield
+    task.cancel()
 
 
 def _seed_admin():
@@ -95,6 +114,7 @@ def public_config():
         "response_time_text": config.chat.response_time_text,
         "notification_sound": config.chat.notification_sound,
         "logo_url": config.site.logo_url,
+        "proactive_delay_seconds": getattr(config.chat, "proactive_delay_seconds", 0),
     }
 
 

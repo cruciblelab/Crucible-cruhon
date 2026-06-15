@@ -3,12 +3,18 @@ import json
 import asyncio
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from ..database import Conversation, Message, Agent
+from pydantic import BaseModel
+from ..database import Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule
 from ..ws_manager import manager
 from ..config import config
 from ..ai_handler import handle_ai_reply
 
 router = APIRouter()
+
+
+class RatingRequest(BaseModel):
+    score: int
+    comment: str = ""
 
 
 def _msg_dict(msg: Message) -> dict:
@@ -37,8 +43,70 @@ def _conv_dict(conv: Conversation) -> dict:
     }
 
 
+@router.post("/api/rating/{conv_id}")
+async def submit_rating(conv_id: int, req: RatingRequest):
+    conv = Conversation.get_or_none(Conversation.id == conv_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    if req.score < 1 or req.score > 5:
+        raise HTTPException(400, "Puan 1-5 arasında olmalı")
+    Rating.insert(
+        conversation=conv,
+        score=req.score,
+        comment=req.comment,
+    ).on_conflict_replace().execute()
+    return {"ok": True}
+
+
+@router.get("/api/botflow/active")
+def get_active_botflow():
+    b = BotFlow.get_or_none(BotFlow.is_active == True)
+    if not b:
+        return None
+    return {
+        "id": b.id,
+        "name": b.name,
+        "greeting": b.greeting,
+        "options": json.loads(b.options_json or "[]"),
+    }
+
+
+@router.get("/api/schedule/status")
+def schedule_status():
+    """Public: returns whether any agent is currently available based on work schedule."""
+    now = datetime.utcnow()
+    weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    current_day = weekdays[now.weekday()]
+    current_time = now.strftime("%H:%M")
+    schedules = WorkSchedule.select()
+    for sched in schedules:
+        try:
+            data = json.loads(sched.schedule_json or "{}")
+            day_data = data.get(current_day, {})
+            if day_data.get("active") and day_data.get("start") and day_data.get("end"):
+                if day_data["start"] <= current_time <= day_data["end"]:
+                    return {"available": True}
+        except Exception:
+            continue
+    agents_online = manager.agent_count() > 0
+    return {"available": agents_online}
+
+
 @router.websocket("/ws/visitor/{visitor_id}")
 async def visitor_ws(ws: WebSocket, visitor_id: str):
+    # IP blacklist check
+    client_ip = "unknown"
+    if ws.client:
+        client_ip = ws.client.host
+    # Also check X-Forwarded-For
+    forwarded_for = ws.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+
+    if BlacklistedIP.get_or_none(BlacklistedIP.ip == client_ip):
+        await ws.close(code=4403)
+        return
+
     await manager.connect_visitor(visitor_id, ws)
     conv = Conversation.get_or_none(
         Conversation.visitor_id == visitor_id,

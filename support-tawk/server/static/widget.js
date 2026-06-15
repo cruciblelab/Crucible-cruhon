@@ -28,6 +28,7 @@
     welcome_message: "Merhaba! Size nasıl yardımcı olabilirim?",
     site_name: "Destek",
     notification_sound: true,
+    proactive_delay_seconds: 0,
   };
 
   var state = {
@@ -40,7 +41,23 @@
     name: localStorage.getItem("st_visitor_name") || "",
     email: localStorage.getItem("st_visitor_email") || "",
     info_given: !!(localStorage.getItem("st_visitor_name")),
+    conv_closed: false,
+    rating_submitted: false,
+    bot_flow: null,
+    bot_shown: false,
+    emoji_open: false,
+    proactive_timer: null,
   };
+
+  // ── Markdown renderer ─────────────────────────────────────────────────────
+  function renderMarkdown(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`(.+?)`/g, "<code style='background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:12px'>$1</code>")
+      .replace(/\n/g, "<br>");
+  }
 
   // ── Styles ────────────────────────────────────────────────────────────────
   var style = document.createElement("style");
@@ -50,7 +67,7 @@
     "#st-btn:hover { transform:scale(1.1); }",
     "#st-badge { position:absolute; top:-4px; right:-4px; background:#ef4444; color:#fff; font-size:11px; font-weight:700; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; }",
     "#st-badge.hidden { display:none; }",
-    "#st-window { position:fixed; bottom:90px; right:24px; z-index:999998; width:360px; height:520px; background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,.18); display:flex; flex-direction:column; overflow:hidden; transform:scale(0); transform-origin:bottom right; transition:transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s; opacity:0; pointer-events:none; }",
+    "#st-window { position:fixed; bottom:90px; right:24px; z-index:999998; width:360px; height:540px; background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,.18); display:flex; flex-direction:column; overflow:hidden; transform:scale(0); transform-origin:bottom right; transition:transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s; opacity:0; pointer-events:none; }",
     "#st-window.open { transform:scale(1); opacity:1; pointer-events:all; }",
     "#st-header { padding:14px 16px; display:flex; align-items:center; gap:10px; color:#fff; }",
     "#st-header .st-avatar { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }",
@@ -78,15 +95,30 @@
     ".st-msg .st-time { font-size:10px; color:#cbd5e1; padding:0 4px; }",
     ".st-msg .st-file { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; text-decoration:none; color:#1e293b; font-size:13px; }",
     ".st-msg img.st-img { max-width:200px; border-radius:10px; cursor:pointer; }",
+    ".st-bot-options { display:flex; flex-direction:column; gap:6px; padding:4px 14px 8px; }",
+    ".st-bot-btn { padding:8px 14px; border:1px solid var(--st-color); border-radius:10px; background:#fff; color:var(--st-color); font-size:13px; cursor:pointer; text-align:left; transition:all .15s; }",
+    ".st-bot-btn:hover { background:var(--st-color); color:#fff; }",
     "#st-typing { font-size:12px; color:#94a3b8; padding:0 14px 6px; height:20px; }",
+    "#st-rating-form { padding:14px; border-top:1px solid #f1f5f9; display:none; flex-direction:column; gap:8px; }",
+    "#st-rating-form p { font-size:13px; color:#1e293b; margin:0; font-weight:500; }",
+    ".st-stars { display:flex; gap:4px; }",
+    ".st-star { font-size:22px; cursor:pointer; opacity:.4; transition:opacity .15s; }",
+    ".st-star.active { opacity:1; }",
+    "#st-rating-comment { padding:8px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none; outline:none; width:100%; }",
+    "#st-rating-submit { padding:8px 16px; border:none; border-radius:8px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }",
     "#st-input-area { padding:10px 12px; border-top:1px solid #f1f5f9; display:flex; align-items:flex-end; gap:8px; }",
     "#st-input { flex:1; resize:none; border:1px solid #e2e8f0; border-radius:10px; padding:9px 12px; font-size:13.5px; outline:none; max-height:120px; line-height:1.4; transition:border-color .2s; }",
     "#st-input:focus { border-color:var(--st-color); }",
-    ".st-action-btn { width:34px; height:34px; border:none; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:#f1f5f9; color:#64748b; font-size:16px; flex-shrink:0; transition:background .15s; }",
+    ".st-action-btn { width:34px; height:34px; border:none; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:#f1f5f9; color:#64748b; font-size:16px; flex-shrink:0; transition:background .15s; position:relative; }",
     ".st-action-btn:hover { background:#e2e8f0; }",
     "#st-send { border:none; border-radius:10px; padding:0 14px; height:34px; color:#fff; font-weight:600; cursor:pointer; font-size:13px; flex-shrink:0; }",
     "#st-send:disabled { opacity:.4; cursor:default; }",
     ".st-file-input { display:none; }",
+    "#st-emoji-picker { position:absolute; bottom:42px; right:0; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.12); padding:10px; display:none; z-index:10; width:220px; }",
+    "#st-emoji-picker.open { display:block; }",
+    "#st-emoji-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }",
+    ".st-emoji-btn { background:none; border:none; cursor:pointer; font-size:18px; padding:4px; border-radius:6px; text-align:center; }",
+    ".st-emoji-btn:hover { background:#f1f5f9; }",
     "@media (max-width: 420px) { #st-window { width:calc(100vw - 16px); right:8px; bottom:80px; } }",
   ].join("\n");
   document.head.appendChild(style);
@@ -95,6 +127,8 @@
   var wrapper = document.createElement("div");
   wrapper.id = "st-wrapper";
   document.body.appendChild(wrapper);
+
+  var EMOJIS = ["😀","😊","😂","❤️","👍","👎","😮","😢","😡","🙏","👋","✅","❌","⚠️","🔥","💯","🎉","💬","📎","🔗","📷","📄","✏️","🔍"];
 
   wrapper.innerHTML = [
     '<button id="st-btn" aria-label="Destek Sohbeti">',
@@ -118,8 +152,26 @@
     '    <div id="st-chat-area" style="display:none; flex-direction:column; height:100%; overflow:hidden; display:flex; flex:1;">',
     '      <div id="st-messages"></div>',
     '      <div id="st-typing"></div>',
+    '      <div id="st-rating-form">',
+    '        <p>Bu konuşmayı değerlendirin</p>',
+    '        <div class="st-stars" id="st-stars">',
+    '          <span class="st-star" data-score="1">⭐</span>',
+    '          <span class="st-star" data-score="2">⭐</span>',
+    '          <span class="st-star" data-score="3">⭐</span>',
+    '          <span class="st-star" data-score="4">⭐</span>',
+    '          <span class="st-star" data-score="5">⭐</span>',
+    '        </div>',
+    '        <textarea id="st-rating-comment" rows="2" placeholder="Yorumunuz (isteğe bağlı)"></textarea>',
+    '        <button id="st-rating-submit">Gönder</button>',
+    '      </div>',
     '      <div id="st-input-area">',
     '        <textarea id="st-input" rows="1" placeholder="Mesajınızı yazın..." maxlength="4000"></textarea>',
+    '        <div class="st-action-btn" id="st-emoji-btn" title="Emoji">',
+    '          😊',
+    '          <div id="st-emoji-picker">',
+    '            <div id="st-emoji-grid"></div>',
+    '          </div>',
+    '        </div>',
     '        <label class="st-action-btn" title="Dosya ekle">',
     '          📎',
     '          <input class="st-file-input" id="st-file-input" type="file" />',
@@ -149,6 +201,64 @@
   var nameInput = document.getElementById("st-name-input");
   var emailInput = document.getElementById("st-email-input");
   var startBtn = document.getElementById("st-start-btn");
+  var ratingForm = document.getElementById("st-rating-form");
+  var ratingComment = document.getElementById("st-rating-comment");
+  var ratingSubmit = document.getElementById("st-rating-submit");
+  var emojiBtn = document.getElementById("st-emoji-btn");
+  var emojiPicker = document.getElementById("st-emoji-picker");
+  var emojiGrid = document.getElementById("st-emoji-grid");
+
+  // Build emoji grid
+  emojiGrid.innerHTML = EMOJIS.map(function(e) {
+    return '<button class="st-emoji-btn" data-emoji="' + e + '">' + e + '</button>';
+  }).join("");
+
+  emojiGrid.addEventListener("click", function(ev) {
+    var target = ev.target.closest(".st-emoji-btn");
+    if (target) {
+      inputEl.value += target.dataset.emoji;
+      inputEl.focus();
+    }
+  });
+
+  emojiBtn.addEventListener("click", function(ev) {
+    ev.stopPropagation();
+    state.emoji_open = !state.emoji_open;
+    emojiPicker.classList.toggle("open", state.emoji_open);
+  });
+
+  document.addEventListener("click", function() {
+    if (state.emoji_open) {
+      state.emoji_open = false;
+      emojiPicker.classList.remove("open");
+    }
+  });
+
+  // ── Rating form ───────────────────────────────────────────────────────────
+  var selectedScore = 0;
+  var stars = document.querySelectorAll(".st-star");
+
+  stars.forEach(function(star) {
+    star.addEventListener("click", function() {
+      selectedScore = parseInt(this.dataset.score);
+      stars.forEach(function(s) {
+        s.classList.toggle("active", parseInt(s.dataset.score) <= selectedScore);
+      });
+    });
+  });
+
+  ratingSubmit.addEventListener("click", function() {
+    if (!selectedScore) { return; }
+    if (!state.convId) return;
+    fetch(SERVER + "/api/rating/" + state.convId, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ score: selectedScore, comment: ratingComment.value.trim() }),
+    }).then(function() {
+      ratingForm.innerHTML = '<p style="color:#22c55e;font-weight:500">Değerlendirmeniz için teşekkürler! ⭐</p>';
+      state.rating_submitted = true;
+    }).catch(function() {});
+  });
 
   // ── Apply color ───────────────────────────────────────────────────────────
   function applyColor(color) {
@@ -156,19 +266,36 @@
     document.documentElement.style.setProperty("--st-color", color);
     btn.style.background = color;
     header.style.background = color;
-    infoForm.querySelector("button").style.background = color;
+    var startBtnEl = infoForm.querySelector("button");
+    if (startBtnEl) startBtnEl.style.background = color;
     sendBtn.style.background = color;
+    ratingSubmit.style.background = color;
   }
   applyColor(cfg.color);
 
-  // ── Fetch public config ───────────────────────────────────────────────────
+  // ── Fetch public config + bot flow ────────────────────────────────────────
   fetch(SERVER + "/api/config").then(function (r) { return r.json(); }).then(function (data) {
     cfg.welcome_message = data.welcome_message || cfg.welcome_message;
     cfg.site_name = data.site_name || cfg.site_name;
     cfg.notification_sound = data.notification_sound !== false;
+    cfg.proactive_delay_seconds = data.proactive_delay_seconds || 0;
     title.textContent = data.site_name || "Destek";
     if (data.widget_color) applyColor(data.widget_color);
+
+    // Proactive chat
+    if (cfg.proactive_delay_seconds > 0 && !state.open) {
+      state.proactive_timer = setTimeout(function() {
+        if (!state.open) openChat();
+      }, cfg.proactive_delay_seconds * 1000);
+    }
   }).catch(function () {});
+
+  // Fetch bot flow
+  fetch(SERVER + "/api/botflow/active").then(function(r) { return r.json(); }).then(function(data) {
+    if (data && data.id) {
+      state.bot_flow = data;
+    }
+  }).catch(function() {});
 
   // ── Toggle window ─────────────────────────────────────────────────────────
   function openChat() {
@@ -266,6 +393,51 @@
     setTimeout(connectWS, delay);
   }
 
+  // ── Bot flow ──────────────────────────────────────────────────────────────
+  function showBotFlow() {
+    if (!state.bot_flow || state.bot_shown) return;
+    state.bot_shown = true;
+    appendMsg({
+      sender_type: "bot",
+      sender_name: "Bot",
+      content: state.bot_flow.greeting,
+    });
+    if (state.bot_flow.options && state.bot_flow.options.length) {
+      var optDiv = document.createElement("div");
+      optDiv.className = "st-bot-options";
+      state.bot_flow.options.forEach(function(opt) {
+        var b = document.createElement("button");
+        b.className = "st-bot-btn";
+        b.textContent = opt.label;
+        b.addEventListener("click", function() {
+          optDiv.remove();
+          // Show user selection
+          appendMsg({ sender_type: "visitor", content: opt.label });
+          // Show bot reply
+          if (opt.reply) {
+            setTimeout(function() {
+              appendMsg({ sender_type: "bot", sender_name: "Bot", content: opt.reply });
+              scrollBottom();
+            }, 600);
+          }
+          // Send to server
+          if (state.ws && state.ws.readyState === 1) {
+            state.ws.send(JSON.stringify({
+              type: "message",
+              content: opt.label,
+              visitor_name: state.name,
+              visitor_email: state.email,
+              page_url: window.location.href,
+            }));
+          }
+        });
+        optDiv.appendChild(b);
+      });
+      messagesEl.appendChild(optDiv);
+      scrollBottom();
+    }
+  }
+
   // ── Handle incoming messages ───────────────────────────────────────────────
   function handleMessage(data) {
     if (data.type === "history") {
@@ -277,7 +449,11 @@
       }
       messagesEl.innerHTML = "";
       if (!data.messages || !data.messages.length) {
-        appendWelcome();
+        if (state.bot_flow) {
+          showBotFlow();
+        } else {
+          appendWelcome();
+        }
       } else {
         data.messages.forEach(appendMsg);
       }
@@ -298,10 +474,15 @@
       state.typing_timer = setTimeout(function () { typingEl.textContent = ""; }, 3000);
 
     } else if (data.type === "conversation_closed") {
+      state.conv_closed = true;
       statusEl.textContent = "Kapatıldı";
       inputEl.disabled = true;
       sendBtn.disabled = true;
       appendSystemMsg("Konuşma kapatıldı. İyi günler!");
+      // Show rating form
+      if (!state.rating_submitted) {
+        ratingForm.style.display = "flex";
+      }
 
     } else if (data.type === "conversation_assigned") {
       statusEl.textContent = "Bağlandı";
@@ -342,7 +523,7 @@
         bubble.appendChild(link);
       }
     } else if (msg.content) {
-      bubble.textContent = msg.content;
+      bubble.innerHTML = renderMarkdown(msg.content);
     }
 
     div.appendChild(bubble);

@@ -97,6 +97,68 @@ class CannedResponse(BaseModel):
         table_name = "canned_responses"
 
 
+class Tag(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=64, unique=True)
+    color = CharField(max_length=16, default="#6366f1")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "tags"
+
+
+class ConversationTag(BaseModel):
+    conversation = ForeignKeyField(Conversation, backref="conv_tags", on_delete="CASCADE")
+    tag = ForeignKeyField(Tag, backref="conv_tags", on_delete="CASCADE")
+    class Meta:
+        table_name = "conversation_tags"
+        indexes = ((("conversation", "tag"), True),)
+
+
+class BlacklistedIP(BaseModel):
+    id = AutoField()
+    ip = CharField(max_length=64, unique=True)
+    reason = CharField(max_length=256, default="")
+    blocked_by = ForeignKeyField(Agent, null=True, on_delete="SET NULL")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "blacklisted_ips"
+
+
+class Rating(BaseModel):
+    id = AutoField()
+    conversation = ForeignKeyField(Conversation, unique=True, backref="rating", on_delete="CASCADE")
+    score = IntegerField()  # 1-5
+    comment = TextField(default="")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "ratings"
+
+
+class WorkSchedule(BaseModel):
+    id = AutoField()
+    agent = ForeignKeyField(Agent, unique=True, backref="schedule", on_delete="CASCADE")
+    # JSON: {"mon": {"start": "09:00", "end": "18:00", "active": true}, "tue": {...}, ...}
+    schedule_json = TextField(default="{}")
+    timezone = CharField(max_length=64, default="Europe/Istanbul")
+    class Meta:
+        table_name = "work_schedules"
+
+
+class BotFlow(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=128, default="Ana Akış")
+    greeting = TextField(default="Merhaba! Size nasıl yardımcı olabilirim?")
+    # JSON: [{"label": "Teknik Destek", "reply": "Teknik destek ekibine bağlanıyorum..."}, ...]
+    options_json = TextField(default="[]")
+    is_active = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "bot_flows"
+
+
 def init_db():
     with database:
-        database.create_tables([Agent, Conversation, Message, CannedResponse], safe=True)
+        database.create_tables([
+            Agent, Conversation, Message, CannedResponse,
+            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow
+        ], safe=True)

@@ -17,14 +17,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #topbar .logout-btn:hover{background:#334155;color:#fff}
 
 /* Stats bar */
-#statsbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;gap:24px;flex-shrink:0}
+#statsbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;gap:24px;flex-shrink:0;align-items:center}
 .stat-item{display:flex;align-items:center;gap:6px;font-size:13px;color:#64748b}
 .stat-dot{width:8px;height:8px;border-radius:50%}
 
 /* Main layout */
 #main{flex:1;display:flex;overflow:hidden}
 
-/* Sidebar */
+/* Left nav */
+#left-nav{width:200px;background:#1e293b;display:flex;flex-direction:column;flex-shrink:0;padding:12px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 18px;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:500;transition:all .15s;border-left:3px solid transparent}
+.nav-item:hover{color:#fff;background:rgba(255,255,255,.05)}
+.nav-item.active{color:#fff;background:rgba(255,255,255,.08);border-left-color:#3b82f6}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center}
+
+/* Content area */
+#content{flex:1;display:flex;overflow:hidden}
+
+/* Page sections */
+.page{display:none;flex:1;overflow:hidden}
+.page.active{display:flex}
+
+/* ── Conversations page ── */
+#page-convs{flex-direction:row}
 #sidebar{width:300px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0}
 #sidebar-tabs{display:flex;border-bottom:1px solid #e2e8f0}
 .stab{flex:1;padding:12px 8px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;color:#64748b;border-bottom:2px solid transparent;transition:all .15s}
@@ -42,13 +57,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .conv-item .ci-status{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
 .conv-item .ci-status.online{background:#22c55e}
 .conv-item .ci-status.offline{background:#94a3b8}
+.conv-tag-pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;color:#fff;margin-right:3px;margin-top:2px}
 
 /* Chat panel */
 #chat-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #chat-header{padding:14px 20px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px}
 #chat-header .ch-name{font-weight:600;font-size:15px}
 #chat-header .ch-meta{font-size:12px;color:#94a3b8;margin-top:2px}
-#chat-header .ch-actions{margin-left:auto;display:flex;gap:8px}
+#chat-header .ch-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .ch-btn{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;transition:all .15s}
 .ch-btn:hover{background:#e2e8f0}
 .ch-btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
@@ -84,12 +100,87 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #canned-dropdown .cd-item:hover{background:#f8fafc}
 #canned-dropdown .cd-title{font-weight:600;color:#1e293b}
 #canned-dropdown .cd-preview{color:#64748b;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* No conv selected */
 #no-conv{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;gap:10px}
 #no-conv .nc-icon{font-size:48px}
 
-/* Agents modal */
+/* ── Stats page ── */
+#page-stats{flex-direction:column;overflow-y:auto;padding:24px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stat-card .sc-label{font-size:12px;color:#94a3b8;margin-bottom:6px}
+.stat-card .sc-value{font-size:28px;font-weight:700;color:#1e293b}
+.stat-card .sc-sub{font-size:12px;color:#64748b;margin-top:4px}
+.chart-section{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+.chart-section h3{font-size:14px;font-weight:600;margin-bottom:16px;color:#374151}
+.bar-chart{display:flex;align-items:flex-end;gap:3px;height:120px;overflow-x:auto}
+.bar-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:28px}
+.bar{background:#3b82f6;border-radius:3px 3px 0 0;width:20px;min-height:4px;transition:height .3s}
+.bar-label{font-size:9px;color:#94a3b8;white-space:nowrap;transform:rotate(-45deg);transform-origin:top left;margin-top:6px}
+.hourly-chart{display:flex;align-items:flex-end;gap:2px;height:80px}
+.h-bar{background:#8b5cf6;border-radius:2px 2px 0 0;flex:1;min-height:2px}
+.top-agents-list .ta-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.ta-row:last-child{border:none}
+.ta-bar-wrap{flex:1;background:#f1f5f9;border-radius:4px;height:8px;overflow:hidden}
+.ta-bar{background:#2563eb;height:100%;border-radius:4px}
+
+/* ── Tags page ── */
+#page-tags{flex-direction:column;overflow-y:auto;padding:24px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-header h2{font-size:18px;font-weight:700}
+.tags-grid{display:flex;flex-wrap:wrap;gap:10px}
+.tag-chip{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;font-size:13px;font-weight:600;color:#fff;cursor:default}
+.tag-chip .tc-del{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.tag-chip .tc-del:hover{color:#fff}
+.add-tag-row{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.add-tag-row input{padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none}
+.add-tag-row input:focus{border-color:#2563eb}
+
+/* ── Blacklist page ── */
+#page-blacklist{flex-direction:column;overflow-y:auto;padding:24px}
+.bl-table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.bl-table th{background:#f8fafc;padding:12px 16px;font-size:12px;font-weight:600;text-align:left;color:#64748b;border-bottom:1px solid #e2e8f0}
+.bl-table td{padding:12px 16px;font-size:13px;border-bottom:1px solid #f1f5f9}
+.bl-table tr:last-child td{border:none}
+.add-bl-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.add-bl-row input{padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;flex:1;min-width:140px}
+.add-bl-row input:focus{border-color:#2563eb}
+
+/* ── Bot Flow page ── */
+#page-botflow{flex-direction:column;overflow-y:auto;padding:24px}
+.flow-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px}
+.flow-card .fc-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.flow-card .fc-name{font-weight:600;font-size:15px;flex:1}
+.flow-card .fc-active{background:#d1fae5;color:#065f46;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+.flow-card .fc-greeting{font-size:13px;color:#64748b;margin-bottom:10px}
+.flow-options{display:flex;flex-wrap:wrap;gap:6px}
+.flow-opt{padding:5px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;color:#374151}
+.add-flow-form{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+.add-flow-form h3{font-size:14px;font-weight:600;margin-bottom:14px}
+.form-field{margin-bottom:12px}
+.form-field label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:5px}
+.form-field input,.form-field textarea{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none}
+.form-field input:focus,.form-field textarea:focus{border-color:#2563eb}
+.form-field textarea{resize:vertical;min-height:60px}
+
+/* ── Schedule page ── */
+#page-schedule{flex-direction:column;overflow-y:auto;padding:24px}
+.schedule-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+.schedule-card h3{font-size:14px;font-weight:600;margin-bottom:16px}
+.sched-agent-select{padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;min-width:200px;margin-bottom:16px}
+.day-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.day-row:last-child{border:none}
+.day-name{width:60px;font-size:13px;font-weight:600;color:#374151}
+.day-toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.day-toggle input{opacity:0;width:0;height:0}
+.day-toggle-slider{position:absolute;cursor:pointer;inset:0;background:#e2e8f0;border-radius:20px;transition:.3s}
+.day-toggle input:checked + .day-toggle-slider{background:#2563eb}
+.day-toggle-slider:before{content:"";position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.day-toggle input:checked + .day-toggle-slider:before{transform:translateX(16px)}
+.time-input{padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;width:90px}
+.time-input:focus{border-color:#2563eb}
+.tz-input{padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;min-width:200px;margin-bottom:12px}
+
+/* Shared components */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000;display:none}
 .modal-overlay.open{display:flex}
 .modal{background:#fff;border-radius:16px;padding:24px;width:480px;max-width:90vw;max-height:80vh;overflow-y:auto}
@@ -107,16 +198,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .form-row input,.form-row select{flex:1;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none}
 .form-row input:focus,.form-row select:focus{border-color:#2563eb}
 .form-submit{padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
-
-/* Canned modal */
+.form-submit:hover{background:#1d4ed8}
 #canned-modal .cr-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9}
 #canned-modal .cr-row:last-child{border:none}
 #canned-modal .cr-title{font-weight:600;font-size:13px}
 #canned-modal .cr-content{font-size:12px;color:#64748b;margin-top:2px}
 #canned-modal .cr-del{background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:4px}
-
-/* Toast */
 #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;display:none;z-index:9999}
+.btn-sm{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;transition:all .15s}
+.btn-sm:hover{background:#e2e8f0}
+.btn-sm.danger{background:#fee2e2;color:#dc2626;border-color:#fecaca}
+.btn-sm.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+.btn-sm.success{background:#d1fae5;color:#065f46;border-color:#a7f3d0}
+.rating-display{display:flex;align-items:center;gap:4px;font-size:12px;color:#f59e0b}
+
+/* Transfer modal */
+#transfer-modal select{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -131,7 +228,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div id="statsbar">
   <div class="stat-item"><div class="stat-dot" style="background:#f59e0b"></div><span id="stat-open">0 açık</span></div>
   <div class="stat-item"><div class="stat-dot" style="background:#3b82f6"></div><span id="stat-assigned">0 atanmış</span></div>
-  <div class="stat-item"><div class="stat-dot" style="background:#22c55e"></div><span id="stat-agents">0 temsilci çevrimiçi</span></div>
+  <div class="stat-item"><div class="stat-dot" style="background:#22c55e"></div><span id="stat-agents">0 temsilci</span></div>
   <div class="stat-item"><div class="stat-dot" style="background:#8b5cf6"></div><span id="stat-visitors">0 ziyaretçi</span></div>
   <div style="margin-left:auto;display:flex;gap:8px">
     <button class="ch-btn" onclick="openCannedModal()">Hazır Yanıtlar</button>
@@ -140,45 +237,195 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div id="main">
-  <div id="sidebar">
-    <div id="sidebar-tabs">
-      <div class="stab active" data-tab="open" onclick="switchTab('open')">Açık</div>
-      <div class="stab" data-tab="mine" onclick="switchTab('mine')">Benimkiler</div>
-      <div class="stab" data-tab="closed" onclick="switchTab('closed')">Kapalı</div>
+  <!-- Left nav -->
+  <div id="left-nav">
+    <div class="nav-item active" data-page="convs" onclick="showPage('convs')">
+      <span class="nav-icon">💬</span> Konuşmalar
     </div>
-    <div id="search-box"><input type="text" id="search-input" placeholder="Konuşma ara..." oninput="filterConvs()"></div>
-    <div id="conv-list"></div>
+    <div class="nav-item" data-page="stats" onclick="showPage('stats')">
+      <span class="nav-icon">📊</span> İstatistikler
+    </div>
+    <div class="nav-item" data-page="tags" onclick="showPage('tags')">
+      <span class="nav-icon">🏷️</span> Etiketler
+    </div>
+    <div class="nav-item" data-page="blacklist" onclick="showPage('blacklist')">
+      <span class="nav-icon">🚫</span> Kara Liste
+    </div>
+    <div class="nav-item" data-page="botflow" onclick="showPage('botflow')">
+      <span class="nav-icon">🤖</span> Bot Akış
+    </div>
+    <div class="nav-item" data-page="schedule" onclick="showPage('schedule')">
+      <span class="nav-icon">🕐</span> Mesai Saatleri
+    </div>
   </div>
 
-  <div id="chat-panel">
-    <div id="no-conv">
-      <div class="nc-icon">💬</div>
-      <div>Bir konuşma seçin</div>
-    </div>
-    <div id="active-chat" style="display:none;flex-direction:column;height:100%">
-      <div id="chat-header">
-        <div>
-          <div class="ch-name" id="ch-name">-</div>
-          <div class="ch-meta" id="ch-meta">-</div>
+  <!-- Content area -->
+  <div id="content">
+
+    <!-- Conversations page -->
+    <div class="page active" id="page-convs">
+      <div id="sidebar">
+        <div id="sidebar-tabs">
+          <div class="stab active" data-tab="open" onclick="switchTab('open')">Açık</div>
+          <div class="stab" data-tab="mine" onclick="switchTab('mine')">Benimkiler</div>
+          <div class="stab" data-tab="closed" onclick="switchTab('closed')">Kapalı</div>
         </div>
-        <div class="ch-actions">
-          <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
-          <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
+        <div id="search-box"><input type="text" id="search-input" placeholder="Konuşma ara..." oninput="filterConvs()"></div>
+        <div id="conv-list"></div>
+      </div>
+      <div id="chat-panel">
+        <div id="no-conv">
+          <div class="nc-icon">💬</div>
+          <div>Bir konuşma seçin</div>
+        </div>
+        <div id="active-chat" style="display:none;flex-direction:column;height:100%">
+          <div id="chat-header">
+            <div>
+              <div class="ch-name" id="ch-name">-</div>
+              <div class="ch-meta" id="ch-meta">-</div>
+              <div id="ch-tags" style="margin-top:4px"></div>
+            </div>
+            <div class="ch-actions">
+              <select id="tag-select" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none" onchange="addTagToConv()">
+                <option value="">+ Etiket</option>
+              </select>
+              <button class="ch-btn" onclick="openTransferModal()" title="Aktar">↪ Aktar</button>
+              <button class="ch-btn" onclick="exportConv()" title="CSV İndir">⬇ CSV</button>
+              <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
+              <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
+            </div>
+          </div>
+          <div id="messages"></div>
+          <div id="typing-indicator"></div>
+          <div style="position:relative">
+            <div id="canned-dropdown"></div>
+          </div>
+          <div id="input-row">
+            <textarea id="msg-input" rows="1" placeholder="Mesajınızı yazın... (/ ile hazır yanıt)"></textarea>
+            <label class="input-btn file-btn" style="display:flex;align-items:center;cursor:pointer">📎<input type="file" id="file-input" style="display:none"></label>
+            <button class="input-btn" id="send-btn">Gönder</button>
+          </div>
         </div>
       </div>
-      <div id="messages"></div>
-      <div id="typing-indicator"></div>
-      <div style="position:relative">
-        <div id="canned-dropdown"></div>
+    </div>
+
+    <!-- Stats page -->
+    <div class="page" id="page-stats">
+      <div class="stats-grid" id="stats-cards">
+        <div class="stat-card"><div class="sc-label">Toplam Konuşma</div><div class="sc-value" id="sc-total">-</div></div>
+        <div class="stat-card"><div class="sc-label">Ort. Yanıt Süresi</div><div class="sc-value" id="sc-resp">-</div><div class="sc-sub">dakika</div></div>
+        <div class="stat-card"><div class="sc-label">Ort. Puan</div><div class="sc-value" id="sc-rating">-</div><div class="sc-sub">/ 5</div></div>
+        <div class="stat-card"><div class="sc-label">Bugün Kapatılan</div><div class="sc-value" id="sc-closed">-</div></div>
       </div>
-      <div id="input-row">
-        <textarea id="msg-input" rows="1" placeholder="Mesajınızı yazın..."></textarea>
-        <label class="input-btn file-btn" style="display:flex;align-items:center;cursor:pointer">📎<input type="file" id="file-input" style="display:none"></label>
-        <button class="input-btn" id="send-btn">Gönder</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="chart-section">
+          <h3>Son 30 Günlük Konuşmalar</h3>
+          <div class="bar-chart" id="daily-chart"></div>
+        </div>
+        <div class="chart-section">
+          <h3>Saatlik Dağılım</h3>
+          <div class="hourly-chart" id="hourly-chart"></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:4px">
+            <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+          </div>
+        </div>
+        <div class="chart-section">
+          <h3>En Aktif Temsilciler (30 gün)</h3>
+          <div class="top-agents-list" id="top-agents-list"></div>
+        </div>
+        <div class="chart-section">
+          <h3>Dışa Aktar</h3>
+          <p style="font-size:13px;color:#64748b;margin-bottom:12px">Tüm konuşmaları CSV olarak indir:</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sm primary" onclick="exportAllConvs(7)">Son 7 Gün</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(30)">Son 30 Gün</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(90)">Son 90 Gün</button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
+
+    <!-- Tags page -->
+    <div class="page" id="page-tags">
+      <div class="page-header">
+        <h2>🏷️ Etiketler</h2>
+      </div>
+      <div class="add-tag-row">
+        <input id="new-tag-name" placeholder="Etiket adı" maxlength="64" style="width:180px">
+        <input id="new-tag-color" type="color" value="#6366f1" style="width:46px;height:38px;border:1px solid #e2e8f0;border-radius:8px;padding:2px;cursor:pointer">
+        <button class="form-submit" onclick="createTag()">Ekle</button>
+      </div>
+      <div class="tags-grid" id="tags-grid"></div>
+    </div>
+
+    <!-- Blacklist page -->
+    <div class="page" id="page-blacklist">
+      <div class="page-header">
+        <h2>🚫 IP Kara Listesi</h2>
+      </div>
+      <div class="add-bl-row">
+        <input id="new-bl-ip" placeholder="IP Adresi" style="max-width:200px">
+        <input id="new-bl-reason" placeholder="Neden (isteğe bağlı)">
+        <button class="form-submit" onclick="addBlacklist()">Ekle</button>
+      </div>
+      <table class="bl-table" id="bl-table">
+        <thead><tr><th>IP</th><th>Neden</th><th>Tarih</th><th></th></tr></thead>
+        <tbody id="bl-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Bot Flow page -->
+    <div class="page" id="page-botflow">
+      <div class="page-header">
+        <h2>🤖 Bot Akışları</h2>
+        <button class="form-submit" onclick="showAddFlowForm()">+ Yeni Akış</button>
+      </div>
+      <div class="add-flow-form" id="add-flow-form" style="display:none">
+        <h3>Yeni Bot Akışı</h3>
+        <div class="form-field">
+          <label>Akış Adı</label>
+          <input id="flow-name" placeholder="Ana Akış">
+        </div>
+        <div class="form-field">
+          <label>Karşılama Mesajı</label>
+          <textarea id="flow-greeting" rows="2" placeholder="Merhaba! Size nasıl yardımcı olabilirim?"></textarea>
+        </div>
+        <div class="form-field">
+          <label>Seçenekler (JSON)</label>
+          <textarea id="flow-options" rows="4" placeholder='[{"label":"Teknik Destek","reply":"Teknik destek ekibine bağlanıyorum..."}]'></textarea>
+          <small style="color:#94a3b8;font-size:11px">Her seçenek: label (buton metni) ve reply (bot yanıtı)</small>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="form-submit" onclick="createBotflow()">Kaydet</button>
+          <button class="btn-sm" onclick="hideAddFlowForm()">İptal</button>
+        </div>
+      </div>
+      <div id="flows-list"></div>
+    </div>
+
+    <!-- Schedule page -->
+    <div class="page" id="page-schedule">
+      <div class="page-header">
+        <h2>🕐 Mesai Saatleri</h2>
+      </div>
+      <div class="schedule-card">
+        <h3>Temsilci Seçin</h3>
+        <select class="sched-agent-select" id="sched-agent-select" onchange="loadSchedule()">
+          <option value="">Temsilci seçin...</option>
+        </select>
+        <div id="sched-form" style="display:none">
+          <div class="form-field" style="margin-bottom:12px">
+            <label>Saat Dilimi</label>
+            <input class="tz-input" id="sched-tz" value="Europe/Istanbul">
+          </div>
+          <div id="day-rows"></div>
+          <button class="form-submit" style="margin-top:16px" onclick="saveSchedule()">Kaydet</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
 
 <!-- Agents Modal -->
 <div class="modal-overlay" id="agents-modal">
@@ -217,6 +464,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- Transfer Modal -->
+<div class="modal-overlay" id="transfer-modal">
+  <div class="modal" style="width:360px">
+    <button class="modal-close" onclick="closeModal('transfer-modal')">✕</button>
+    <h2>Konuşmayı Aktar</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:14px">Hangi temsilciye aktarmak istiyorsunuz?</p>
+    <select id="transfer-agent-select"></select>
+    <button class="form-submit" onclick="doTransfer()">Aktar</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -226,8 +484,11 @@ var currentConvId = null;
 var ws = null;
 var convs = [];
 var canned = [];
+var allTags = [];
+var allAgents = [];
 var currentTab = "open";
 var typingTimer = null;
+var scheduleData = {};
 
 if (!TOKEN || !AGENT) { window.location.href = "/admin/login.html"; }
 
@@ -241,7 +502,15 @@ function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   }).then(function(r) {
     if (r.status === 401) { logout(); throw new Error("Oturum süresi doldu"); }
-    return r.json();
+    return r.json().catch(function() { return {}; });
+  });
+}
+
+function apiRaw(method, path, body) {
+  return fetch("/api/admin" + path, {
+    method,
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN },
+    body: body ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -251,18 +520,35 @@ function logout() {
   window.location.href = "/admin/login.html";
 }
 
-function toast(msg) {
+function toast(msg, type) {
   var t = document.getElementById("toast");
   t.textContent = msg;
+  t.style.background = type === "error" ? "#dc2626" : "#1e293b";
   t.style.display = "block";
   setTimeout(function() { t.style.display = "none"; }, 2500);
+}
+
+// ── Page navigation ───────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(function(p) { p.classList.remove("active"); });
+  document.querySelectorAll(".nav-item").forEach(function(n) { n.classList.remove("active"); });
+  var page = document.getElementById("page-" + name);
+  if (page) page.classList.add("active");
+  var nav = document.querySelector(".nav-item[data-page='" + name + "']");
+  if (nav) nav.classList.add("active");
+
+  if (name === "stats") loadDetailedStats();
+  if (name === "tags") loadTags();
+  if (name === "blacklist") loadBlacklist();
+  if (name === "botflow") loadBotflows();
+  if (name === "schedule") loadScheduleAgents();
 }
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
   var proto = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(proto + "//" + location.host + "/api/admin/ws/" + TOKEN);
-  ws.onopen = function() { console.log("[ST Admin] WS connected"); };
+  ws.onopen = function() {};
   ws.onmessage = function(e) { handleWS(JSON.parse(e.data)); };
   ws.onclose = function() { setTimeout(connectWS, 3000); };
 }
@@ -295,7 +581,7 @@ function handleWS(data) {
   } else if (data.type === "conversation_assigned") {
     var c = convs.find(function(x){ return x.id === data.conversation_id; });
     if (c) { c.status = "assigned"; c.assigned_to = data.agent; renderConvList(); }
-    if (data.conversation_id === currentConvId) appendMsg(data.message);
+    if (data.conversation_id === currentConvId && data.message) appendMsg(data.message);
   } else if (data.type === "conversation_closed") {
     convs = convs.filter(function(x){ return x.id !== data.conversation_id; });
     renderConvList();
@@ -325,14 +611,12 @@ function switchTab(tab) {
 function loadConvs() {
   var path = currentTab === "mine" ? "/conversations/mine" : "/conversations?status=" + (currentTab === "closed" ? "closed" : "open");
   api("GET", path).then(function(data) {
-    convs = data;
+    convs = Array.isArray(data) ? data : [];
     renderConvList();
   });
 }
 
-function filterConvs() {
-  renderConvList();
-}
+function filterConvs() { renderConvList(); }
 
 function renderConvList() {
   var q = document.getElementById("search-input").value.toLowerCase();
@@ -346,10 +630,14 @@ function renderConvList() {
     var time = c.updated_at ? new Date(c.updated_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
     var badge = c.unread_count ? '<div class="ci-badge">' + c.unread_count + '</div>' : "";
     var online = c.visitor_online ? '<span class="ci-status online"></span>' : '<span class="ci-status offline"></span>';
+    var tags = (c.tags || []).map(function(t) {
+      return '<span class="conv-tag-pill" style="background:' + escHtml(t.color) + '">' + escHtml(t.name) + '</span>';
+    }).join("");
     return '<div class="conv-item' + (c.id===currentConvId?" active":"") + '" onclick="openConv(' + c.id + ')">' +
       badge +
       '<div class="ci-name">' + online + escHtml(c.visitor_name||"Ziyaretçi") + '</div>' +
       '<div class="ci-preview">' + escHtml(preview.substring(0,60)) + '</div>' +
+      (tags ? '<div style="margin-top:3px">' + tags + '</div>' : '') +
       '<div class="ci-time">' + time + (c.assigned_to ? ' · ' + escHtml(c.assigned_to.display_name||c.assigned_to.username) : '') + '</div>' +
       '</div>';
   }).join("");
@@ -360,7 +648,6 @@ function openConv(id) {
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify({ action: "watch", conversation_id: id }));
   }
-  // Clear unread
   var conv = convs.find(function(c){ return c.id===id; });
   if (conv) conv.unread_count = 0;
   renderConvList();
@@ -371,6 +658,10 @@ function openConv(id) {
   document.getElementById("msg-input").disabled = false;
   document.getElementById("send-btn").disabled = false;
   document.getElementById("messages").innerHTML = "";
+  document.getElementById("ch-tags").innerHTML = "";
+
+  // Populate tag dropdown
+  populateTagSelect();
 
   api("GET", "/conversations/" + id).then(function(data) {
     document.getElementById("ch-name").textContent = data.visitor_name || "Ziyaretçi";
@@ -378,6 +669,15 @@ function openConv(id) {
     if (data.visitor_email) meta.push(data.visitor_email);
     if (data.page_url) meta.push(data.page_url);
     document.getElementById("ch-meta").textContent = meta.join(" · ") || "Bilgi yok";
+
+    // Show tags
+    renderConvTags(data.tags || []);
+
+    // Show rating if exists
+    if (data.rating) {
+      var stars = "⭐".repeat(data.rating.score);
+      appendSystemMsg("Değerlendirme: " + stars + " (" + data.rating.score + "/5)" + (data.rating.comment ? " — " + data.rating.comment : ""));
+    }
 
     var assignBtn = document.getElementById("assign-btn");
     if (data.status === "assigned" && data.assigned_to && data.assigned_to.id === AGENT.id) {
@@ -394,6 +694,51 @@ function openConv(id) {
     }
     (data.messages || []).forEach(appendMsg);
     scrollBottom();
+  });
+}
+
+function renderConvTags(tags) {
+  var el = document.getElementById("ch-tags");
+  el.innerHTML = tags.map(function(t) {
+    return '<span class="conv-tag-pill" style="background:' + escHtml(t.color) + '">' +
+      escHtml(t.name) +
+      ' <button onclick="removeTagFromConv(' + t.id + ')" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:12px;padding:0 2px">✕</button>' +
+      '</span>';
+  }).join("");
+}
+
+function populateTagSelect() {
+  var sel = document.getElementById("tag-select");
+  sel.innerHTML = '<option value="">+ Etiket</option>' +
+    allTags.map(function(t) {
+      return '<option value="' + t.id + '">' + escHtml(t.name) + '</option>';
+    }).join("");
+}
+
+function addTagToConv() {
+  var sel = document.getElementById("tag-select");
+  var tagId = parseInt(sel.value);
+  if (!tagId || !currentConvId) { sel.value = ""; return; }
+  api("POST", "/conversations/" + currentConvId + "/tags", { tag_id: tagId }).then(function() {
+    sel.value = "";
+    // Refresh conversation tags display
+    api("GET", "/conversations/" + currentConvId).then(function(data) {
+      renderConvTags(data.tags || []);
+      // Update conv list
+      var conv = convs.find(function(c){ return c.id === currentConvId; });
+      if (conv) { conv.tags = data.tags; renderConvList(); }
+    });
+  });
+}
+
+function removeTagFromConv(tagId) {
+  if (!currentConvId) return;
+  api("DELETE", "/conversations/" + currentConvId + "/tags/" + tagId).then(function() {
+    api("GET", "/conversations/" + currentConvId).then(function(data) {
+      renderConvTags(data.tags || []);
+      var conv = convs.find(function(c){ return c.id === currentConvId; });
+      if (conv) { conv.tags = data.tags; renderConvList(); }
+    });
   });
 }
 
@@ -458,8 +803,7 @@ function sendMsg() {
   var content = document.getElementById("msg-input").value.trim();
   if (!content || !currentConvId) return;
   api("POST", "/conversations/send", { conversation_id: currentConvId, content: content }).then(function(msg) {
-    appendMsg(msg);
-    scrollBottom();
+    if (msg && msg.id) { appendMsg(msg); scrollBottom(); }
   });
   document.getElementById("msg-input").value = "";
   document.getElementById("msg-input").style.height = "";
@@ -478,10 +822,10 @@ document.getElementById("file-input").addEventListener("change", function() {
   }).then(function(r) { return r.json(); }).then(function() {
     document.getElementById("file-input").value = "";
     toast("Dosya gönderildi");
-  }).catch(function(e) { toast("Hata: " + e.message); });
+  }).catch(function(e) { toast("Hata: " + e.message, "error"); });
 });
 
-// ── Assign / Close ────────────────────────────────────────────────────────────
+// ── Assign / Close / Transfer ─────────────────────────────────────────────────
 function assignConv() {
   if (!currentConvId) return;
   api("POST", "/conversations/assign", { conversation_id: currentConvId }).then(function() {
@@ -507,9 +851,43 @@ function closeConv() {
   });
 }
 
+function openTransferModal() {
+  if (!currentConvId) return;
+  var sel = document.getElementById("transfer-agent-select");
+  sel.innerHTML = allAgents.filter(function(a){ return a.id !== AGENT.id; }).map(function(a) {
+    return '<option value="' + a.id + '">' + escHtml(a.display_name || a.username) + ' (' + a.role + ')</option>';
+  }).join("");
+  document.getElementById("transfer-modal").classList.add("open");
+}
+
+function doTransfer() {
+  var toId = parseInt(document.getElementById("transfer-agent-select").value);
+  if (!toId || !currentConvId) return;
+  api("POST", "/conversations/transfer", { conversation_id: currentConvId, to_agent_id: toId }).then(function() {
+    closeModal("transfer-modal");
+    toast("Konuşma aktarıldı");
+  });
+}
+
+function exportConv() {
+  if (!currentConvId) return;
+  window.open("/api/admin/conversations/" + currentConvId + "/export?token=" + encodeURIComponent(TOKEN), "_blank");
+  // Use direct fetch with auth header instead
+  fetch("/api/admin/conversations/" + currentConvId + "/export", {
+    headers: { "Authorization": "Bearer " + TOKEN }
+  }).then(function(r) { return r.blob(); }).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "conv_" + currentConvId + ".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
 // ── Canned responses ──────────────────────────────────────────────────────────
 function loadCanned() {
-  api("GET", "/canned").then(function(data) { canned = data; });
+  api("GET", "/canned").then(function(data) { canned = Array.isArray(data) ? data : []; });
 }
 
 function checkCannedTrigger(val) {
@@ -540,7 +918,7 @@ function insertCanned(id) {
 
 function openCannedModal() {
   api("GET", "/canned").then(function(data) {
-    canned = data;
+    canned = Array.isArray(data) ? data : [];
     document.getElementById("canned-list").innerHTML = data.map(function(c) {
       return '<div class="cr-row">' +
         '<div style="flex:1"><div class="cr-title">' + escHtml(c.title) + (c.shortcut ? ' <small>/' + escHtml(c.shortcut) + '</small>' : '') + '</div>' +
@@ -555,7 +933,7 @@ function createCanned() {
   var title = document.getElementById("cr-title").value.trim();
   var content = document.getElementById("cr-content").value.trim();
   var shortcut = document.getElementById("cr-shortcut").value.trim();
-  if (!title || !content) { toast("Başlık ve içerik zorunlu"); return; }
+  if (!title || !content) { toast("Başlık ve içerik zorunlu", "error"); return; }
   api("POST", "/canned", { title, content, shortcut }).then(function() {
     toast("Hazır yanıt eklendi");
     openCannedModal();
@@ -571,8 +949,15 @@ function deleteCanned(id) {
 }
 
 // ── Agents ────────────────────────────────────────────────────────────────────
+function loadAgents() {
+  api("GET", "/agents").then(function(data) {
+    allAgents = Array.isArray(data) ? data : [];
+  });
+}
+
 function openAgentsModal() {
   api("GET", "/agents").then(function(data) {
+    allAgents = Array.isArray(data) ? data : [];
     document.getElementById("agents-list").innerHTML = data.map(function(a) {
       return '<div class="agent-row">' +
         '<div class="agent-avatar">' + (a.display_name||a.username).charAt(0).toUpperCase() + '</div>' +
@@ -590,14 +975,15 @@ function createAgent() {
   var password = document.getElementById("new-password").value.trim();
   var display_name = document.getElementById("new-displayname").value.trim();
   var role = document.getElementById("new-role").value;
-  if (!username || !password) { toast("Kullanıcı adı ve şifre zorunlu"); return; }
+  if (!username || !password) { toast("Kullanıcı adı ve şifre zorunlu", "error"); return; }
   api("POST", "/agents", { username, password, display_name, role }).then(function() {
     toast("Temsilci eklendi");
     document.getElementById("new-username").value="";
     document.getElementById("new-password").value="";
     document.getElementById("new-displayname").value="";
     openAgentsModal();
-  }).catch(function(e){ toast("Hata: "+e.message); });
+    loadAgents();
+  });
 }
 
 function closeModal(id) {
@@ -609,9 +995,257 @@ function loadStats() {
   api("GET", "/stats").then(function(s) {
     document.getElementById("stat-open").textContent = s.open + " açık";
     document.getElementById("stat-assigned").textContent = s.assigned + " atanmış";
-    document.getElementById("stat-agents").textContent = s.agents_online + " temsilci çevrimiçi";
+    document.getElementById("stat-agents").textContent = s.agents_online + " temsilci";
     document.getElementById("stat-visitors").textContent = s.visitors_online + " ziyaretçi";
+    if (document.getElementById("sc-closed")) {
+      document.getElementById("sc-closed").textContent = s.closed_today || 0;
+    }
   });
+}
+
+function loadDetailedStats() {
+  api("GET", "/stats/detailed").then(function(s) {
+    document.getElementById("sc-total").textContent = s.total_conversations || 0;
+    document.getElementById("sc-resp").textContent = s.avg_response_minutes || 0;
+    document.getElementById("sc-rating").textContent = s.avg_rating || 0;
+
+    // Daily chart
+    var daily = s.daily_conversations || [];
+    var maxCount = Math.max.apply(null, daily.map(function(d){ return d.count; }).concat([1]));
+    var chart = document.getElementById("daily-chart");
+    chart.innerHTML = daily.map(function(d) {
+      var h = Math.max(4, Math.round((d.count / maxCount) * 100));
+      var label = d.date ? d.date.slice(5) : "";
+      return '<div class="bar-wrap"><div class="bar" style="height:' + h + 'px" title="' + d.date + ': ' + d.count + '"></div>' +
+        '<div class="bar-label">' + label + '</div></div>';
+    }).join("");
+
+    // Hourly chart
+    var hourly = s.hourly_distribution || [];
+    var maxH = Math.max.apply(null, hourly.map(function(h){ return h.count; }).concat([1]));
+    document.getElementById("hourly-chart").innerHTML = hourly.map(function(h) {
+      var ht = Math.max(2, Math.round((h.count / maxH) * 70));
+      return '<div class="h-bar" style="height:' + ht + 'px" title="' + h.hour + ':00 — ' + h.count + ' konuşma"></div>';
+    }).join("");
+
+    // Top agents
+    var ta = s.top_agents || [];
+    var maxA = ta.length ? ta[0].count : 1;
+    document.getElementById("top-agents-list").innerHTML = ta.length ? ta.map(function(a) {
+      var pct = Math.round((a.count / maxA) * 100);
+      return '<div class="ta-row"><span style="font-size:13px;font-weight:500;width:140px;flex-shrink:0">' + escHtml(a.agent_name) + '</span>' +
+        '<div class="ta-bar-wrap"><div class="ta-bar" style="width:' + pct + '%"></div></div>' +
+        '<span style="font-size:12px;color:#64748b;margin-left:8px">' + a.count + '</span></div>';
+    }).join("") : '<p style="color:#94a3b8;font-size:13px">Henüz veri yok.</p>';
+  });
+}
+
+function exportAllConvs(days) {
+  fetch("/api/admin/conversations/export?days=" + days, {
+    headers: { "Authorization": "Bearer " + TOKEN }
+  }).then(function(r) { return r.blob(); }).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "conversations_" + days + "days.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+function loadTags() {
+  api("GET", "/tags").then(function(data) {
+    allTags = Array.isArray(data) ? data : [];
+    var grid = document.getElementById("tags-grid");
+    grid.innerHTML = allTags.map(function(t) {
+      return '<div class="tag-chip" style="background:' + escHtml(t.color) + '">' +
+        escHtml(t.name) +
+        ' <button class="tc-del" onclick="deleteTag(' + t.id + ')">✕</button>' +
+        '</div>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz etiket yok.</p>';
+  });
+}
+
+function createTag() {
+  var name = document.getElementById("new-tag-name").value.trim();
+  var color = document.getElementById("new-tag-color").value;
+  if (!name) { toast("Etiket adı zorunlu", "error"); return; }
+  api("POST", "/tags", { name, color }).then(function() {
+    document.getElementById("new-tag-name").value = "";
+    toast("Etiket eklendi");
+    loadTags();
+  });
+}
+
+function deleteTag(id) {
+  if (!confirm("Etiket silinsin mi?")) return;
+  api("DELETE", "/tags/" + id).then(function() { toast("Silindi"); loadTags(); });
+}
+
+// ── Blacklist ─────────────────────────────────────────────────────────────────
+function loadBlacklist() {
+  api("GET", "/blacklist").then(function(data) {
+    var tbody = document.getElementById("bl-tbody");
+    var list = Array.isArray(data) ? data : [];
+    tbody.innerHTML = list.map(function(b) {
+      var d = b.created_at ? new Date(b.created_at).toLocaleDateString() : "";
+      return '<tr>' +
+        '<td style="font-weight:600;font-family:monospace">' + escHtml(b.ip) + '</td>' +
+        '<td>' + escHtml(b.reason || "-") + '</td>' +
+        '<td>' + d + '</td>' +
+        '<td><button class="btn-sm danger" onclick="removeBlacklist(' + b.id + ')">Kaldır</button></td>' +
+        '</tr>';
+    }).join("") || '<tr><td colspan="4" style="color:#94a3b8;text-align:center;padding:20px">Liste boş.</td></tr>';
+  });
+}
+
+function addBlacklist() {
+  var ip = document.getElementById("new-bl-ip").value.trim();
+  var reason = document.getElementById("new-bl-reason").value.trim();
+  if (!ip) { toast("IP adresi zorunlu", "error"); return; }
+  api("POST", "/blacklist", { ip, reason }).then(function() {
+    document.getElementById("new-bl-ip").value = "";
+    document.getElementById("new-bl-reason").value = "";
+    toast("IP yasaklandı");
+    loadBlacklist();
+  });
+}
+
+function removeBlacklist(id) {
+  if (!confirm("Kaldırılsın mı?")) return;
+  api("DELETE", "/blacklist/" + id).then(function() { toast("Kaldırıldı"); loadBlacklist(); });
+}
+
+// ── Bot Flow ──────────────────────────────────────────────────────────────────
+function loadBotflows() {
+  api("GET", "/botflow").then(function(data) {
+    var list = Array.isArray(data) ? data : [];
+    document.getElementById("flows-list").innerHTML = list.map(function(f) {
+      var opts = [];
+      try { opts = JSON.parse(f.options_json || "[]"); } catch(e){}
+      return '<div class="flow-card">' +
+        '<div class="fc-header">' +
+        '<div class="fc-name">' + escHtml(f.name) + '</div>' +
+        (f.is_active ? '<span class="fc-active">AKTİF</span>' : '') +
+        '</div>' +
+        '<div class="fc-greeting">' + escHtml(f.greeting) + '</div>' +
+        '<div class="flow-options">' + opts.map(function(o){ return '<span class="flow-opt">' + escHtml(o.label||"") + '</span>'; }).join("") + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:12px">' +
+        (!f.is_active ? '<button class="btn-sm success" onclick="activateBotflow(' + f.id + ')">Aktifleştir</button>' : '') +
+        '<button class="btn-sm danger" onclick="deleteBotflow(' + f.id + ')">Sil</button>' +
+        '</div>' +
+        '</div>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz bot akışı yok.</p>';
+  });
+}
+
+function showAddFlowForm() {
+  document.getElementById("add-flow-form").style.display = "block";
+}
+
+function hideAddFlowForm() {
+  document.getElementById("add-flow-form").style.display = "none";
+}
+
+function createBotflow() {
+  var name = document.getElementById("flow-name").value.trim() || "Ana Akış";
+  var greeting = document.getElementById("flow-greeting").value.trim();
+  var options_json = document.getElementById("flow-options").value.trim() || "[]";
+  if (!greeting) { toast("Karşılama mesajı zorunlu", "error"); return; }
+  try { JSON.parse(options_json); } catch(e) { toast("Seçenekler geçersiz JSON", "error"); return; }
+  api("POST", "/botflow", { name, greeting, options_json }).then(function() {
+    toast("Bot akışı oluşturuldu");
+    hideAddFlowForm();
+    document.getElementById("flow-name").value = "";
+    document.getElementById("flow-greeting").value = "";
+    document.getElementById("flow-options").value = "";
+    loadBotflows();
+  });
+}
+
+function activateBotflow(id) {
+  api("POST", "/botflow/" + id + "/activate").then(function() {
+    toast("Akış aktifleştirildi");
+    loadBotflows();
+  });
+}
+
+function deleteBotflow(id) {
+  if (!confirm("Bot akışı silinsin mi?")) return;
+  api("DELETE", "/botflow/" + id).then(function() { toast("Silindi"); loadBotflows(); });
+}
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+var DAYS = [
+  {key:"mon",label:"Pazartesi"},
+  {key:"tue",label:"Salı"},
+  {key:"wed",label:"Çarşamba"},
+  {key:"thu",label:"Perşembe"},
+  {key:"fri",label:"Cuma"},
+  {key:"sat",label:"Cumartesi"},
+  {key:"sun",label:"Pazar"},
+];
+
+function loadScheduleAgents() {
+  api("GET", "/agents").then(function(data) {
+    allAgents = Array.isArray(data) ? data : [];
+    var sel = document.getElementById("sched-agent-select");
+    sel.innerHTML = '<option value="">Temsilci seçin...</option>' +
+      allAgents.map(function(a) {
+        return '<option value="' + a.id + '">' + escHtml(a.display_name || a.username) + '</option>';
+      }).join("");
+  });
+}
+
+function loadSchedule() {
+  var agentId = document.getElementById("sched-agent-select").value;
+  if (!agentId) { document.getElementById("sched-form").style.display="none"; return; }
+  api("GET", "/schedule/" + agentId).then(function(data) {
+    document.getElementById("sched-form").style.display = "block";
+    document.getElementById("sched-tz").value = data.timezone || "Europe/Istanbul";
+    var sched = {};
+    try { sched = JSON.parse(data.schedule_json || "{}"); } catch(e) {}
+    scheduleData = sched;
+    renderDayRows(sched);
+  });
+}
+
+function renderDayRows(sched) {
+  var container = document.getElementById("day-rows");
+  container.innerHTML = DAYS.map(function(d) {
+    var day = sched[d.key] || { active: false, start: "09:00", end: "18:00" };
+    return '<div class="day-row">' +
+      '<div class="day-name">' + d.label + '</div>' +
+      '<label class="day-toggle">' +
+      '<input type="checkbox" data-day="' + d.key + '"' + (day.active ? " checked" : "") + ' onchange="updateScheduleDay(\'' + d.key + '\')">' +
+      '<span class="day-toggle-slider"></span>' +
+      '</label>' +
+      '<input type="time" class="time-input" data-day-start="' + d.key + '" value="' + (day.start||"09:00") + '" onchange="updateScheduleDay(\'' + d.key + '\')">' +
+      '<span style="font-size:12px;color:#94a3b8">—</span>' +
+      '<input type="time" class="time-input" data-day-end="' + d.key + '" value="' + (day.end||"18:00") + '" onchange="updateScheduleDay(\'' + d.key + '\')">' +
+      '</div>';
+  }).join("");
+}
+
+function updateScheduleDay(dayKey) {
+  var cb = document.querySelector('[data-day="' + dayKey + '"]');
+  var start = document.querySelector('[data-day-start="' + dayKey + '"]');
+  var end = document.querySelector('[data-day-end="' + dayKey + '"]');
+  if (!scheduleData[dayKey]) scheduleData[dayKey] = {};
+  scheduleData[dayKey].active = cb ? cb.checked : false;
+  scheduleData[dayKey].start = start ? start.value : "09:00";
+  scheduleData[dayKey].end = end ? end.value : "18:00";
+}
+
+function saveSchedule() {
+  var agentId = document.getElementById("sched-agent-select").value;
+  if (!agentId) return;
+  var tz = document.getElementById("sched-tz").value.trim() || "Europe/Istanbul";
+  api("PUT", "/schedule/" + agentId, {
+    schedule_json: JSON.stringify(scheduleData),
+    timezone: tz,
+  }).then(function() { toast("Mesai saatleri kaydedildi"); });
 }
 
 // ── Browser notif ─────────────────────────────────────────────────────────────
@@ -634,6 +1268,8 @@ connectWS();
 loadConvs();
 loadCanned();
 loadStats();
+loadAgents();
+loadTags();
 setInterval(loadStats, 15000);
 setInterval(function() { if (currentTab !== "mine") loadConvs(); }, 10000);
 </script>
