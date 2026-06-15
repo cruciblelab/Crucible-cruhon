@@ -1166,7 +1166,46 @@ def _tris_from_tess(tess, n):
 # ══════════════════════════════════════════════════════════════════
 
 def face_lms_to_xyz(lms, w, h) -> np.ndarray:
-    return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.2] for lm in lms.landmark], dtype=np.float32)
+    # z * 0.5 — daha gerçekçi derinlik (burun ~32px öne çıkar)
+    return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
+
+
+def _face_delaunay_tris(pts_3d: np.ndarray) -> np.ndarray:
+    """
+    2D Delaunay ile yüz landmark üçgenlemesi.
+    Büyük (yüz dışı / arka plan) üçgenleri filtreler.
+    Döner: (N, 3) int32 yüz indeksleri; scipy yoksa kenar-tabanlı fallback.
+    """
+    pts_2d = pts_3d[:, :2].astype(np.float64)
+    try:
+        from scipy.spatial import Delaunay as _Del
+        simplices = _Del(pts_2d).simplices
+    except Exception:
+        # scipy yoksa kenar-tabanlı basit yaklaşım
+        tri_list = _tris_from_tess(list(_TESS), len(pts_3d))
+        if not tri_list:
+            return np.zeros((0, 3), dtype=np.int32)
+        return np.array(tri_list, dtype=np.int32).reshape(-1, 3)
+
+    # Yüz sınırı dışındaki büyük üçgenleri çıkar
+    w_span = float(pts_2d[:, 0].ptp())
+    h_span = float(pts_2d[:, 1].ptp())
+    max_edge = max(w_span, h_span) * 0.12  # yüz genişliğinin %12'si
+
+    valid = []
+    for tri in simplices:
+        p = pts_2d[tri]
+        edges = [
+            np.linalg.norm(p[1] - p[0]),
+            np.linalg.norm(p[2] - p[1]),
+            np.linalg.norm(p[0] - p[2]),
+        ]
+        if max(edges) < max_edge:
+            valid.append(tri)
+
+    if not valid:
+        return np.zeros((0, 3), dtype=np.int32)
+    return np.array(valid, dtype=np.int32)
 
 def pose_lms_to_xyz(lms, w, h) -> np.ndarray:
     return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
@@ -1209,45 +1248,62 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
     out.mkdir(parents=True)
     log_cb(f"Export başlıyor → {name}", "EXPORT")
 
-    if session.frames_xyz and HAS_TRIMESH:
+    if session.frames_xyz:
         stacked = np.stack(session.frames_xyz)
-        # Medyan yüz mesh'i (frontal referans)
         pts     = np.median(stacked, axis=0).astype(np.float64)
         pts    -= pts.mean(axis=0)
-        tess    = list(_TESS)
-        tri_list = _tris_from_tess(tess, len(pts))
-        try:
-            if tri_list:
-                tris = np.array(tri_list, dtype=np.int32).reshape(-1, 3)
-                mesh = trimesh.Trimesh(vertices=pts, faces=tris, process=False)
-                mesh.export(str(out / "face_mesh.obj"))
-                mesh.export(str(out / "face_mesh.stl"))
-                log_cb(f"Yüz mesh: {len(pts)} vertex, {len(tris)} üçgen", "OK")
-            else:
-                trimesh.PointCloud(vertices=pts).export(str(out / "face_mesh.obj"))
-                log_cb(f"Yüz nokta bulutu (mesh yok): {len(pts)} nokta", "OK")
-        except Exception as e:
-            log_cb(f"Mesh export hatası: {e}", "WARN")
-            trimesh.PointCloud(vertices=pts).export(str(out / "face_pointcloud_med.ply"))
-            log_cb(f"Fallback: face_pointcloud_med.ply ({len(pts)} nokta)", "OK")
 
-        # Kabsch hizalamalı multi-view nokta bulutu
-        if len(session.frames_xyz) > 5:
+        # ── Delaunay üçgen mesh (yüzey, trimesh ile) ──
+        if HAS_TRIMESH:
             try:
-                aligned = align_frames(session.frames_xyz)
-                aligned -= aligned.mean(axis=0)
-                trimesh.PointCloud(vertices=aligned).export(str(out / "face_multiview.ply"))
-                log_cb(f"face_multiview.ply: {len(aligned)} nokta (hizalanmış)", "OK")
+                faces = _face_delaunay_tris(pts)
+                if len(faces) > 0:
+                    mesh = trimesh.Trimesh(vertices=pts, faces=faces, process=False)
+                    mesh.export(str(out / "face_mesh.obj"))
+                    mesh.export(str(out / "face_mesh.ply"))
+                    log_cb(f"face_mesh.obj / face_mesh.ply: {len(pts)} vertex, {len(faces)} üçgen", "OK")
+                else:
+                    pcd = trimesh.PointCloud(vertices=pts)
+                    pcd.export(str(out / "face_mesh.ply"))
+                    log_cb(f"face_mesh.ply (nokta bulutu, üçgen bulunamadı): {len(pts)} nokta", "WARN")
             except Exception as e:
-                log_cb(f"Multi-view hizalama atlandı: {e}", "WARN")
-        else:
-            all_pts = stacked.reshape(-1, 3)
-            all_pts -= all_pts.mean(axis=0)
-            trimesh.PointCloud(vertices=all_pts).export(str(out / "face_pointcloud.ply"))
-            log_cb("face_pointcloud.ply hazır", "OK")
+                log_cb(f"Mesh export hatası: {e}", "WARN")
+
+            # Hizalanmış çok-açı nokta bulutu
+            if len(session.frames_xyz) > 5:
+                try:
+                    aligned = align_frames(session.frames_xyz)
+                    aligned -= aligned.mean(axis=0)
+                    aligned_faces = _face_delaunay_tris(aligned)
+                    if len(aligned_faces) > 0:
+                        trimesh.Trimesh(vertices=aligned, faces=aligned_faces, process=False).export(
+                            str(out / "face_multiview.ply"))
+                        log_cb(f"face_multiview.ply: {len(aligned)} vertex, {len(aligned_faces)} üçgen", "OK")
+                    else:
+                        trimesh.PointCloud(vertices=aligned).export(str(out / "face_multiview.ply"))
+                        log_cb(f"face_multiview.ply: {len(aligned)} nokta (nokta bulutu)", "OK")
+                except Exception as e:
+                    log_cb(f"Multi-view hizalama atlandı: {e}", "WARN")
+
+        # ── Wireframe OBJ (her zaman yaz: l + f elementleri) ──
+        try:
+            wf_text = build_wireframe_obj(pts, list(_TESS))
+            with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
+                f.write(wf_text)
+            wf_cont = build_wireframe_obj(pts, list(_CONT))
+            with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
+                f.write(wf_cont)
+            log_cb("face_wireframe.obj + face_contour.obj hazır", "OK")
+        except Exception as e:
+            log_cb(f"Wireframe OBJ hatası: {e}", "WARN")
+
+        # ── trimesh yoksa ASCII PLY fallback ──
+        if not HAS_TRIMESH:
+            write_ply_ascii(str(out / "face_pointcloud.ply"), pts)
+            log_cb(f"face_pointcloud.ply ({len(pts)} nokta, trimesh olmadan)", "OK")
 
         # Poz bazlı ayrı PLY (guided mod)
-        if session.scan_mode == "guided" and session.frame_pose_labels:
+        if HAS_TRIMESH and session.scan_mode == "guided" and session.frame_pose_labels:
             from collections import defaultdict
             groups: dict = defaultdict(list)
             for pts_f, p_idx in zip(session.frames_xyz, session.frame_pose_labels):
@@ -1255,25 +1311,15 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
             for p_idx, frames in groups.items():
                 if frames and 0 <= p_idx < len(GUIDED_POSES):
                     p_name = GUIDED_POSES[p_idx]["id"]
-                    pmed   = np.median(np.stack(frames), axis=0)
+                    pmed   = np.median(np.stack(frames), axis=0).astype(np.float64)
                     pmed  -= pmed.mean(0)
-                    trimesh.PointCloud(vertices=pmed).export(str(out / f"pose_{p_name}.ply"))
+                    pf = _face_delaunay_tris(pmed)
+                    if len(pf) > 0:
+                        trimesh.Trimesh(vertices=pmed, faces=pf, process=False).export(
+                            str(out / f"pose_{p_name}.ply"))
+                    else:
+                        trimesh.PointCloud(vertices=pmed).export(str(out / f"pose_{p_name}.ply"))
                     log_cb(f"pose_{p_name}.ply ({len(frames)} frame)", "OK")
-
-    elif session.frames_xyz:
-        # trimesh yok — fallback: sade ASCII PLY ve OBJ yaz
-        stacked = np.stack(session.frames_xyz)
-        pts_med = np.median(stacked, axis=0)
-        pts_med -= pts_med.mean(axis=0)
-        write_ply_ascii(str(out / "face_pointcloud.ply"), pts_med)
-        log_cb(f"face_pointcloud.ply ({len(pts_med)} nokta, trimesh olmadan)", "OK")
-        wf_text = build_wireframe_obj(pts_med, list(_TESS))
-        with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
-            f.write(wf_text)
-        wf_cont = build_wireframe_obj(pts_med, list(_CONT))
-        with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
-            f.write(wf_cont)
-        log_cb("face_wireframe.obj + face_contour.obj hazır (trimesh olmadan)", "OK")
 
     if session.pose_frames:
         ps  = np.stack(session.pose_frames)
@@ -1295,23 +1341,6 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
             else:
                 write_ply_ascii(str(out / f"{side}.ply"), ph)
             log_cb(f"{side}.ply hazır", "OK")
-
-    # Tel kafes OBJ (renksiz kalıp/şablon)
-    if session.frames_xyz and HAS_TRIMESH:
-        try:
-            pts_med = np.median(np.stack(session.frames_xyz), axis=0)
-            pts_med -= pts_med.mean(axis=0)
-            tess_conn = list(_TESS)
-            wf_text = build_wireframe_obj(pts_med, tess_conn)
-            with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
-                f.write(wf_text)
-            cont_conn = list(_CONT)
-            wf_cont = build_wireframe_obj(pts_med, cont_conn)
-            with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
-                f.write(wf_cont)
-            log_cb(f"face_wireframe.obj + face_contour.obj (kalıp formatı)", "OK")
-        except Exception as e:
-            log_cb(f"Wireframe export hatası: {e}", "WARN")
 
     json_path = out / "landmarks.json"
     try:
