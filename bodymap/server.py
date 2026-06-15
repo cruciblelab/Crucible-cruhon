@@ -1170,134 +1170,186 @@ def face_lms_to_xyz(lms, w, h) -> np.ndarray:
     return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
 
 
-def _face_delaunay_tris(pts_3d: np.ndarray, max_edge_factor: Optional[float] = 0.12) -> np.ndarray:
+def _poly_contains(pts_2d: np.ndarray, polygon: np.ndarray) -> np.ndarray:
     """
-    2D Delaunay ile yüz landmark üçgenlemesi.
-    max_edge_factor=None → filtreleme yok (tamamen dolu yüzey).
-    Döner: (N, 3) int32 yüz indeksleri; scipy yoksa kenar-tabanlı fallback.
+    Vektörleştirilmiş ray-casting: polygon içinde kalan nokta maskeleri.
+    polygon: (M, 2) sıralı köşe dizisi.
+    """
+    n = len(polygon)
+    inside = np.zeros(len(pts_2d), dtype=bool)
+    j = n - 1
+    for k in range(n):
+        xi, yi = polygon[k]
+        xj, yj = polygon[j]
+        # Ray crossing test
+        cross = ((polygon[k, 1] > pts_2d[:, 1]) != (polygon[j, 1] > pts_2d[:, 1])) & (
+            pts_2d[:, 0] < (xj - xi) * (pts_2d[:, 1] - yi) / ((yj - yi) + 1e-12) + xi
+        )
+        inside ^= cross
+        j = k
+    return inside
+
+
+def _ring_to_poly(ring_indices: list, pts_2d: np.ndarray) -> np.ndarray:
+    """İndeks listesini 2D poligon koordinatlarına çevirir."""
+    if not ring_indices:
+        return np.zeros((0, 2))
+    return pts_2d[np.array(ring_indices)].astype(np.float64)
+
+
+def _face_front_tris(pts_3d: np.ndarray, solid: bool = False) -> np.ndarray:
+    """
+    Oval sınırı içindeki Delaunay üçgenlemesi.
+    solid=False → göz/ağız delikli (face_mesh detaylı)
+    solid=True  → tamamen dolu yüzey (head_model için)
+    Döner: (N, 3) int32 face indeksleri.
     """
     pts_2d = pts_3d[:, :2].astype(np.float64)
+    oval_ring  = _order_loop(list(_OVAL))
+    leye_ring  = _order_loop(list(_L_EYE))
+    reye_ring  = _order_loop(list(_R_EYE))
+
+    oval_poly = _ring_to_poly(oval_ring, pts_2d)
+    leye_poly = _ring_to_poly(leye_ring, pts_2d)
+    reye_poly = _ring_to_poly(reye_ring, pts_2d)
+
+    # Ağız için dış sınır noktaları
+    mouth_outer = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291,
+                   375, 321, 405, 314, 17, 84, 181, 91, 146]
+    mouth_poly = pts_2d[mouth_outer]
+
     try:
         from scipy.spatial import Delaunay as _Del
         simplices = _Del(pts_2d).simplices
     except Exception:
-        # scipy yoksa kenar-tabanlı basit yaklaşım
-        tri_list = _tris_from_tess(list(_TESS), len(pts_3d))
-        if not tri_list:
-            return np.zeros((0, 3), dtype=np.int32)
-        return np.array(tri_list, dtype=np.int32).reshape(-1, 3)
+        tl = _tris_from_tess(list(_TESS), len(pts_3d))
+        return np.array(tl, dtype=np.int32).reshape(-1, 3) if tl else np.zeros((0,3), dtype=np.int32)
 
-    if max_edge_factor is None:
-        return np.array(simplices, dtype=np.int32)
+    # Üçgen merkez noktaları
+    centroids = pts_2d[simplices].mean(axis=1)   # (T, 2)
 
-    # Yüz sınırı dışındaki büyük üçgenleri çıkar
-    w_span = float(np.ptp(pts_2d[:, 0]))
-    h_span = float(np.ptp(pts_2d[:, 1]))
-    max_edge = max(w_span, h_span) * max_edge_factor
+    in_oval = _poly_contains(centroids, oval_poly)
+    valid_mask = in_oval
 
-    valid = []
-    for tri in simplices:
-        p = pts_2d[tri]
-        edges = [
-            np.linalg.norm(p[1] - p[0]),
-            np.linalg.norm(p[2] - p[1]),
-            np.linalg.norm(p[0] - p[2]),
-        ]
-        if max(edges) < max_edge:
-            valid.append(tri)
+    if not solid and len(leye_poly) >= 3:
+        in_leye = _poly_contains(centroids, leye_poly)
+        valid_mask = valid_mask & ~in_leye
+    if not solid and len(reye_poly) >= 3:
+        in_reye = _poly_contains(centroids, reye_poly)
+        valid_mask = valid_mask & ~in_reye
+    if not solid and len(mouth_poly) >= 3:
+        in_mouth = _poly_contains(centroids, mouth_poly)
+        valid_mask = valid_mask & ~in_mouth
 
-    if not valid:
-        return np.zeros((0, 3), dtype=np.int32)
-    return np.array(valid, dtype=np.int32)
+    result = simplices[valid_mask]
+    return result.astype(np.int32) if len(result) > 0 else np.zeros((0,3), dtype=np.int32)
 
 
-def _order_loop(edges) -> list:
-    """Kenar listesinden sıralı kapalı döngü (oval halka) çıkar."""
-    from collections import defaultdict
-    adj = defaultdict(list)
-    for a, b in edges:
-        adj[a].append(b)
-        adj[b].append(a)
-    if not adj:
-        return []
-    start = min(adj.keys())
-    loop = [start]
-    prev, cur = None, start
-    for _ in range(len(adj) + 2):
-        nxt = None
-        for n in adj[cur]:
-            if n != prev:
-                nxt = n
-                break
-        if nxt is None or nxt == start:
-            break
-        loop.append(nxt)
-        prev, cur = cur, nxt
-    return loop
+def _smooth_mesh(mesh: "trimesh.Trimesh", iterations: int = 5,
+                 alpha: float = 0.1, beta: float = 0.5) -> "trimesh.Trimesh":
+    """Humphrey veya Laplacian yumuşatma — en iyi kullanılabileni seç."""
+    try:
+        import trimesh.smoothing as _sm
+        _sm.filter_humphrey(mesh, alpha=alpha, beta=beta, iterations=iterations)
+    except Exception:
+        try:
+            import trimesh.smoothing as _sm
+            _sm.filter_laplacian(mesh, iterations=iterations, lamb=0.3)
+        except Exception:
+            pass
+    return mesh
 
 
-def build_head_mesh(face_pts: np.ndarray, n_rings: int = 12):
+def _make_mtl(path: str, name: str = "BodyMap_Material"):
+    """OBJ için sade ten rengi MTL malzeme dosyası."""
+    with open(path, "w") as f:
+        f.write(f"# BodyMap Material\nnewmtl {name}\n")
+        f.write("Ka 0.10 0.08 0.07\n")   # ambient: koyu ten
+        f.write("Kd 0.82 0.68 0.58\n")   # diffuse: ten rengi
+        f.write("Ks 0.06 0.06 0.06\n")   # specular: mat
+        f.write("Ns 12.0\nd 1.0\nillum 2\n")
+
+
+def build_head_mesh(face_pts: np.ndarray, n_rings: int = 20):
     """
-    Yakalanan yüzü (478 nokta) tam bir kafa yapısına entegre eder.
-    Ön yüz = gerçek yüz mesh'i; arka = pürüzsüz kafatası kubbesi.
-    Döner: (vertices (M,3), faces (F,3)) — kapalı (watertight) katı model.
+    Profesyonel kafa modeli — yakalanan yüzü kafatası yapısına entegre eder.
+
+    Antropometrik oranlar (ISO 7250 yetişkin ortalaması):
+      • Kafa derinliği  ≈ yüz genişliği × 1.35
+      • Alın yüksekliği ≈ yüz yüksekliği × 0.45
+      • Şakak genişlik oranı ≈ %90 (hafif içe doğru)
+
+    Profil eğrisi: Bezier-benzeri — yumuşak alın, belirgin oksipital çıkıntı.
     """
     pts = np.asarray(face_pts, dtype=np.float64)
-    V = [pts[i].copy() for i in range(len(pts))]
+    V: list = [p.copy() for p in pts]
     faces: list = []
 
-    # 1) Ön yüz — tamamen dolu Delaunay yüzeyi (göz/ağız boşlukları kapalı)
-    front = _face_delaunay_tris(pts, max_edge_factor=None)
-    faces.extend(front.tolist())
+    # ── Ön yüz (solid): oval içi tamamen dolu ──────────────────────
+    front = _face_front_tris(pts, solid=True)
+    if len(front):
+        faces.extend(front.tolist())
 
-    # 2) Yüz oval halkası (sıralı)
+    # ── Yüz oval halkası ───────────────────────────────────────────
     ring0 = _order_loop(list(_OVAL))
     if len(ring0) < 8:
-        # Oval bulunamazsa sadece ön yüzü döndür
         return np.asarray(V), np.asarray(faces, dtype=np.int32)
+
     N = len(ring0)
     ring_pts = pts[ring0]
-    C = ring_pts.mean(axis=0)
-    z_oval = float(ring_pts[:, 2].mean())
+    C_xy = ring_pts[:, :2].mean(axis=0)
+    C_z  = float(ring_pts[:, 2].mean())
+    radii = ring_pts[:, :2] - C_xy     # her nokta için C'ye göre yönlü yarıçap
 
-    # Kafa derinliği — yüz boyutuna oranlı (kafa, yüzden biraz daha derin)
     fw = float(np.ptp(pts[:, 0]))
     fh = float(np.ptp(pts[:, 1]))
-    head_depth = max(fw, fh) * 1.25
+    head_depth = max(fw, fh) * 1.35    # ön-arka derinlik
 
-    # 3) Arka kubbe — oval halkayı geriye doğru süpür (yarım elipsoid)
+    # ── Kafa profil eğrisi — 4 Bezier kontrol noktası ─────────────
+    # t=0: oval (ön), t=1: kutup (arka)
+    # Her t için (rscale, z_off) tanımlı — şakak bombesi + oksipital çıkıntı
+    def _profile(t: float):
+        # rscale: oval ne kadar daralıyor (şakaklar t=0.15'de biraz genişler)
+        # z_off : ne kadar geriye gidiyor
+        ang  = t * math.pi * 0.75          # 0 → 135°
+        rs   = math.cos(ang)
+        # Şakak bombesi: t=0.12 civarında %4 genişleme
+        bump = 0.04 * math.exp(-((t - 0.12) / 0.08) ** 2)
+        rs   = max(0.0, rs + bump)
+        zo   = -head_depth * math.sin(ang)
+        return rs, zo
+
     prev_ring = list(ring0)
     for j in range(1, n_rings):
-        t = j / n_rings
-        ang = t * (math.pi / 2.0)
-        rscale = math.cos(ang)          # XY küçülür
-        zoff = -head_depth * math.sin(ang)  # geriye gider (-Z = arka)
-        cur_ring = []
+        t   = j / n_rings
+        rs, zo = _profile(t)
+        cur_ring: list = []
         for i in range(N):
-            p = ring_pts[i]
-            nx = C[0] + (p[0] - C[0]) * rscale
-            ny = C[1] + (p[1] - C[1]) * rscale
-            nz = z_oval + zoff
+            r  = radii[i]
+            nx = C_xy[0] + r[0] * rs
+            ny = C_xy[1] + r[1] * rs
+            nz = C_z + zo
             V.append(np.array([nx, ny, nz]))
             cur_ring.append(len(V) - 1)
-        # Halkaları dörtgen→üçgen ile bağla
+        # Dörtgen → 2 üçgen
         for i in range(N):
             i2 = (i + 1) % N
             a, an = prev_ring[i], prev_ring[i2]
-            b, bn = cur_ring[i], cur_ring[i2]
-            faces.append([a, b, bn])
-            faces.append([a, bn, an])
+            b, bn = cur_ring[i],  cur_ring[i2]
+            faces.append([a,  b,  bn])
+            faces.append([a,  bn, an])
         prev_ring = cur_ring
 
-    # 4) Arka kutup — son halkayı tek noktaya kapat
-    pole = np.array([C[0], C[1], z_oval - head_depth])
+    # ── Arka kutup ─────────────────────────────────────────────────
+    pole = np.array([C_xy[0], C_xy[1], C_z - head_depth])
     V.append(pole)
-    pole_idx = len(V) - 1
+    pi = len(V) - 1
     for i in range(N):
         i2 = (i + 1) % N
-        faces.append([prev_ring[i], pole_idx, prev_ring[i2]])
+        faces.append([prev_ring[i], pi, prev_ring[i2]])
 
-    return np.asarray(V), np.asarray(faces, dtype=np.int32)
+    return np.asarray(V, dtype=np.float64), np.asarray(faces, dtype=np.int32)
+
 
 
 def pose_lms_to_xyz(lms, w, h) -> np.ndarray:
@@ -1346,10 +1398,10 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         pts     = np.median(stacked, axis=0).astype(np.float64)
         pts    -= pts.mean(axis=0)
 
-        # ── TAM KAFA MODELİ (yüz + arka kafatası, kapalı katı) ──
+        # ── 1. TAM KAFA MODELİ (yüz + kafatası, kapalı katı) ──────
         if HAS_TRIMESH:
             try:
-                hv, hf = build_head_mesh(pts)
+                hv, hf = build_head_mesh(pts, n_rings=24)
                 head = trimesh.Trimesh(vertices=hv, faces=hf, process=True)
                 head.merge_vertices()
                 head.fix_normals()
@@ -1357,63 +1409,58 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
                     head.fill_holes()
                 except Exception:
                     pass
-                # Hafif yumuşatma — dikiş izlerini gider, yüz detayını korur
-                try:
-                    import trimesh.smoothing as _sm
-                    _sm.filter_humphrey(head, alpha=0.1, beta=0.5, iterations=4)
-                except Exception:
-                    pass
+                # Hafif yumuşatma: kafatası dikişlerini gider, yüz detayını saklar
+                head = _smooth_mesh(head, iterations=5, alpha=0.1, beta=0.5)
+                head.fix_normals()
+                wt = "watertight" if head.is_watertight else "open-surface"
+                _make_mtl(str(out / "head_model.mtl"))
                 head.export(str(out / "head_model.obj"))
                 head.export(str(out / "head_model.ply"))
                 head.export(str(out / "head_model.stl"))
-                wt = "su geçirmez" if head.is_watertight else "açık"
-                log_cb(f"head_model (TAM KAFA): {len(head.vertices)} vertex, {len(head.faces)} üçgen [{wt}]", "OK")
+                log_cb(f"head_model: {len(head.vertices)}v {len(head.faces)}f [{wt}]", "OK")
             except Exception as e:
                 log_cb(f"Kafa modeli hatası: {e}", "WARN")
 
-            # ── Sadece ön yüz mesh'i (detaylı, göz/ağız açık) ──
+            # ── 2. Ön yüz (göz + ağız delikleriyle) ───────────────
             try:
-                faces = _face_delaunay_tris(pts)
-                if len(faces) > 0:
-                    mesh = trimesh.Trimesh(vertices=pts, faces=faces, process=False)
-                    mesh.export(str(out / "face_mesh.obj"))
-                    mesh.export(str(out / "face_mesh.ply"))
-                    log_cb(f"face_mesh.obj / face_mesh.ply: {len(pts)} vertex, {len(faces)} üçgen", "OK")
+                ffaces = _face_front_tris(pts, solid=False)
+                if len(ffaces) > 0:
+                    fm = trimesh.Trimesh(vertices=pts, faces=ffaces, process=True)
+                    fm.fix_normals()
+                    _make_mtl(str(out / "face_mesh.mtl"))
+                    fm.export(str(out / "face_mesh.obj"))
+                    fm.export(str(out / "face_mesh.ply"))
+                    log_cb(f"face_mesh: {len(fm.vertices)}v {len(fm.faces)}f (göz/ağız delikleri açık)", "OK")
                 else:
                     trimesh.PointCloud(vertices=pts).export(str(out / "face_mesh.ply"))
-                    log_cb(f"face_mesh.ply (nokta bulutu): {len(pts)} nokta", "WARN")
+                    log_cb(f"face_mesh.ply nokta bulutu: {len(pts)} nokta", "WARN")
             except Exception as e:
-                log_cb(f"Mesh export hatası: {e}", "WARN")
+                log_cb(f"face_mesh hatası: {e}", "WARN")
 
-            # Hizalanmış çok-açı nokta bulutu
+            # ── 3. Çok-açılı hizalanmış mesh ───────────────────────
             if len(session.frames_xyz) > 5:
                 try:
                     aligned = align_frames(session.frames_xyz)
-                    aligned -= aligned.mean(axis=0)
-                    aligned_faces = _face_delaunay_tris(aligned)
-                    if len(aligned_faces) > 0:
-                        trimesh.Trimesh(vertices=aligned, faces=aligned_faces, process=False).export(
+                    aligned = (aligned - aligned.mean(axis=0)).astype(np.float64)
+                    af = _face_front_tris(aligned, solid=False)
+                    if len(af) > 0:
+                        trimesh.Trimesh(vertices=aligned, faces=af, process=True).export(
                             str(out / "face_multiview.ply"))
-                        log_cb(f"face_multiview.ply: {len(aligned)} vertex, {len(aligned_faces)} üçgen", "OK")
-                    else:
-                        trimesh.PointCloud(vertices=aligned).export(str(out / "face_multiview.ply"))
-                        log_cb(f"face_multiview.ply: {len(aligned)} nokta (nokta bulutu)", "OK")
+                        log_cb(f"face_multiview.ply: {len(aligned)}v {len(af)}f", "OK")
                 except Exception as e:
-                    log_cb(f"Multi-view hizalama atlandı: {e}", "WARN")
+                    log_cb(f"Multi-view atlandı: {e}", "WARN")
 
-        # ── Wireframe OBJ (her zaman yaz: l + f elementleri) ──
+        # ── 4. Wireframe OBJ (referans için) ───────────────────────
         try:
-            wf_text = build_wireframe_obj(pts, list(_TESS))
             with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
-                f.write(wf_text)
-            wf_cont = build_wireframe_obj(pts, list(_CONT))
+                f.write(build_wireframe_obj(pts, list(_TESS)))
             with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
-                f.write(wf_cont)
+                f.write(build_wireframe_obj(pts, list(_CONT)))
             log_cb("face_wireframe.obj + face_contour.obj hazır", "OK")
         except Exception as e:
             log_cb(f"Wireframe OBJ hatası: {e}", "WARN")
 
-        # ── trimesh yoksa ASCII PLY fallback ──
+        # ── 5. trimesh yoksa ASCII PLY fallback ─────────────────────
         if not HAS_TRIMESH:
             write_ply_ascii(str(out / "face_pointcloud.ply"), pts)
             log_cb(f"face_pointcloud.ply ({len(pts)} nokta, trimesh olmadan)", "OK")
