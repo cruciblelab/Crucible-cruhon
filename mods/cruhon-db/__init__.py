@@ -223,6 +223,14 @@ def _parse_dsn(url: str):
     return "sqlite", {"database": url}
 
 
+def _mask_dsn(url: str) -> str:
+    """Hide the password in a DSN so it is safe to print/log/stream.
+
+    postgres://user:secret@host/db → postgres://user:****@host/db
+    """
+    return re.sub(r"(://[^:/@]+:)([^@]+)(@)", r"\1****\3", str(url))
+
+
 # ─────────────────────────────────────────────────────────────
 # MAIN DB CLASS
 # ─────────────────────────────────────────────────────────────
@@ -362,8 +370,131 @@ class _DB:
             raise RuntimeError("[cruhon-db] No previous DSN for reconnect.")
         self.connect([self._dsn])
 
+    def connect_env(self, args: list):
+        """@db.connect_env[]  /  @db.connect_env[VAR]
+
+        Connect using a DSN read from an environment variable. Defaults to
+        DATABASE_URL — the de-facto standard used by Heroku, Railway, Fly,
+        Render, and most hosts. Keeps secrets out of the source.
+        """
+        import os
+        var = str(args[0]) if args else "DATABASE_URL"
+        dsn = os.environ.get(var)
+        if not dsn:
+            raise RuntimeError(
+                f"[cruhon-db] @db.connect_env: environment variable {var!r} is not set. "
+                f"Set it (e.g. in a .env file) before connecting."
+            )
+        return self.connect([dsn])
+
+    def dsn_safe(self, args: list):
+        """@db.dsn_safe[]  — the active DSN with any password masked.
+
+        Safe to print, log, or stream to a panel.
+        """
+        if not self._dsn:
+            return None
+        return _mask_dsn(self._dsn)
+
     def in_transaction(self, args: list):
         return self._in_transaction
+
+    # ── MIGRATIONS & SEEDING ──────────────────────────────────
+
+    def migrate(self, args: list):
+        """@db.migrate[dir]  — apply every *.sql file in `dir`, in name order.
+
+        Each file runs once. Applied filenames are tracked in a
+        `_cruhon_migrations` table, so re-running is safe and idempotent.
+        Returns the list of filenames applied on this call.
+        """
+        import os
+        self._require_conn()
+        if not args:
+            raise RuntimeError("[cruhon-db] @db.migrate requires a directory path.")
+        directory = str(args[0])
+        if not os.path.isdir(directory):
+            raise RuntimeError(f"[cruhon-db] @db.migrate: {directory!r} is not a directory.")
+
+        # Tracking table (portable column types).
+        ts_default = (
+            "CURRENT_TIMESTAMP" if self._db_type != "mysql"
+            else "CURRENT_TIMESTAMP"
+        )
+        self._cursor.execute(
+            "CREATE TABLE IF NOT EXISTS _cruhon_migrations ("
+            "filename VARCHAR(255) PRIMARY KEY, "
+            f"applied_at TIMESTAMP DEFAULT {ts_default})"
+        )
+        self._commit_if_needed()
+
+        # Which have already run?
+        self._cursor.execute("SELECT filename FROM _cruhon_migrations")
+        done = {self._row_to_dict(r)["filename"] for r in self._cursor.fetchall()}
+
+        files = sorted(f for f in os.listdir(directory) if f.endswith(".sql"))
+        applied = []
+        ph = "?" if self._db_type == "sqlite" else "%s"
+        for fname in files:
+            if fname in done:
+                continue
+            with open(os.path.join(directory, fname), "r", encoding="utf-8") as fh:
+                sql = fh.read()
+            self._run_script(sql)
+            self._cursor.execute(
+                f"INSERT INTO _cruhon_migrations (filename) VALUES ({ph})", (fname,)
+            )
+            self._commit_if_needed()
+            applied.append(fname)
+        return applied
+
+    def seed(self, args: list):
+        """@db.seed[table; file]  — bulk-insert rows from a JSON or CSV file.
+
+        JSON: a list of objects. CSV: header row → column names.
+        Returns the number of rows inserted.
+        """
+        import os, json, csv
+        self._require_conn()
+        if len(args) < 2:
+            raise RuntimeError("[cruhon-db] @db.seed requires a table and a file path.")
+        table, path = str(args[0]), str(args[1])
+        if not os.path.isfile(path):
+            raise RuntimeError(f"[cruhon-db] @db.seed: file not found: {path!r}")
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".json":
+            with open(path, "r", encoding="utf-8") as fh:
+                rows = json.load(fh)
+            if isinstance(rows, dict):
+                rows = [rows]
+        elif ext == ".csv":
+            with open(path, "r", encoding="utf-8", newline="") as fh:
+                rows = list(csv.DictReader(fh))
+        else:
+            raise RuntimeError(
+                f"[cruhon-db] @db.seed: unsupported file type {ext!r} (use .json or .csv)."
+            )
+        if not rows:
+            return 0
+        self.insertmany([table, rows])
+        return len(rows)
+
+    def _commit_if_needed(self):
+        """Commit unless inside an explicit transaction (sqlite autocommits)."""
+        if self._db_type != "sqlite" and not self._in_transaction:
+            try:
+                self._conn.commit()
+            except Exception:
+                pass
+
+    def _run_script(self, sql: str):
+        """Run a multi-statement SQL string across any backend."""
+        if self._db_type == "sqlite":
+            self._cursor.executescript(sql)
+        else:
+            for stmt in sql.split(";"):
+                if stmt.strip():
+                    self._cursor.execute(stmt)
 
     # ── CONNECTION INFO & RAW ACCESS ──────────────────────────
 
@@ -1817,7 +1948,10 @@ class _DB:
 
 _SYNC_METHODS = (
     # Connection
-    "connect", "close", "ping", "reconnect", "in_transaction",
+    "connect", "connect_env", "close", "ping", "reconnect", "in_transaction",
+    "dsn_safe",
+    # Migrations & seeding
+    "migrate", "seed",
     # Connection info & raw access
     "connection", "cursor_obj", "db_type", "dsn", "closed", "conn_info",
     "server_version", "autocommit", "isolation_level", "total_changes",

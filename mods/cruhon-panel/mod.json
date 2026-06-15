@@ -1,0 +1,11 @@
+{
+    "name": "cruhon-panel",
+    "version": "1.0.0",
+    "description": "Live log-stream dashboard for Cruhon — a zero-dependency web panel that streams logs, metrics, and events to the browser over Server-Sent Events",
+    "author": "Crucible",
+    "cruhon": ">=1.0.0",
+    "namespace": "panel",
+    "default_port": 8787,
+    "default_host": "127.0.0.1",
+    "history_size": 200
+}

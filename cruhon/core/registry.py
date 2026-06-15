@@ -162,6 +162,8 @@ _LIBS: dict[str, str] = {
     "zipapp":      _BUILTIN,     # @zipapp.* — create runnable ZIP archives
     "runpy":       _BUILTIN,     # @runpy.* — run modules/scripts dynamically
     "pdb":         _BUILTIN,     # @pdb.* — Python debugger integration
+    # New in v2.10.0 — configuration & secrets
+    "env":         _BUILTIN,     # @env.* — environment variables, .env files, secret masking
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -428,6 +430,7 @@ def _register_stdlib():
     from .libs.zipapp_      import register as _r_zipapp
     from .libs.runpy_       import register as _r_runpy
     from .libs.pdb_         import register as _r_pdb
+    from .libs.env_         import register as _r_env
     _r_file()
     _r_time()
     _r_date()
@@ -547,5 +550,6 @@ def _register_stdlib():
     _r_zipapp()
     _r_runpy()
     _r_pdb()
+    _r_env()
 
 _register_stdlib()

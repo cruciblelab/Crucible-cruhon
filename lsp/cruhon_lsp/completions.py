@@ -221,6 +221,8 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "zipapp":     ("ZIP application archives", ["create", "interpreter", "main", "is_archive", "copy"]),
     "runpy":      ("Dynamic module execution", ["module", "module_ns", "is_module", "path", "path_ns", "find", "result"]),
     "pdb":        ("Python debugger",          ["bp", "breakpoint", "pm", "run", "runeval", "runcall", "new", "set_bp", "clear_bp", "clear_all", "list_bps"]),
+    # New in v2.10.0
+    "env":        ("Env vars & secrets",       ["get", "require", "has", "all", "prefix", "int", "float", "bool", "list", "json", "set", "unset", "setdefault", "load", "parse", "save", "mask", "expand"]),
 }
 
 

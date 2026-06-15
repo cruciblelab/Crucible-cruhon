@@ -4,7 +4,75 @@ All notable changes are documented here.
 
 ---
 
-## v2.9.0 (current) — Async, FFI, Color Math, Tokenizer, Debugger
+## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
+
+This release rounds out real-world deployment: read configuration safely,
+connect databases from the environment, and watch everything live in a
+browser.
+
+### New namespace — `@env.*` (environment variables & secrets)
+
+A single, safe surface for configuration. 18 commands:
+
+| Group | Commands |
+|---|---|
+| Read | `get`, `require` (fail fast if missing), `has`, `all`, `prefix` |
+| Typed | `int`, `float`, `bool` (1/true/yes/on), `list`, `json` |
+| Write | `set`, `unset`, `setdefault` |
+| `.env` files | `load` (auto-loads `./.env`), `parse`, `save` |
+| Secrets | `mask` (`"ab••••••89"` — safe to log/stream), `expand` (`$VAR`) |
+
+```clpy
+@env.load[]
+@var[port; @env.int["PORT"; 8080]]
+@var[key;  @env.require["API_KEY"]]
+@print[key = {@env.mask[key]}]
+```
+
+### cruhon-db — env-aware connection, migrations, seeding
+
+Four new commands on the `@db.*` plugin:
+
+| Command | Does |
+|---|---|
+| `@db.connect_env[]` / `@db.connect_env[VAR]` | Connect using a DSN from an env var (default `DATABASE_URL`) — keeps secrets out of source |
+| `@db.migrate[dir]` | Apply every `*.sql` file in order, once each, tracked in a `_cruhon_migrations` table (idempotent) |
+| `@db.seed[table; file]` | Bulk-insert rows from a `.json` or `.csv` file |
+| `@db.dsn_safe[]` | The active DSN with the password masked — safe to print/log |
+
+### New plugin — `@panel.*` (live log-stream dashboard)
+
+A zero-dependency web panel (`mods/cruhon-panel`). Start it, open the URL,
+and watch logs, metrics, and events stream into the browser over
+Server-Sent Events — pure standard library, no pip installs.
+
+| Command | Does |
+|---|---|
+| `@panel.start[port]` | Start the dashboard server → returns the URL |
+| `@panel.log[msg; level]` · `info`/`warn`/`error`/`debug` | Stream a log line |
+| `@panel.metric[name; value]` | Push/update a metric tile |
+| `@panel.event[type; data]` | Push an arbitrary JSON event |
+| `@panel.attach_logging[level]` | Mirror all `@log.*` output to the panel |
+| `@panel.open[]` · `url[]` · `clients[]` · `wait[]` · `stop[]` | Lifecycle |
+
+```clpy
+@panel.start[8787]
+@panel.attach_logging["INFO"]
+@log.info["server warming up"]
+@panel.metric["users online"; 42]
+@panel.wait[]
+```
+
+### Counts
+
+- **128 stdlib namespaces** (was 127) · **1839 handlers** (was 1821)
+- cruhon-db: **170+ commands** (was 166)
+- New plugin: cruhon-panel
+- **4034 tests** passing (was 3999)
+
+---
+
+## v2.9.0 — Async, FFI, Color Math, Tokenizer, Debugger
 
 8 new namespaces · 131 new handler methods · 3999 tests
 

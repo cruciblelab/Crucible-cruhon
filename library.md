@@ -1,6 +1,6 @@
 # Cruhon Library Reference
 
-**v2.9.0 — 127 namespaces · 1822+ commands**
+**v2.10.0 — 128 namespaces · 1839+ commands**
 
 All built-in namespaces are available without `@import`. Just call them.
 
@@ -240,6 +240,18 @@ Third-party packages not in the stdlib must be registered explicitly (see below)
 
 ---
 
+### Configuration & Secrets
+
+| Namespace | Wraps | Commands |
+|---|---|---|
+| `@env.*` | `os.environ` | get, require, has, all, prefix, int, float, bool, list, json, set, unset, setdefault, load, parse, save, mask, expand |
+| `@config.*` | `json`/`tomllib`/`configparser`/`os.environ` | load, loads, save, dump, get, set, keys, values, has, dotenv, env, env_int, env_float, env_bool, env_list, require, merge, flatten, from_str, to_str |
+
+`@env` is the recommended surface for tokens and DB URLs. Auto-load a `.env`
+file with `@env.load[]`, read typed values (`@env.int`, `@env.bool`, …),
+fail fast on missing required vars with `@env.require`, and never leak a
+secret thanks to `@env.mask` (`"ab••••••89"`).
+
 ### Utilities
 
 | Namespace | Wraps | Commands |
@@ -267,7 +279,8 @@ Third-party packages not in the stdlib must be registered explicitly (see below)
 | `@yaml.*` | built-in (optional) | Requires `pip install pyyaml` |
 | `@image.*` | built-in (optional) | Requires `pip install pillow` |
 | `@pdf.*` | built-in (optional) | Requires `pip install pdfplumber` |
-| `@db.*` | plugin | `mods/cruhon-db` — 138 commands |
+| `@db.*` | plugin | `mods/cruhon-db` — 170+ commands (SQLite/PostgreSQL/MySQL, sync + async). Includes `connect_env`, `migrate`, `seed`, `dsn_safe` |
+| `@panel.*` | plugin | `mods/cruhon-panel` — live SSE log/metric/event dashboard: `start`, `stop`, `log`, `metric`, `event`, `attach_logging`, `open`, `wait` |
 | `@discord.*` | plugin | `mods/cruhon-discord` — ~60 commands |
 
 ---

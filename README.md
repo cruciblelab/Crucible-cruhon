@@ -497,7 +497,7 @@ cruhon run app.clpy --no-cache  # bypass for one run
 
 ---
 
-## Standard Libraries — 127 Namespaces
+## Standard Libraries — 128 Namespaces
 
 All namespaces are available without `@import`. Just call them directly.
 See [`library.md`](library.md) for the complete method reference.
@@ -680,6 +680,22 @@ See [`library.md`](library.md) for the complete method reference.
 |---|---|---|
 | `@ctypes.*` | `ctypes` | load CDLL, all C scalar types, buffer, pointer, cast… |
 | `@array.*` | `array` | typed compact arrays — append, extend, insert, pop, slice… |
+
+### Configuration & Secrets
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@env.*` | `os.environ` | get, require, has, typed (`int`/`float`/`bool`/`list`/`json`), set, `.env` load/parse/save, **mask** (hide secrets), expand `$VAR` |
+| `@config.*` | `json`/`tomllib`/`configparser` | load, save, get, set, keys, dotenv, env |
+
+```clpy
+# Read configuration safely from the environment / a .env file
+@env.load[]                                 # auto-load ./.env
+@var[port; @env.int["PORT"; 8080]]          # typed, with a default
+@var[debug; @env.bool["DEBUG"]]             # 1/true/yes/on → True
+@var[key; @env.require["API_KEY"]]          # raises if missing
+@print[Using key {@env.mask[key]}]          # "ab••••••89" — safe to log
+```
 
 ### Utilities
 
@@ -1156,6 +1172,43 @@ methods. All four load together without conflicts:
 @var[amt; @money["3.14159"]]            # decimal.money → 2dp
 @var[ok; @is_private_ip["10.0.0.1"]]
 ```
+
+---
+
+## Bundled Plugins
+
+These ship in `mods/` and load automatically:
+
+### `@db.*` — multi-backend database (cruhon-db)
+
+SQLite, PostgreSQL, MySQL with full CRUD, transactions, and async — 170+
+commands. Now also env-aware connection, migrations, and seeding:
+
+```clpy
+@db.connect_env["DATABASE_URL"]        # DSN from the environment
+@db.migrate["./migrations"]            # apply *.sql files once, in order
+@db.seed["users"; "fixtures/users.json"]   # bulk-load JSON or CSV
+@print[Connected to {@db.dsn_safe[]}]  # DSN with the password masked
+```
+
+### `@panel.*` — live log-stream dashboard (cruhon-panel)
+
+A zero-dependency web panel that streams logs, metrics, and events to the
+browser over Server-Sent Events — pure standard library.
+
+```clpy
+@panel.start[8787]                     # → http://127.0.0.1:8787
+@panel.attach_logging["INFO"]          # mirror all @log.* output to the panel
+@log.info["server warming up"]         # …shows up live in the browser
+@panel.metric["users online"; 42]      # update a metric tile
+@panel.event["deploy"; {"version": "2.10"}]
+@panel.open[]                          # open the dashboard in a browser
+@panel.wait[]                          # keep the panel alive
+```
+
+### `@discord.*` — Discord bot toolkit (cruhon-discord)
+
+~60 commands for building bots — see `mods/cruhon-discord`.
 
 ---
 
