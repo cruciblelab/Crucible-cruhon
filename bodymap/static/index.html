@@ -454,7 +454,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 </div>
 
 <div id="limitBadge">⚠ FRAME LİMİTİ DOLDU</div>
-<div id="recBadge"><div id="recDot"></div><span id="recTime">REC 0s</span></div>
+<div id="recBadge"><div id="recDot"></div><span id="recTime">REC 0s</span><span id="recFaceCount" style="margin-left:6px;opacity:.75">0 yüz</span></div>
 
 <!-- VİEW GEÇİŞ -->
 <div id="viewRow">
@@ -1673,7 +1673,7 @@ function startSend(){
         else if (q.tooBlurry) showQualWarn('⚠ Görüntü bulanık — telefonu tuttur');
     }
     _waitResp=true;
-    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',0.65),orientation}));
+    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',0.82),orientation}));
   }, 50);
 }
 
@@ -1751,6 +1751,7 @@ function applyStats(s){
   $('modePill').textContent=(s.style||curStyle).toUpperCase();
   $('limitBadge').classList.toggle('vis',!!s.at_limit);
   $('kQuality').textContent=['Hızlı','Dengeli','Yüksek'][s.quality??1];
+  if(s.face_frames!=null) $('recFaceCount').textContent=s.face_frames+' yüz';
 
   if(s.recording!==recording){
     const wasRec=recording;

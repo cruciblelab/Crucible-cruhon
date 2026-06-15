@@ -247,7 +247,7 @@ class _HolisticResult:
 
 class HolisticRef:
     """FaceLandmarker + PoseLandmarker + HandLandmarker — Tasks API sarmalayıcısı."""
-    def __init__(self, complexity: int = 1, det_conf: float = 0.5, track_conf: float = 0.5):
+    def __init__(self, complexity: int = 1, det_conf: float = 0.35, track_conf: float = 0.35):
         self.complexity  = complexity
         self.det_conf    = det_conf
         self.track_conf  = track_conf
@@ -526,8 +526,8 @@ class Session:
         self.camera_profile: dict = {}
         # Donanım uyarlama durumu
         self.preprocess  = PreprocessPipeline()
-        self.det_conf    = 0.5   # MediaPipe algılama eşiği
-        self.track_conf  = 0.5   # MediaPipe takip eşiği
+        self.det_conf    = 0.35  # MediaPipe algılama eşiği
+        self.track_conf  = 0.35  # MediaPipe takip eşiği
         self.lm_radius   = 2     # Landmark nokta boyutu (piksel)
         # EMA stabilizasyon
         self.ema         = EMAFilter(alpha=0.35)
@@ -574,6 +574,8 @@ class Session:
         self.guided_pose_idx  = 0
         self.pose_hold_frames = 0
         self.pose_complete    = False
+        self._meas_accum.clear()
+        self._avg_measurements.clear()
         self.log("Sıfırlandı", "WARN")
 
     def fps(self) -> float:
@@ -814,6 +816,17 @@ def is_quality_frame(face_lms, pose_lms) -> bool:
         if np.mean(key) < 0.35:
             return False
     return True
+
+
+def write_ply_ascii(path: str, vertices: np.ndarray):
+    """trimesh gerektirmeden ASCII PLY nokta bulutu yaz — Blender/MeshLab'de açılır."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("ply\nformat ascii 1.0\n")
+        f.write(f"element vertex {len(vertices)}\n")
+        f.write("property float x\nproperty float y\nproperty float z\n")
+        f.write("end_header\n")
+        for x, y, z in vertices:
+            f.write(f"{x:.6f} {y:.6f} {z:.6f}\n")
 
 
 def build_wireframe_obj(pts_3d: np.ndarray, connections) -> str:
@@ -1118,7 +1131,8 @@ def draw_hud(frame: np.ndarray, sess: Session, detected: bool, fps: float):
         cv2.circle(frame, (w-112, 20), 7, (0,0,255), -1, cv2.LINE_AA)
         cv2.putText(frame, f"REC {elapsed:.0f}s", (w-185, 26),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.40, (30,80,255), 1, cv2.LINE_AA)
-        cv2.putText(frame, f"FRAME {sess.frame_count}/{MAX_FRAMES}",
+        face_cnt = len(sess.frames_xyz) if sess.frames_xyz else 0
+        cv2.putText(frame, f"YUZ {face_cnt}  FRAME {sess.frame_count}/{MAX_FRAMES}",
                     (10, h-10), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180,180,180), 1, cv2.LINE_AA)
         if sess.frame_count > MAX_FRAMES * 0.8:
             cv2.putText(frame, f"BELLEK DOLUYOR!", (w//2-70, h-10),
@@ -1237,21 +1251,39 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
                     log_cb(f"pose_{p_name}.ply ({len(frames)} frame)", "OK")
 
     elif session.frames_xyz:
-        log_cb("trimesh yok — OBJ/PLY atlandı. pip install trimesh", "WARN")
+        # trimesh yok — fallback: sade ASCII PLY ve OBJ yaz
+        stacked = np.stack(session.frames_xyz)
+        pts_med = np.median(stacked, axis=0)
+        pts_med -= pts_med.mean(axis=0)
+        write_ply_ascii(str(out / "face_pointcloud.ply"), pts_med)
+        log_cb(f"face_pointcloud.ply ({len(pts_med)} nokta, trimesh olmadan)", "OK")
+        wf_text = build_wireframe_obj(pts_med, list(_TESS))
+        with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
+            f.write(wf_text)
+        wf_cont = build_wireframe_obj(pts_med, list(_CONT))
+        with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
+            f.write(wf_cont)
+        log_cb("face_wireframe.obj + face_contour.obj hazır (trimesh olmadan)", "OK")
 
-    if session.pose_frames and HAS_TRIMESH:
+    if session.pose_frames:
         ps  = np.stack(session.pose_frames)
         pp  = np.median(ps, axis=0)
         pp -= pp.mean(axis=0)
-        trimesh.PointCloud(vertices=pp).export(str(out / "body_skeleton.ply"))
+        if HAS_TRIMESH:
+            trimesh.PointCloud(vertices=pp).export(str(out / "body_skeleton.ply"))
+        else:
+            write_ply_ascii(str(out / "body_skeleton.ply"), pp)
         log_cb(f"body_skeleton.ply: {len(pp)} nokta", "OK")
 
     for side, frames in [("left_hand", session.hand_l_frames), ("right_hand", session.hand_r_frames)]:
-        if frames and HAS_TRIMESH:
+        if frames:
             sh  = np.stack(frames)
             ph  = np.median(sh, axis=0)
             ph -= ph.mean(axis=0)
-            trimesh.PointCloud(vertices=ph).export(str(out / f"{side}.ply"))
+            if HAS_TRIMESH:
+                trimesh.PointCloud(vertices=ph).export(str(out / f"{side}.ply"))
+            else:
+                write_ply_ascii(str(out / f"{side}.ply"), ph)
             log_cb(f"{side}.ply hazır", "OK")
 
     # Tel kafes OBJ (renksiz kalıp/şablon)
@@ -1367,7 +1399,7 @@ async def health():
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     sess     = Session()
-    holistic = HolisticRef(complexity=0)  # lite: VDS CPU tasarrufu
+    holistic = HolisticRef(complexity=0, det_conf=0.35, track_conf=0.35)  # lite: VDS CPU tasarrufu
 
     sess.log("BodyMap bağlantısı kuruldu", "SYSTEM")
     face_ok = holistic._face_lm is not None
@@ -1484,6 +1516,14 @@ async def ws_endpoint(ws: WebSocket):
                     if handr_sm:
                         sess.hand_r_frames.append(hand_lms_to_xyz(handr_sm, w, h))
 
+                    # frame_count = kaydedilen kaliteli frame sayısı
+                    sess.frame_count += 1
+                    if sess.at_frame_limit():
+                        sess.recording = False
+                        sess.log(f"Frame limiti ({MAX_FRAMES} kaliteli frame) doldu — kayıt durdu", "WARN")
+                    elif sess.frame_count % 50 == 0:
+                        sess.log(f"Kayıt: {sess.frame_count} frame ({len(sess.frames_xyz)} yüz)", "INFO")
+
                 # Poz tespiti (guided mod)
                 pose_status = None
                 if sess.scan_mode == "guided" and sess.recording:
@@ -1525,12 +1565,6 @@ async def ws_endpoint(ws: WebSocket):
                 # Ölçüm geçmişine ekle (recording iken)
                 if sess.recording and measurements:
                     sess._meas_accum.append(measurements)
-
-                if sess.recording and not sess.at_frame_limit():
-                    sess.frame_count += 1
-                elif sess.recording and sess.at_frame_limit():
-                    sess.recording = False
-                    sess.log(f"Frame limiti ({MAX_FRAMES}) doldu — kayıt durdu", "WARN")
 
                 draw_hud(frame, sess, detected, fps)
 
@@ -1600,7 +1634,10 @@ async def ws_endpoint(ws: WebSocket):
 
                 elif cmd == "export":
                     if not sess.frames_xyz and not sess.pose_frames:
-                        sess.log("Export için önce kayıt yapın", "WARN")
+                        if sess.frame_count == 0:
+                            sess.log("Export için önce KAYIT butonuna basın", "WARN")
+                        else:
+                            sess.log(f"Kayıt yapıldı ama yüz/vücut tespit edilemedi ({sess.frame_count} frame). Işığı artırın ve kameraya bakın.", "WARN")
                     else:
                         ff = list(sess.frames_xyz); fp = list(sess.pose_frames)
                         fhl = list(sess.hand_l_frames); fhr = list(sess.hand_r_frames)
