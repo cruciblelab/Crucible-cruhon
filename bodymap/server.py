@@ -1212,14 +1212,24 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
     if session.frames_xyz and HAS_TRIMESH:
         stacked = np.stack(session.frames_xyz)
         # Medyan yüz mesh'i (frontal referans)
-        pts     = np.median(stacked, axis=0)
+        pts     = np.median(stacked, axis=0).astype(np.float64)
         pts    -= pts.mean(axis=0)
         tess    = list(_TESS)
-        tris    = np.array(_tris_from_tess(tess, len(pts)), dtype=np.int32)
-        mesh    = trimesh.Trimesh(vertices=pts, faces=tris, process=False)
-        mesh.export(str(out / "face_mesh.obj"))
-        mesh.export(str(out / "face_mesh.stl"))
-        log_cb(f"Yüz mesh: {len(pts)} vertex, {len(tris)} üçgen", "OK")
+        tri_list = _tris_from_tess(tess, len(pts))
+        try:
+            if tri_list:
+                tris = np.array(tri_list, dtype=np.int32).reshape(-1, 3)
+                mesh = trimesh.Trimesh(vertices=pts, faces=tris, process=False)
+                mesh.export(str(out / "face_mesh.obj"))
+                mesh.export(str(out / "face_mesh.stl"))
+                log_cb(f"Yüz mesh: {len(pts)} vertex, {len(tris)} üçgen", "OK")
+            else:
+                trimesh.PointCloud(vertices=pts).export(str(out / "face_mesh.obj"))
+                log_cb(f"Yüz nokta bulutu (mesh yok): {len(pts)} nokta", "OK")
+        except Exception as e:
+            log_cb(f"Mesh export hatası: {e}", "WARN")
+            trimesh.PointCloud(vertices=pts).export(str(out / "face_pointcloud_med.ply"))
+            log_cb(f"Fallback: face_pointcloud_med.ply ({len(pts)} nokta)", "OK")
 
         # Kabsch hizalamalı multi-view nokta bulutu
         if len(session.frames_xyz) > 5:
@@ -1304,35 +1314,42 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
             log_cb(f"Wireframe export hatası: {e}", "WARN")
 
     json_path = out / "landmarks.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(build_json_export(session), f, ensure_ascii=False, indent=2)
-    log_cb(f"landmarks.json ({json_path.stat().st_size//1024+1} KB)", "OK")
+    try:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(build_json_export(session), f, ensure_ascii=False, indent=2)
+        log_cb(f"landmarks.json ({json_path.stat().st_size//1024+1} KB)", "OK")
+    except Exception as e:
+        log_cb(f"JSON export hatası: {e}", "WARN")
+        json_path.write_text("{}", encoding="utf-8")
 
-    with open(out / "README.txt", "w", encoding="utf-8") as f:
-        f.write(f"BodyMap Tarama Raporu\n{'='*40}\n")
-        f.write(f"Tarih       : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Hedef       : {TARGETS[session.target]['name']}\n")
-        f.write(f"Stil        : {STYLES[session.style]['name']}\n")
-        f.write(f"Yüz frame   : {len(session.frames_xyz)}\n")
-        f.write(f"Vücut frame : {len(session.pose_frames)}\n")
-        f.write(f"Sol el      : {len(session.hand_l_frames)}\n")
-        f.write(f"Sağ el      : {len(session.hand_r_frames)}\n")
-        if session.camera_profile:
-            f.write(f"\nKamera Profili:\n")
-            for k, v in session.camera_profile.items():
-                f.write(f"  {k}: {v}\n")
-        f.write(f"\ntrimesh: {'VAR' if HAS_TRIMESH else 'YOK'}\n\n")
-        f.write("DOSYALAR:\n")
-        for fp in sorted(out.iterdir()):
-            f.write(f"  {fp.name:30s} {fp.stat().st_size//1024:5d} KB\n")
-        f.write("\nNOT: RGB kamera kullanıldı. Koordinatlar görecelidir.\n")
-        if session.px_per_cm > 0:
-            f.write(f"\nKALİBRASYON: {session.px_per_cm:.2f} px/cm\n")
-            f.write(f"  Omuz referans: {session.calib_shoulder_cm:.1f} cm\n")
-        f.write("\nYENİ DOSYALAR:\n")
-        f.write("  face_wireframe.obj  → Renksiz tel kafes (Blender/MeshLab)\n")
-        f.write("  face_contour.obj    → Yüz kontur hattı\n")
-        f.write("  rapor.html          → Tarayıcıda aç, PDF olarak kaydet\n")
+    try:
+        with open(out / "README.txt", "w", encoding="utf-8") as f:
+            f.write(f"BodyMap Tarama Raporu\n{'='*40}\n")
+            f.write(f"Tarih       : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Hedef       : {TARGETS.get(session.target, {}).get('name', session.target)}\n")
+            f.write(f"Stil        : {STYLES.get(session.style, {}).get('name', session.style)}\n")
+            f.write(f"Yüz frame   : {len(session.frames_xyz)}\n")
+            f.write(f"Vücut frame : {len(session.pose_frames)}\n")
+            f.write(f"Sol el      : {len(session.hand_l_frames)}\n")
+            f.write(f"Sağ el      : {len(session.hand_r_frames)}\n")
+            if session.camera_profile:
+                f.write(f"\nKamera Profili:\n")
+                for k, v in session.camera_profile.items():
+                    f.write(f"  {k}: {v}\n")
+            f.write(f"\ntrimesh: {'VAR' if HAS_TRIMESH else 'YOK'}\n\n")
+            f.write("DOSYALAR:\n")
+            for fp in sorted(out.iterdir()):
+                f.write(f"  {fp.name:30s} {fp.stat().st_size//1024:5d} KB\n")
+            f.write("\nNOT: RGB kamera kullanıldı. Koordinatlar görecelidir.\n")
+            if session.px_per_cm > 0:
+                f.write(f"\nKALİBRASYON: {session.px_per_cm:.2f} px/cm\n")
+                f.write(f"  Omuz referans: {session.calib_shoulder_cm:.1f} cm\n")
+            f.write("\nDOSYALAR:\n")
+            f.write("  face_wireframe.obj  — Renksiz tel kafes (Blender/MeshLab)\n")
+            f.write("  face_contour.obj    — Yuz kontur hatti\n")
+            f.write("  rapor.html          — Tarayicida ac, PDF olarak kaydet\n")
+    except Exception as e:
+        log_cb(f"README yazma hatası: {e}", "WARN")
 
     # HTML rapor (tarayıcıda PDF olarak kaydedilebilir)
     try:
@@ -1642,32 +1659,36 @@ async def ws_endpoint(ws: WebSocket):
                         ff = list(sess.frames_xyz); fp = list(sess.pose_frames)
                         fhl = list(sess.hand_l_frames); fhr = list(sess.hand_r_frames)
                         def _do_export():
-                            tmp = Session()
-                            tmp.frames_xyz    = ff
-                            tmp.pose_frames   = fp
-                            tmp.hand_l_frames = fhl
-                            tmp.hand_r_frames = fhr
-                            tmp.frame_count   = sess.frame_count
-                            tmp.target        = sess.target
-                            tmp.style         = sess.style
-                            tmp.camera_profile = dict(sess.camera_profile)
-                            tmp.scan_mode      = sess.scan_mode
-                            tmp.covered_sectors = set(sess.covered_sectors)
-                            tmp.px_per_cm      = sess.px_per_cm
-                            tmp.calib_shoulder_cm = sess.calib_shoulder_cm
-                            tmp._meas_accum    = list(sess._meas_accum)
-                            tmp._avg_measurements = {}
-                            zip_path = build_export(tmp, sess.log)
-                            if zip_path:
-                                try:
-                                    sess._log_q.put_nowait({
-                                        "type": "export_done",
-                                        "url":  f"/exports/{zip_path.name}",
-                                        "name": zip_path.name,
-                                        "size_kb": zip_path.stat().st_size // 1024,
-                                    })
-                                except _queue.Full:
-                                    pass
+                            try:
+                                tmp = Session()
+                                tmp.frames_xyz    = ff
+                                tmp.pose_frames   = fp
+                                tmp.hand_l_frames = fhl
+                                tmp.hand_r_frames = fhr
+                                tmp.frame_count   = sess.frame_count
+                                tmp.target        = sess.target
+                                tmp.style         = sess.style
+                                tmp.camera_profile = dict(sess.camera_profile)
+                                tmp.scan_mode      = sess.scan_mode
+                                tmp.covered_sectors = set(sess.covered_sectors)
+                                tmp.px_per_cm      = sess.px_per_cm
+                                tmp.calib_shoulder_cm = sess.calib_shoulder_cm
+                                tmp._meas_accum    = list(sess._meas_accum)
+                                tmp._avg_measurements = {}
+                                zip_path = build_export(tmp, sess.log)
+                                if zip_path:
+                                    try:
+                                        sess._log_q.put_nowait({
+                                            "type": "export_done",
+                                            "url":  f"/exports/{zip_path.name}",
+                                            "name": zip_path.name,
+                                            "size_kb": zip_path.stat().st_size // 1024,
+                                        })
+                                    except _queue.Full:
+                                        pass
+                            except Exception as _ex:
+                                sess.log(f"Export hatası: {_ex}", "ERR")
+                                logging.exception("Export thread çöktü")
                         threading.Thread(target=_do_export, daemon=True).start()
                         sess.log("Export başlatıldı (arka plan)…", "EXPORT")
 
