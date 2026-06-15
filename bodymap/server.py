@@ -1170,6 +1170,31 @@ def face_lms_to_xyz(lms, w, h) -> np.ndarray:
     return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
 
 
+def _order_loop(edges: list) -> list:
+    """Edge tuple listesinden döngüsel vertex sırası oluşturur (MediaPipe ring → sıralı indeks listesi)."""
+    if not edges:
+        return []
+    adj: dict = {}
+    for a, b in edges:
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+    start = min(adj)
+    path = [start]
+    prev = None
+    cur = start
+    for _ in range(len(adj)):
+        neighbors = [n for n in adj.get(cur, []) if n != prev]
+        if not neighbors:
+            break
+        nxt = neighbors[0]
+        if nxt == start and len(path) > 2:
+            break
+        path.append(nxt)
+        prev = cur
+        cur = nxt
+    return path
+
+
 def _poly_contains(pts_2d: np.ndarray, polygon: np.ndarray) -> np.ndarray:
     """
     Vektörleştirilmiş ray-casting: polygon içinde kalan nokta maskeleri.
@@ -1476,7 +1501,7 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
                     p_name = GUIDED_POSES[p_idx]["id"]
                     pmed   = np.median(np.stack(frames), axis=0).astype(np.float64)
                     pmed  -= pmed.mean(0)
-                    pf = _face_delaunay_tris(pmed)
+                    pf = _face_front_tris(pmed, solid=False)
                     if len(pf) > 0:
                         trimesh.Trimesh(vertices=pmed, faces=pf, process=False).export(
                             str(out / f"pose_{p_name}.ply"))
