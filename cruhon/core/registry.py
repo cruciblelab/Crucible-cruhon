@@ -30,7 +30,7 @@ _LIBS: dict[str, str] = {
     "datetime":    "datetime",
     "re":          "re",
     "pathlib":     "pathlib",
-    "asyncio":     "asyncio",
+    "asyncio":     _BUILTIN,     # @asyncio.* — event loop, tasks, async primitives
     "typing":      "typing",
     "dataclasses": "dataclasses",
     "http":        "requests",   # @import[http] → import requests
@@ -154,6 +154,14 @@ _LIBS: dict[str, str] = {
     "errno":       _BUILTIN,     # @errno.* — OS error-code helpers
     "linecache":   _BUILTIN,     # @linecache.* — cached source-line retrieval
     "numbers":     _BUILTIN,     # @numbers.* — numeric-tower ABC checks
+    # New in v2.9.0 — async, encoding, color, FFI, code analysis, tooling
+    "codecs":      _BUILTIN,     # @codecs.* — codec encode/decode (rot13, hex, zlib, …)
+    "colorsys":    _BUILTIN,     # @colorsys.* — RGB ↔ HSV/HLS/YIQ color conversions
+    "ctypes":      _BUILTIN,     # @ctypes.* — foreign function interface (C libs)
+    "tokenize":    _BUILTIN,     # @tokenize.* — Python source tokenizer
+    "zipapp":      _BUILTIN,     # @zipapp.* — create runnable ZIP archives
+    "runpy":       _BUILTIN,     # @runpy.* — run modules/scripts dynamically
+    "pdb":         _BUILTIN,     # @pdb.* — Python debugger integration
 }
 
 # Lib method call handlers: (namespace, method) → Python code generator
@@ -412,6 +420,14 @@ def _register_stdlib():
     from .libs.errno_       import register as _r_errno
     from .libs.linecache_   import register as _r_linecache
     from .libs.numbers_     import register as _r_numbers
+    from .libs.asyncio_     import register as _r_asyncio
+    from .libs.codecs_      import register as _r_codecs
+    from .libs.colorsys_    import register as _r_colorsys
+    from .libs.ctypes_      import register as _r_ctypes
+    from .libs.tokenize_    import register as _r_tokenize
+    from .libs.zipapp_      import register as _r_zipapp
+    from .libs.runpy_       import register as _r_runpy
+    from .libs.pdb_         import register as _r_pdb
     _r_file()
     _r_time()
     _r_date()
@@ -523,5 +539,13 @@ def _register_stdlib():
     _r_errno()
     _r_linecache()
     _r_numbers()
+    _r_asyncio()
+    _r_codecs()
+    _r_colorsys()
+    _r_ctypes()
+    _r_tokenize()
+    _r_zipapp()
+    _r_runpy()
+    _r_pdb()
 
 _register_stdlib()

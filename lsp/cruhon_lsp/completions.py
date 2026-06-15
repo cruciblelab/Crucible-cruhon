@@ -212,6 +212,15 @@ NAMESPACES: dict[str, tuple[str, list[str]]] = {
     "errno":      ("OS error-code helpers",    ["name", "description", "code", "all", "ENOENT", "EEXIST", "EACCES", "EPERM", "ENOTEMPTY", "EINVAL", "EBADF"]),
     "linecache":  ("Cached source lines",      ["line", "lines", "count", "check", "clear"]),
     "numbers":    ("Numeric-tower ABC checks", ["is_number", "is_complex", "is_real", "is_rational", "is_integral"]),
+    # New in v2.9.0
+    "asyncio":    ("Async I/O and event loop", ["run", "sleep", "gather", "wait_for", "task", "cancel", "done", "result", "all_tasks", "current_task", "shield", "ensure", "loop", "new_loop", "set_loop", "run_loop", "close_loop", "lock", "event", "condition", "semaphore", "queue", "open", "serve", "timeout", "iscoroutine", "isfuture", "istask"]),
+    "codecs":     ("Codec encode/decode",      ["encode", "decode", "encode_err", "decode_err", "rot13", "hex", "unhex", "zip", "unzip", "lookup", "name", "open", "reader", "writer"]),
+    "colorsys":   ("Color system conversions", ["to_hsv", "from_hsv", "to_hls", "from_hls", "to_yiq", "from_yiq", "hex_to_rgb", "rgb_to_hex", "hex_to_hsv", "hex_to_hls", "luminance", "blend"]),
+    "ctypes":     ("Foreign function interface", ["load", "load_win", "load_util", "libc", "c_int", "c_uint", "c_long", "c_ulong", "c_float", "c_double", "c_bool", "c_char", "c_char_p", "c_void_p", "c_size_t", "c_wchar_p", "create_buf", "create_wbuf", "string_at", "wstring_at", "memmove", "memset", "byref", "pointer", "addressof", "sizeof", "cast", "pointer_type", "val", "set_val"]),
+    "tokenize":   ("Python source tokenizer",  ["tokens", "names", "strings", "numbers", "comments", "ops", "keywords", "type", "string", "start", "end", "line", "NAME", "OP", "NUMBER", "STRING", "COMMENT", "NEWLINE", "INDENT", "DEDENT", "tok_name", "untokenize", "count", "unique_names"]),
+    "zipapp":     ("ZIP application archives", ["create", "interpreter", "main", "is_archive", "copy"]),
+    "runpy":      ("Dynamic module execution", ["module", "module_ns", "is_module", "path", "path_ns", "find", "result"]),
+    "pdb":        ("Python debugger",          ["bp", "breakpoint", "pm", "run", "runeval", "runcall", "new", "set_bp", "clear_bp", "clear_all", "list_bps"]),
 }
 
 

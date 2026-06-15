@@ -64,4 +64,4 @@ def test_handler_produces_valid_expression(namespace, method, handler):
 
 def test_handler_count_is_substantial():
     # Sanity check that the registry actually loaded a large surface area.
-    assert len(_LIB_CALLS) > 800
+    assert len(_LIB_CALLS) > 1800
