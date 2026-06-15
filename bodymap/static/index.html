@@ -1649,12 +1649,19 @@ function connectWS(){
 }
 
 const cap2d=document.createElement('canvas').getContext('2d'), capC=cap2d.canvas;
+let _waitResp=false;
 function startSend(){
   clearInterval(sendIv);
+  _waitResp=false;
   sendIv=setInterval(()=>{
     if(!ws||ws.readyState!==1) return;
+    if(_waitResp) return; // bir önceki yanıt gelene kadar bekle
     const v=$('video'); if(v.readyState<2) return;
-    capC.width=v.videoWidth||640; capC.height=v.videoHeight||480;
+    // Max 640px — daha büyük gönderme (VDS CPU tasarrufu)
+    const MAX=640;
+    const scale=Math.min(1, MAX/(v.videoWidth||640));
+    capC.width=Math.round((v.videoWidth||640)*scale);
+    capC.height=Math.round((v.videoHeight||480)*scale);
     cap2d.drawImage(v,0,0,capC.width,capC.height);
     const orientation=imuAvailable?{yaw:imuYaw,pitch:imuPitch,roll:imuRoll}:null;
     frameCount++;
@@ -1665,13 +1672,15 @@ function startSend(){
         else if (q.tooBright) showQualWarn('⚠ Çok parlak — güneşten uzaklaş');
         else if (q.tooBlurry) showQualWarn('⚠ Görüntü bulanık — telefonu tuttur');
     }
-    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',jpegQuality),orientation}));
-  }, sendInterval);
+    _waitResp=true;
+    ws.send(JSON.stringify({type:'frame',data:capC.toDataURL('image/jpeg',0.65),orientation}));
+  }, 50);
 }
 
 function onMsg(e){
   const m=JSON.parse(e.data);
   if(m.type==='frame'){
+    _waitResp=false;
     $('camOut').src=m.data;
     if(videoRecording) _recImgEl.src=m.data;
     applyStats(m.stats);

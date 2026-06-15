@@ -75,7 +75,7 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-VERSION = "tasks-v4"  # Çalışan sürümü doğrulamak için
+VERSION = "tasks-v5"
 
 # ══════════════════════════════════════════════════════════════════
 #  PATHS
@@ -344,7 +344,7 @@ class HolisticRef:
         else:
             logging.warning(f"Model eksik: {hand_path}")
 
-    def process(self, rgb: np.ndarray) -> _HolisticResult:
+    def process(self, rgb: np.ndarray, target: str = "full") -> _HolisticResult:
         ts  = self._next_ts()
         out = _HolisticResult()
 
@@ -355,7 +355,10 @@ class HolisticRef:
             logging.warning(f"mp.Image oluşturulamadı: {e}")
             return out
 
-        if self._face_lm:
+        need_face = target in ("face", "full")
+        need_body = target in ("body", "full")
+
+        if need_face and self._face_lm:
             try:
                 fr = self._face_lm.detect_for_video(img, ts)
                 if fr.face_landmarks:
@@ -363,7 +366,7 @@ class HolisticRef:
             except Exception as e:
                 logging.warning(f"face detect: {e}")
 
-        if self._pose_lm:
+        if need_body and self._pose_lm:
             try:
                 pr = self._pose_lm.detect_for_video(img, ts)
                 if pr.pose_landmarks:
@@ -373,7 +376,7 @@ class HolisticRef:
             except Exception as e:
                 logging.warning(f"pose detect: {e}")
 
-        if self._hand_lm:
+        if need_body and self._hand_lm:
             try:
                 hr = self._hand_lm.detect_for_video(img, ts)
                 for i, hlist in enumerate(hr.handedness):
@@ -1364,7 +1367,7 @@ async def health():
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     sess     = Session()
-    holistic = HolisticRef(complexity=1)
+    holistic = HolisticRef(complexity=0)  # lite: VDS CPU tasarrufu
 
     sess.log("BodyMap bağlantısı kuruldu", "SYSTEM")
     face_ok = holistic._face_lm is not None
@@ -1412,7 +1415,7 @@ async def ws_endpoint(ws: WebSocket):
                 # Ön-işlem: sadece MediaPipe girişine uygulanır, gösterim karesi etkilenmez
                 mp_frame = sess.preprocess.apply(frame)
                 rgb = cv2.cvtColor(mp_frame, cv2.COLOR_BGR2RGB)
-                res = holistic.process(rgb)
+                res = holistic.process(rgb, sess.target)
 
                 # EMA stabilizasyon — smoothed wrapper'lar oluştur
                 def _smooth(key, mp_lms):
