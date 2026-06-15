@@ -1170,10 +1170,10 @@ def face_lms_to_xyz(lms, w, h) -> np.ndarray:
     return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
 
 
-def _face_delaunay_tris(pts_3d: np.ndarray) -> np.ndarray:
+def _face_delaunay_tris(pts_3d: np.ndarray, max_edge_factor: Optional[float] = 0.12) -> np.ndarray:
     """
     2D Delaunay ile yüz landmark üçgenlemesi.
-    Büyük (yüz dışı / arka plan) üçgenleri filtreler.
+    max_edge_factor=None → filtreleme yok (tamamen dolu yüzey).
     Döner: (N, 3) int32 yüz indeksleri; scipy yoksa kenar-tabanlı fallback.
     """
     pts_2d = pts_3d[:, :2].astype(np.float64)
@@ -1187,10 +1187,13 @@ def _face_delaunay_tris(pts_3d: np.ndarray) -> np.ndarray:
             return np.zeros((0, 3), dtype=np.int32)
         return np.array(tri_list, dtype=np.int32).reshape(-1, 3)
 
+    if max_edge_factor is None:
+        return np.array(simplices, dtype=np.int32)
+
     # Yüz sınırı dışındaki büyük üçgenleri çıkar
-    w_span = float(pts_2d[:, 0].ptp())
-    h_span = float(pts_2d[:, 1].ptp())
-    max_edge = max(w_span, h_span) * 0.12  # yüz genişliğinin %12'si
+    w_span = float(np.ptp(pts_2d[:, 0]))
+    h_span = float(np.ptp(pts_2d[:, 1]))
+    max_edge = max(w_span, h_span) * max_edge_factor
 
     valid = []
     for tri in simplices:
@@ -1206,6 +1209,96 @@ def _face_delaunay_tris(pts_3d: np.ndarray) -> np.ndarray:
     if not valid:
         return np.zeros((0, 3), dtype=np.int32)
     return np.array(valid, dtype=np.int32)
+
+
+def _order_loop(edges) -> list:
+    """Kenar listesinden sıralı kapalı döngü (oval halka) çıkar."""
+    from collections import defaultdict
+    adj = defaultdict(list)
+    for a, b in edges:
+        adj[a].append(b)
+        adj[b].append(a)
+    if not adj:
+        return []
+    start = min(adj.keys())
+    loop = [start]
+    prev, cur = None, start
+    for _ in range(len(adj) + 2):
+        nxt = None
+        for n in adj[cur]:
+            if n != prev:
+                nxt = n
+                break
+        if nxt is None or nxt == start:
+            break
+        loop.append(nxt)
+        prev, cur = cur, nxt
+    return loop
+
+
+def build_head_mesh(face_pts: np.ndarray, n_rings: int = 12):
+    """
+    Yakalanan yüzü (478 nokta) tam bir kafa yapısına entegre eder.
+    Ön yüz = gerçek yüz mesh'i; arka = pürüzsüz kafatası kubbesi.
+    Döner: (vertices (M,3), faces (F,3)) — kapalı (watertight) katı model.
+    """
+    pts = np.asarray(face_pts, dtype=np.float64)
+    V = [pts[i].copy() for i in range(len(pts))]
+    faces: list = []
+
+    # 1) Ön yüz — tamamen dolu Delaunay yüzeyi (göz/ağız boşlukları kapalı)
+    front = _face_delaunay_tris(pts, max_edge_factor=None)
+    faces.extend(front.tolist())
+
+    # 2) Yüz oval halkası (sıralı)
+    ring0 = _order_loop(list(_OVAL))
+    if len(ring0) < 8:
+        # Oval bulunamazsa sadece ön yüzü döndür
+        return np.asarray(V), np.asarray(faces, dtype=np.int32)
+    N = len(ring0)
+    ring_pts = pts[ring0]
+    C = ring_pts.mean(axis=0)
+    z_oval = float(ring_pts[:, 2].mean())
+
+    # Kafa derinliği — yüz boyutuna oranlı (kafa, yüzden biraz daha derin)
+    fw = float(np.ptp(pts[:, 0]))
+    fh = float(np.ptp(pts[:, 1]))
+    head_depth = max(fw, fh) * 1.25
+
+    # 3) Arka kubbe — oval halkayı geriye doğru süpür (yarım elipsoid)
+    prev_ring = list(ring0)
+    for j in range(1, n_rings):
+        t = j / n_rings
+        ang = t * (math.pi / 2.0)
+        rscale = math.cos(ang)          # XY küçülür
+        zoff = -head_depth * math.sin(ang)  # geriye gider (-Z = arka)
+        cur_ring = []
+        for i in range(N):
+            p = ring_pts[i]
+            nx = C[0] + (p[0] - C[0]) * rscale
+            ny = C[1] + (p[1] - C[1]) * rscale
+            nz = z_oval + zoff
+            V.append(np.array([nx, ny, nz]))
+            cur_ring.append(len(V) - 1)
+        # Halkaları dörtgen→üçgen ile bağla
+        for i in range(N):
+            i2 = (i + 1) % N
+            a, an = prev_ring[i], prev_ring[i2]
+            b, bn = cur_ring[i], cur_ring[i2]
+            faces.append([a, b, bn])
+            faces.append([a, bn, an])
+        prev_ring = cur_ring
+
+    # 4) Arka kutup — son halkayı tek noktaya kapat
+    pole = np.array([C[0], C[1], z_oval - head_depth])
+    V.append(pole)
+    pole_idx = len(V) - 1
+    for i in range(N):
+        i2 = (i + 1) % N
+        faces.append([prev_ring[i], pole_idx, prev_ring[i2]])
+
+    return np.asarray(V), np.asarray(faces, dtype=np.int32)
+
 
 def pose_lms_to_xyz(lms, w, h) -> np.ndarray:
     return np.array([[lm.x*w, -lm.y*h, -lm.z*w*0.5] for lm in lms.landmark], dtype=np.float32)
@@ -1253,8 +1346,32 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         pts     = np.median(stacked, axis=0).astype(np.float64)
         pts    -= pts.mean(axis=0)
 
-        # ── Delaunay üçgen mesh (yüzey, trimesh ile) ──
+        # ── TAM KAFA MODELİ (yüz + arka kafatası, kapalı katı) ──
         if HAS_TRIMESH:
+            try:
+                hv, hf = build_head_mesh(pts)
+                head = trimesh.Trimesh(vertices=hv, faces=hf, process=True)
+                head.merge_vertices()
+                head.fix_normals()
+                try:
+                    head.fill_holes()
+                except Exception:
+                    pass
+                # Hafif yumuşatma — dikiş izlerini gider, yüz detayını korur
+                try:
+                    import trimesh.smoothing as _sm
+                    _sm.filter_humphrey(head, alpha=0.1, beta=0.5, iterations=4)
+                except Exception:
+                    pass
+                head.export(str(out / "head_model.obj"))
+                head.export(str(out / "head_model.ply"))
+                head.export(str(out / "head_model.stl"))
+                wt = "su geçirmez" if head.is_watertight else "açık"
+                log_cb(f"head_model (TAM KAFA): {len(head.vertices)} vertex, {len(head.faces)} üçgen [{wt}]", "OK")
+            except Exception as e:
+                log_cb(f"Kafa modeli hatası: {e}", "WARN")
+
+            # ── Sadece ön yüz mesh'i (detaylı, göz/ağız açık) ──
             try:
                 faces = _face_delaunay_tris(pts)
                 if len(faces) > 0:
@@ -1263,9 +1380,8 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
                     mesh.export(str(out / "face_mesh.ply"))
                     log_cb(f"face_mesh.obj / face_mesh.ply: {len(pts)} vertex, {len(faces)} üçgen", "OK")
                 else:
-                    pcd = trimesh.PointCloud(vertices=pts)
-                    pcd.export(str(out / "face_mesh.ply"))
-                    log_cb(f"face_mesh.ply (nokta bulutu, üçgen bulunamadı): {len(pts)} nokta", "WARN")
+                    trimesh.PointCloud(vertices=pts).export(str(out / "face_mesh.ply"))
+                    log_cb(f"face_mesh.ply (nokta bulutu): {len(pts)} nokta", "WARN")
             except Exception as e:
                 log_cb(f"Mesh export hatası: {e}", "WARN")
 
@@ -1373,10 +1489,13 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
             if session.px_per_cm > 0:
                 f.write(f"\nKALİBRASYON: {session.px_per_cm:.2f} px/cm\n")
                 f.write(f"  Omuz referans: {session.calib_shoulder_cm:.1f} cm\n")
-            f.write("\nDOSYALAR:\n")
-            f.write("  face_wireframe.obj  — Renksiz tel kafes (Blender/MeshLab)\n")
-            f.write("  face_contour.obj    — Yuz kontur hatti\n")
-            f.write("  rapor.html          — Tarayicida ac, PDF olarak kaydet\n")
+            f.write("\nONEMLI DOSYALAR:\n")
+            f.write("  head_model.ply/.obj/.stl — TAM KAFA MODELI (yuz + arka kafatasi,\n")
+            f.write("                             kapali kati model — Blender/MeshLab ile ac)\n")
+            f.write("  face_mesh.ply/.obj       — Sadece on yuz yuzeyi (detayli)\n")
+            f.write("  face_wireframe.obj       — Renksiz tel kafes\n")
+            f.write("  face_contour.obj         — Yuz kontur hatti\n")
+            f.write("  rapor.html               — Tarayicida ac, PDF olarak kaydet\n")
     except Exception as e:
         log_cb(f"README yazma hatası: {e}", "WARN")
 

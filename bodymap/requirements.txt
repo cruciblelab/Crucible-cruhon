@@ -3,6 +3,8 @@ uvicorn[standard]
 opencv-python-headless
 mediapipe
 numpy
+scipy
 trimesh
+networkx
 python-multipart
 websockets
