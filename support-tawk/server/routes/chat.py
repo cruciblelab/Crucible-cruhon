@@ -1,0 +1,169 @@
+from __future__ import annotations
+import json
+import asyncio
+from datetime import datetime
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from ..database import Conversation, Message, Agent
+from ..ws_manager import manager
+from ..config import config
+from ..ai_handler import handle_ai_reply
+
+router = APIRouter()
+
+
+def _msg_dict(msg: Message) -> dict:
+    return {
+        "id": msg.id,
+        "sender_type": msg.sender_type,
+        "sender_name": msg.sender_name,
+        "content": msg.content,
+        "file_url": msg.file_url,
+        "file_name": msg.file_name,
+        "created_at": msg.created_at.isoformat(),
+    }
+
+
+def _conv_dict(conv: Conversation) -> dict:
+    return {
+        "id": conv.id,
+        "visitor_id": conv.visitor_id,
+        "visitor_name": conv.visitor_name,
+        "visitor_email": conv.visitor_email,
+        "status": conv.status,
+        "assigned_to": conv.assigned_to_id,
+        "page_url": conv.page_url,
+        "created_at": conv.created_at.isoformat(),
+        "updated_at": conv.updated_at.isoformat(),
+    }
+
+
+@router.websocket("/ws/visitor/{visitor_id}")
+async def visitor_ws(ws: WebSocket, visitor_id: str):
+    await manager.connect_visitor(visitor_id, ws)
+    conv = Conversation.get_or_none(
+        Conversation.visitor_id == visitor_id,
+        Conversation.status != "closed"
+    )
+    if not conv:
+        conv = Conversation.create(
+            visitor_id=visitor_id,
+            status="open",
+            site_name=config.site.name,
+        )
+        await manager.broadcast_to_agents({
+            "type": "new_conversation",
+            "conversation": _conv_dict(conv),
+        })
+
+    # Send history
+    history = list(conv.messages.order_by(Message.created_at))
+    await ws.send_text(json.dumps({
+        "type": "history",
+        "messages": [_msg_dict(m) for m in history],
+        "conversation_id": conv.id,
+        "config": {
+            "color": config.chat.widget_color,
+            "welcome_message": config.chat.welcome_message,
+            "site_name": config.site.name,
+            "agents_online": manager.agent_count() > 0,
+        }
+    }, ensure_ascii=False))
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            data = json.loads(raw)
+            msg_type = data.get("type", "message")
+
+            if msg_type == "message":
+                content = str(data.get("content", "")).strip()
+                if not content:
+                    continue
+                if len(content) > config.limits.max_message_length:
+                    content = content[:config.limits.max_message_length]
+
+                visitor_name = data.get("visitor_name", conv.visitor_name) or "Ziyaretçi"
+                visitor_email = data.get("visitor_email", conv.visitor_email) or ""
+                page_url = data.get("page_url", conv.page_url) or ""
+
+                if conv.visitor_name != visitor_name or conv.page_url != page_url:
+                    Conversation.update(
+                        visitor_name=visitor_name,
+                        visitor_email=visitor_email,
+                        page_url=page_url,
+                        updated_at=datetime.utcnow()
+                    ).where(Conversation.id == conv.id).execute()
+                    conv.visitor_name = visitor_name
+
+                msg = Message.create(
+                    conversation=conv,
+                    sender_type="visitor",
+                    sender_id=visitor_id,
+                    sender_name=visitor_name,
+                    content=content,
+                )
+
+                payload = {
+                    "type": "message",
+                    "conversation_id": conv.id,
+                    "message": _msg_dict(msg),
+                }
+
+                await manager.broadcast_to_watchers(conv.id, payload)
+                await manager.broadcast_to_agents({**payload, "visitor_name": visitor_name})
+
+                # AI auto-reply if no agent assigned and AI enabled
+                if conv.status == "open" and config.ai.enabled and config.ai.auto_reply:
+                    asyncio.create_task(_ai_reply(conv, msg))
+
+            elif msg_type == "typing":
+                await manager.broadcast_to_watchers(conv.id, {
+                    "type": "visitor_typing",
+                    "conversation_id": conv.id,
+                })
+
+            elif msg_type == "read":
+                Message.update(is_read=True).where(
+                    Message.conversation == conv,
+                    Message.sender_type != "visitor"
+                ).execute()
+
+    except WebSocketDisconnect:
+        manager.disconnect_visitor(visitor_id)
+        await manager.broadcast_to_agents({
+            "type": "visitor_offline",
+            "conversation_id": conv.id if conv else None,
+            "visitor_id": visitor_id,
+        })
+
+
+async def _ai_reply(conv: Conversation, trigger_msg: Message):
+    await asyncio.sleep(1.2)
+    # Re-check if agent took over while we waited
+    fresh = Conversation.get_by_id(conv.id)
+    if fresh.status == "assigned":
+        return
+    reply_text = await handle_ai_reply(conv, trigger_msg.content)
+    if not reply_text:
+        return
+    msg = Message.create(
+        conversation=conv,
+        sender_type="bot",
+        sender_name="Destek Botu",
+        content=reply_text,
+    )
+    payload = {
+        "type": "message",
+        "conversation_id": conv.id,
+        "message": {
+            "id": msg.id,
+            "sender_type": "bot",
+            "sender_name": "Destek Botu",
+            "content": reply_text,
+            "file_url": "",
+            "file_name": "",
+            "created_at": msg.created_at.isoformat(),
+        }
+    }
+    await manager.send_to_visitor(conv.visitor_id, payload)
+    await manager.broadcast_to_watchers(conv.id, payload)
