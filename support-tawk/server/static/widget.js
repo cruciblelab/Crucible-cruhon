@@ -483,6 +483,12 @@
     state.ws.onopen = function () {
       state.reconnect_attempts = 0;
       statusEl.textContent = "Bağlandı";
+      // Send current page
+      state.ws.send(JSON.stringify({
+        type: "page_view",
+        url: window.location.href,
+        title: document.title,
+      }));
     };
 
     state.ws.onmessage = function (evt) {
@@ -499,6 +505,17 @@
       statusEl.textContent = "Hata";
     };
   }
+
+  window.addEventListener("popstate", function() {
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify({ type: "page_view", url: window.location.href, title: document.title }));
+    }
+  });
+  window.addEventListener("hashchange", function() {
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify({ type: "page_view", url: window.location.href, title: document.title }));
+    }
+  });
 
   function scheduleReconnect() {
     if (state.reconnect_attempts >= 8) return;
@@ -572,6 +589,9 @@
         data.messages.forEach(appendMsg);
       }
       scrollBottom();
+      if (data.config && !data.config.agents_online) {
+        appendSystemMsg("Şu an tüm temsilciler çevrimdışı. Mesaj bırakabilir veya bekleyebilirsiniz.");
+      }
 
     } else if (data.type === "message") {
       appendMsg(data.message);
@@ -600,6 +620,19 @@
 
     } else if (data.type === "conversation_assigned") {
       statusEl.textContent = "Bağlandı";
+    } else if (data.type === "messages_read") {
+      messagesEl.querySelectorAll(".st-msg.visitor .st-read-status").forEach(function(el) {
+        el.textContent = "✓✓";
+        el.style.color = "#22c55e";
+      });
+    } else if (data.type === "agent_online") {
+      statusEl.textContent = "Çevrimiçi";
+      // If in wait mode, switch to chat
+      if (state.waiting) {
+        state.waiting = false;
+        waitMode.style.display = "none";
+        showChat();
+      }
     }
   }
 
@@ -654,6 +687,14 @@
       time.className = "st-time";
       time.textContent = formatTime(msg.created_at);
       div.appendChild(time);
+    }
+
+    if (msg.sender_type === "visitor") {
+      var readStatus = document.createElement("div");
+      readStatus.className = "st-read-status";
+      readStatus.textContent = msg.is_read ? "✓✓" : "✓";
+      if (msg.is_read) readStatus.style.color = "#22c55e";
+      div.appendChild(readStatus);
     }
 
     messagesEl.appendChild(div);
