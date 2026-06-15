@@ -4,9 +4,207 @@ All notable changes are documented here.
 
 ---
 
-## v2.7.0 (current) — Type Annotations, Transpile Cache, REPL Polish
+## v2.9.0 (current) — Async, FFI, Color Math, Tokenizer, Debugger
+
+8 new namespaces · 131 new handler methods · 3999 tests
+
+### New namespaces
+
+| Namespace | Wraps | What you can do |
+|---|---|---|
+| `@asyncio.*` | `asyncio` | Run coroutines (`run`, `gather`, `wait_for`), create tasks, async primitives (lock, event, semaphore, queue), open async connections, `asyncio.timeout` context manager |
+| `@codecs.*` | `codecs` | ROT-13, hex codec, zlib codec encode/decode, named codec encode/decode with error handlers, `getreader`/`getwriter` stream wrappers |
+| `@colorsys.*` | `colorsys` | RGB ↔ HSV, RGB ↔ HLS, RGB ↔ YIQ — plus hex helpers (`hex_to_rgb`, `rgb_to_hex`, `hex_to_hsv`, `hex_to_hls`), perceptual luminance, linear color blend |
+| `@ctypes.*` | `ctypes` | Load C libraries (`CDLL`, `load_util`), all C scalar types (`c_int`, `c_double`, `c_char_p`, …), buffer creation, pointer/byref/cast ops, `sizeof`, raw memory (`memmove`, `memset`) |
+| `@tokenize.*` | `tokenize` | Tokenize Python source strings — list all tokens or filter by category (`names`, `keywords`, `comments`, `ops`, `numbers`, `strings`), token type constants, `untokenize`, `unique_names` |
+| `@zipapp.*` | `zipapp` | Create runnable `.pyz` ZIP archives (`create` with optional main entry and interpreter), inspect `interpreter`, test `is_archive`, copy archives |
+| `@runpy.*` | `runpy` | Run any Python module as `__main__` (`module`, `module_ns`), run a script file (`path`, `path_ns`), check if a module exists (`is_module`), `find` spec |
+| `@pdb.*` | `pdb` | Set breakpoints (`bp`, `set_bp`), post-mortem analysis (`pm`), run code under debugger (`run`, `runeval`, `runcall`), create `Pdb` instances |
+
+### Handler count: 1690 → 1822
+
+---
+
+## v2.8.0 — Major stdlib Expansion (49 New Namespaces)
+
+49 new namespaces · ~900 new handler methods · 3807 tests
+
+### New namespaces by category
+
+**Text & Math**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@textwrap.*` | `textwrap` | wrap, fill, shorten, dedent, indent, columns |
+| `@getpass.*` | `getpass` | password, user, terminal |
+| `@cmath.*` | `cmath` | Complex sqrt, exp, log, polar, rect, phase, pi, e, inf, nan |
+| `@array.*` | `array` | Typed compact arrays — append, extend, insert, pop, remove, set, slice, from_file, to_file |
+
+**OS & System**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@gc.*` | `gc` | collect, enable/disable, count, threshold, get_objects, freeze |
+| `@inspect.*` | `inspect` | signature, members, source, isfunction, isclass, stack, annotations |
+| `@traceback.*` | `traceback` | format, print, format_exc, extract_tb, extract_stack |
+| `@warnings.*` | `warnings` | warn, ignore, error, once, always, simplefilter, resetwarnings |
+| `@weakref.*` | `weakref` | ref, proxy, finalize, deref, is_alive, WeakValueDictionary |
+| `@types.*` | `types` | new_class, SimpleNamespace, MappingProxy, is_function, FunctionType |
+| `@abc.*` | `abc` | abstract, abstractmethod, isabstract, ABC, ABCMeta |
+| `@signal.*` | `signal` | handler, send, alarm, pause, getsignal, SIGINT, SIGTERM |
+| `@mmap.*` | `mmap` | read, slice, find, open (writable), seek, put, flush, close |
+| `@atexit.*` | `atexit` | register, unregister, handlers |
+| `@locale.*` | `locale` | setlocale, getlocale, format_number, currency, strxfrm |
+| `@gettext.*` | `gettext` | translation, gettext, ngettext, bindtextdomain |
+| `@argparse.*` | `argparse` | new, add, run, run_known, parse, parse_dict, to_dict |
+| `@sysconfig.*` | `sysconfig` | get_path, get_config_var, get_platform, variables |
+| `@resource.*` | `resource` | getrlimit, setrlimit, getrusage, RLIMIT_CPU, RLIMIT_AS, utime |
+
+**Networking**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@socket.*` | `socket` | hostname, connect, server, tcp, udp, send, recv, bind, accept |
+| `@ssl.*` | `ssl` | wrap, client_context, server_context, load_cert, verify_mode |
+| `@ftp.*` | `ftplib` | connect, login, list, download, upload, rename, mkdir, passive |
+| `@pop3.*` | `poplib` | connect, list, retrieve, delete, stat, top, uidl |
+| `@xmlrpc.*` | `xmlrpc.client` | client, call, multi_call, fault |
+| `@httpserver.*` | `http.server` | serve, threaded, serve_async, stop, close, port |
+| `@selectors.*` | `selectors` | new, watch_read, watch_write, wait, count, modify, unwatch |
+
+**HTML & Web**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@html.*` | `html` / `re` | escape, unescape, strip_tags, text, links, images, tags |
+| `@webbrowser.*` | `webbrowser` | open, open_new, open_tab, get, controller |
+| `@mimetypes.*` | `mimetypes` | guess, guess_ext, is_text, charset, known |
+
+**Concurrency**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@multiprocessing.*` | `multiprocessing` | cpus, pool, map, starmap, apply, process, queue, pipe, value |
+| `@futures.*` | `concurrent.futures` | threads, processes, submit, result, map, wait_first, as_done |
+| `@sched.*` | `sched` | new (uses `time.time`/`time.sleep`), run, after, at, cancel |
+
+**Testing & Profiling**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@timeit.*` | `timeit` | time, repeat, stmt, auto |
+| `@profile.*` | `cProfile` | run, sort, stats, dump, top, cumulative |
+| `@doctest.*` | `doctest` | run, testmod, testfile, verbose |
+| `@unittest.*` | `unittest` | run, discover, assert_equal, assert_true, mock, patch |
+
+**Developer Tools**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@ast.*` | `ast` | parse, dump, unparse, walk, names, functions, classes, is_valid |
+| `@dis.*` | `dis` | bytecode, instructions, opnames, consts, varnames, stack_size |
+| `@keyword.*` | `keyword` | iskeyword, issoftkeyword, all, kwlist |
+| `@importlib.*` | `importlib` | import_module, reload, find_spec, source_hash |
+| `@graphlib.*` | `graphlib` | sort, is_dag, ancestors, roots, leaves |
+| `@reprlib.*` | `reprlib` | repr, shorten, maxstring, maxlist, maxdict |
+| `@tracemalloc.*` | `tracemalloc` | start, stop, snapshot, top, compare, peak |
+
+**File Management & Utilities**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@shutil.*` | `shutil` | copy, move, tree, rmtree, disk_usage, which, make_archive |
+| `@filecmp.*` | `filecmp` | equal, shallow, dircmp, same_files, diff_files |
+| `@configparser.*` | `configparser` | load, new, get, set, sections, save |
+| `@errno.*` | `errno` | name, description, code, ENOENT, EEXIST, EACCES |
+| `@linecache.*` | `linecache` | line, lines, count, check, clear |
+| `@numbers.*` | `numbers` | is_number, is_complex, is_real, is_rational, is_integral |
+
+**Database & Serialization**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@sqlite.*` | `sqlite3` | open, execute, fetchall, commit, tables, columns, transaction |
+| `@pickle.*` | `pickle` | dump, load, dumps, loads, to_file, from_file, copy |
+| `@shelve.*` | `shelve` | open, get, set, delete, keys, items, sync |
+| `@plist.*` | `plistlib` | dumps, loads, to_file, from_file |
+
+**File & Path (expanded)**
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@glob.*` | `glob` | glob, iglob, recursive, fnmatch |
+| `@tempfile.*` | `tempfile` | file, dir, named, mkstemp, mkdtemp |
+| `@fnmatch.*` | `fnmatch` | match, filter, translate |
+| `@fileinput.*` | `fileinput` | lines, input, filename, lineno |
+| `@stat.*` | `stat` | mode_str, is_file, is_dir, is_link, permissions |
+
+### Safety net test
+
+New parametrized test (`test_handlers_compile.py`) verifies every registered
+handler produces valid Python syntax for at least one arity. Async handlers
+(`await ...`) are validated by wrapping in `async def`.
+
+---
+
+## v2.7.0 — Type Annotations, Transpile Cache, REPL Polish
 
 ### Type system
+
+Type annotations are now first-class in the language — no `@raw` required.
+
+| Syntax | Emits |
+|---|---|
+| `@var[x: int; 42]` | `x: int = 42` |
+| `@var[x: int]` | `x: int` (annotation-only) |
+| `@const[LIMIT: int; 100]` | `LIMIT: int = 100  # const` |
+| `@func[f; a: int; b: str; return=bool]` | `def f(a: int, b: str) -> bool:` |
+| `@type[Vector; list[float]]` | `Vector = list[float]  # type alias` |
+| `@dataclass[Point] ... @end` | `@dataclass` decorated class block |
+
+```clpy
+@var[score: float; 0.0]
+@const[MAX: int; 100]
+@type[Matrix; list[list[float]]]
+
+@dataclass[Point]
+    x: float = 0.0
+    y: float = 0.0
+@end
+
+@func[distance; p: Point; q: Point; return=float]
+    @return[((p.x - q.x)**2 + (p.y - q.y)**2) ** 0.5]
+@end
+```
+
+### Transpile cache
+
+Cruhon now skips re-parsing and re-transpiling files that have not changed.
+The cache is written to `.cruhon_cache/` and invalidated automatically when
+the source, dependencies, Cruhon version, or Python version changes.
+
+- Binary format — marshal'd code objects with a `CRUHON\x00CACHE\x00V1` magic header
+- Atomic writes — temp-file + `os.replace` prevents torn reads
+- `cruhon cache` — show stats (file count, total bytes, cache dir)
+- `cruhon cache --clear` — delete all cache files
+- `--no-cache` / `run_file(no_cache=True)` — bypass for one run
+
+### REPL improvements
+
+- **Persistent history** — `~/.cruhon_history` survives across sessions
+- **Tab completion** — completes `@commands` and `:meta-commands`
+- **`:history [n]`** — show the last n REPL inputs (default 20)
+- **`:load <file.clpy>`** — run a `.clpy` file from the REPL
+- **`:type <expr>`** — show the Python type of a value
+
+### Bug fixes
+
+- **Multiple inheritance** — `@class[Dog; Animal; Serializable]` now correctly emits all parents
+- **`try`/`except`/`else`** — `@else` between `@catch` and `@finally` is now parsed and emitted
+
+### Tests: 1556 (+82 from v2.6.0)
+
+
 
 Type annotations are now first-class in the language — no `@raw` required.
 

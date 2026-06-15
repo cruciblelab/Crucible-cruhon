@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · v2.6.0
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.9.0**
 
 ---
 
@@ -12,10 +12,12 @@ indented block syntax with a uniform `@command[args]` syntax, making scripts
 easier to read and write — especially for automation, tooling, and data tasks.
 
 Every Cruhon program is valid Python under the hood. You can always inspect
-what Python gets generated with `cruhon run --show-python`.
+the generated Python with `cruhon run --show-python`.
 
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
+
+**127 stdlib namespaces · 1822+ built-in commands · 3999 tests**
 
 ---
 
@@ -61,10 +63,9 @@ cruhon run hello.clpy
 | `cruhon run file.clpy` | Run a script |
 | `cruhon run file.clpy --show-python` | Show generated Python before running |
 | `cruhon run file.clpy --watch` | Re-run automatically when `.clpy` files change |
-| `cruhon run file.clpy --log cruhon.log [--log-level DEBUG]` | Write Cruhon's diagnostics to a log file |
-| `cruhon repl` | Start an interactive session (`:help`, `:vars`, `:clear`, `:quit`) |
+| `cruhon run file.clpy --log cruhon.log [--log-level DEBUG]` | Write diagnostics to a log file |
+| `cruhon repl` | Start an interactive session (`:help`, `:vars`, `:history`, `:load`, `:type`, `:clear`, `:quit`) |
 | `cruhon docs` | List plugins that ship a command reference |
-| `cruhon docs discord` | Show a plugin's full command reference |
 | `cruhon fmt file.clpy` | Normalize indentation (writes the file) |
 | `cruhon fmt file.clpy --check` | Exit non-zero if not formatted (CI-friendly) |
 | `cruhon fmt file.clpy --stdout` | Print formatted result without writing |
@@ -74,7 +75,9 @@ cruhon run hello.clpy
 | `cruhon new myproject` | Create a new project scaffold |
 | `cruhon new --plugin myplugin` | Create a plugin scaffold in `mods/myplugin/` |
 | `cruhon libs` | List all supported libraries |
-| `cruhon mods` | Show loaded plugins, exposed APIs, block commands, overrides |
+| `cruhon mods` | Show loaded plugins, APIs, block commands, overrides |
+| `cruhon cache` | Show transpile cache stats |
+| `cruhon cache --clear` | Clear the transpile cache |
 | `cruhon --version` | Show version |
 
 ---
@@ -109,6 +112,34 @@ Named parameters work everywhere:
 ```clpy
 @http.post["https://api.example.com/ban"; reason="spam"; days=7]
 ```
+
+### Type Annotations
+
+Type annotations are first-class — no `@raw` required:
+
+```clpy
+@var[score: float; 0.0]
+@const[LIMIT: int; 100]
+@type[Matrix; list[list[float]]]
+
+@dataclass[Point]
+    x: float = 0.0
+    y: float = 0.0
+@end
+
+@func[distance; p: Point; q: Point; return=float]
+    @return[((p.x - q.x)**2 + (p.y - q.y)**2) ** 0.5]
+@end
+```
+
+| Syntax | Emits |
+|---|---|
+| `@var[x: int; 42]` | `x: int = 42` |
+| `@var[x: int]` | `x: int` (annotation-only) |
+| `@const[LIMIT: int; 100]` | `LIMIT: int = 100  # const` |
+| `@func[f; a: int; b: str; return=bool]` | `def f(a: int, b: str) -> bool:` |
+| `@type[Vector; list[float]]` | `Vector = list[float]  # type alias` |
+| `@dataclass[Point] ... @end` | `@dataclass` decorated class block |
 
 ### Output and Input
 
@@ -151,11 +182,7 @@ Use `{varname}` inside any value to embed a variable:
 @repeat[5]
     @print[hello]
 @end
-```
 
-Break and continue:
-
-```clpy
 @for[i; range(10)]
     @if[i == 5]
         @break
@@ -164,6 +191,28 @@ Break and continue:
         @continue
     @end
     @print[{i}]
+@end
+```
+
+### Pattern Matching (Python 3.10+)
+
+```clpy
+@match[status]
+    @case[200]
+        @print[OK]
+    @case[404]
+        @print[Not Found]
+    @default
+        @print[Unknown status]
+@end
+
+@match[command.split()]
+    @case[["quit"]]
+        @print[Quitting]
+    @case[["go"; direction]]
+        @print[Going {direction}]
+    @default
+        @print[Unknown command]
 @end
 ```
 
@@ -182,9 +231,12 @@ Async functions:
 
 ```clpy
 @async[main]
-    @await[asyncio.sleep(1)]
-    @print[Done!]
+    @var[res; @http.async_get["https://example.com"]]
+    @var[data; @http.json[res]]
+    @print[Got {len(data)} bytes]
 @end
+
+@asyncio.run[main()]
 ```
 
 Async for and async with:
@@ -221,6 +273,14 @@ Async for and async with:
 dog.speak()
 ```
 
+Multiple inheritance:
+
+```clpy
+@class[Cat; Animal; Serializable; JsonMixin]
+    ...
+@end
+```
+
 ### Error Handling
 
 ```clpy
@@ -228,18 +288,34 @@ dog.speak()
     @var[x; int("bad")]
 @catch[e]
     @print[Error: {e}]
+@else
+    @print[no error]
 @finally
     @print[done]
 @end
 
-# Raise exceptions
 @raise[ValueError; "invalid input"]
 
-# Re-raise inside @catch
 @try
     risky_call()
 @catch[e]
     @raise
+@end
+```
+
+Retry and timeout:
+
+```clpy
+@retry[3]
+    risky_api_call()
+@end
+
+@retry[5; requests.ConnectionError]
+    risky_api_call()
+@end
+
+@timeout[30]
+    slow_operation()
 @end
 ```
 
@@ -251,74 +327,51 @@ dog.speak()
     @print[{content}]
 @end
 
-# Without binding
 @with[lock]
     do_work()
 @end
 ```
 
-### Pattern Matching (Python 3.10+)
+### Templates and Pipelines
 
 ```clpy
-@match[status]
-    @case[200]
-        @print[OK]
-    @case[404]
-        @print[Not Found]
-    @default
-        @print[Unknown status]
+@template[greeting]
+    Hello, {name}! You have {count} messages.
 @end
 
-# Structural patterns work too
-@match[command.split()]
-    @case[["quit"]]
-        @print[Quitting]
-    @case[["go"; direction]]
-        @print[Going {direction}]
-    @default
-        @print[Unknown command]
-@end
+@var[msg; @render[greeting; name="Alice"; count=5]]
+@print[{msg}]
+
+@pipeline[normalize; str.strip; str.lower]
+@var[result; @apply[normalize; "  Hello  "]]   # "hello"
 ```
 
-### Delete Variables
+### Multi-variable assignment and spread
+
+```clpy
+@let[x; 10; y; 20; z; 30]
+
+@var[n; @spread[max; [3, 1, 4, 1, 5]]]      # max(*[...]) → 5
+@var[r; @unpack[dict; {"a": 1, "b": 2}]]    # dict(**{...})
+```
+
+### Other Commands
 
 ```clpy
 @del[x]
 @del[a; b; c]
-```
-
-### Assertions
-
-```clpy
 @assert[x > 0; "x must be positive"]
-```
-
-### Environment Variables
-
-```clpy
 @var[home; @env[HOME]]
-@var[port; @env[PORT; 8080]]   # with default
-```
-
-### Imports
-
-```clpy
+@var[port; @env[PORT; 8080]]
 @import[requests]
-@import[requests; req]   # with alias
-```
-
-### Include Other Files
-
-```clpy
+@import[requests; req]
 @include[utils.clpy]
-@include[../shared/helpers.clpy]
+@swap[a; b]
+@inc[counter]
+@dec[counter; 5]
 ```
-
-Circular includes are detected and raise a runtime error.
 
 ### Raw Python Blocks
-
-Use `@raw` to pass Python code through unchanged — no Cruhon processing:
 
 ```clpy
 @raw
@@ -331,13 +384,11 @@ Use `@raw` to pass Python code through unchanged — no Cruhon processing:
 ### Collections
 
 ```clpy
-@var[lst; @list[1; 2; 3]]                        # [1, 2, 3]
-@var[d; @dict["name"; "Alice"; "age"; 30]]        # {"name": "Alice", "age": 30}
+@var[lst; @list[1; 2; 3]]
+@var[d; @dict["name"; "Alice"; "age"; 30]]
 ```
 
 ### Multi-line Expressions
-
-Expressions can span multiple lines inside parentheses, brackets, or braces:
 
 ```clpy
 @var[result; max(
@@ -357,9 +408,8 @@ Expressions can span multiple lines inside parentheses, brackets, or braces:
 
 ## Errors & Diagnostics
 
-When something goes wrong, Cruhon shows **more** than Python — not a flat
-traceback, but the exact line, a caret under the problem, a plain-language
-hint, and a spelling suggestion:
+When something goes wrong, Cruhon shows the exact line, a caret under the
+problem, a plain-language hint, and a spelling suggestion:
 
 ```
 ✗ NameError  greet.clpy:3
@@ -374,432 +424,366 @@ hint, and a spelling suggestion:
         If you meant text, wrap it in quotes: "price".
 ```
 
-`cruhon check file.clpy` shows the same rich excerpt for syntax errors,
-without running the script. Color auto-disables for pipes, files, and when
-`NO_COLOR` is set.
+`cruhon check file.clpy` shows the same rich excerpt for syntax errors without
+running the script. Color auto-disables for pipes and when `NO_COLOR` is set.
 
-### Logging Cruhon's diagnostics to a file (no code changes)
-
-Any user can route Cruhon's own diagnostics to a log file — purely via
-environment variables or a CLI flag, no script edits required:
+### Logging
 
 ```bash
-# Environment variables
-CRUHON_LOG=cruhon.log cruhon run app.clpy          # write to cruhon.log
-CRUHON_LOG=1 cruhon run app.clpy                    # write to ./cruhon.log
+# Cruhon engine diagnostics
+CRUHON_LOG=cruhon.log cruhon run app.clpy
 CRUHON_LOG_LEVEL=DEBUG CRUHON_LOG=cruhon.log cruhon run app.clpy
-
-# Or with CLI flags
 cruhon run app.clpy --log cruhon.log --log-level DEBUG
 ```
 
-Levels: `ERROR`, `WARNING`, `INFO` (default), `DEBUG`. At `DEBUG` the log also
-captures the source, the generated Python, run timings, and the full
-diagnostic plus Python traceback for every run.
+Levels: `ERROR`, `WARNING`, `INFO` (default), `DEBUG`.
 
-> This is Cruhon's **engine** diagnostics. For your **script's own**
-> application logging (to any file you choose), use the `@log.*` library —
-> e.g. `@log.setup["DEBUG"; "app.log"]`.
+For **script-level** application logging use `@log.*`:
+
+```clpy
+@log.setup["DEBUG"; "app.log"]
+@log.info["Application started"]
+@log.warning["Something looks off"]
+@log.error["Critical failure"]
+```
+
+### Transpile Cache
+
+Cruhon caches compiled output in `.cruhon_cache/`. Re-runs of unchanged
+scripts skip parsing entirely.
+
+```bash
+cruhon cache          # show stats
+cruhon cache --clear  # delete cache
+cruhon run app.clpy --no-cache  # bypass for one run
+```
 
 ---
 
 ## Value Semantics
 
-Cruhon has two evaluation contexts:
-
 **`expr` context** — right-hand sides of `@var`, `@const`, `@return`, etc.:
 - `"text"` → string literal
 - `42`, `3.14` → numeric literal
 - `True`, `False`, `None` → Python literal
-- `[...]`, `{...}`, `(...)` → collection literal, passed through
-- Expression with operator/call/dot → passed through as Python expression
+- `[...]`, `{...}`, `(...)` → collection or expression, passed through
+- Expression with operator / call / dot → passed through as Python expression
 - Single identifier → Python variable reference
-- Bare text (anything else) → string literal
+- Bare text → string literal
 
 **`display` context** — `@print`, `@assert` message:
 - Same as `expr`, except a **single identifier becomes a string literal**
 - Use `{varname}` for variable interpolation
 
-```clpy
-@var[x; 42]           # x = 42
-@var[name; "Alice"]   # name = "Alice"
-@var[copy; name]      # copy = name        (variable reference)
-@var[msg; hi there]   # msg = "hi there"   (bare text → string)
-
-@print[hello]         # print("hello")     (single word → string in display)
-@print[{x}]           # print(f"{x}")      (interpolation)
-@print[x = {x}]       # print(f"x = {x}")
-```
-
-See [`spec/semantics.md`](spec/semantics.md) for the full specification.
-
 ---
 
 ## Context Variables (`@ctx`)
 
-`__ctx__` is a shared dict available throughout script execution. Plugins use
-it to pass data into block bodies. Scripts can read and write it directly.
+`__ctx__` is a shared dict available throughout script execution.
 
 ```clpy
 @ctx.set["username"; "Alice"]
-@ctx.set["score"; 100]
-
-@var[u; @ctx["username"]]            # read with inline expression
-@var[u; @ctx["username"; "guest"]]   # with default
-
-@var[s; @ctx.get["score"]]
-@ctx.clear[]
+@var[u; @ctx.get["username"]]
+@var[u; @ctx.get["username"; "guest"]]
 @ctx.delete["score"]
+@ctx.clear[]
 
-# Stack-based scope (for nested blocks)
+# Stack-based scope
 @ctx.push[]
     @ctx.set["x"; "inner"]
-    @print[{@ctx["x"]}]   # inner
+    @print[{@ctx["x"]}]
 @ctx.pop[]
-@print[{@ctx["x"]}]       # outer
 ```
 
 ---
 
-## Standard Libraries (55 namespaces, 1100+ commands)
-
-See [`library.md`](library.md) for the complete reference.
-
-### HTTP (`@http.*`) — GET, POST, upload, auth
-
-```clpy
-@var[res; @http.get["https://api.example.com/data"]]
-@var[body; @http.json[res]]
-@var[status; @http.status[res]]
-
-@var[res; @http.post["https://api.example.com/items"; {"name": "test"}]]
-@var[res; @http.auth_post["https://api.example.com"; data; "user"; "pass"]]
-@http.upload["https://example.com/upload"; "file"; "document.pdf"]
-@var[elapsed; @http.elapsed[res]]
-
-@async[main]
-    @var[res; @http.async_get["https://example.com"]]
-@end
-```
-
-### File (`@file.*`) — read, write, copy, touch, symlink, stat
-
-```clpy
-@var[content; @file.read["data.txt"]]
-@file.write["output.txt"; content]
-@file.append["log.txt"; "new line\n"]
-@file.touch["newfile.txt"]
-@file.symlink["target.txt"; "link.txt"]
-@file.copy["a.txt"; "b.txt"]
-@var[stats; @file.stat["data.txt"]]
-@var[files; @file.glob["*.txt"]]
-```
-
-### Date (`@date.*`) — format, parse, arithmetic, timezone, calendar
-
-```clpy
-@var[now; @date.now[]]
-@var[formatted; @date.format[@date.now[]; "%Y-%m-%d %H:%M"]]
-@var[parsed; @date.parse["2024-01-15"; "%Y-%m-%d"]]
-@var[future; @date.add[@date.now[]; days=7; hours=2]]
-@var[gap; @date.diff_days[future; @date.now[]]]
-@var[tz_time; @date.to_timezone[@date.utcnow[]; "US/Eastern"]]
-@var[week; @date.isoweek[@date.today[]]]
-```
-
-### Text (`@text.*`) — regex, encode, case, split, partition, slug
-
-```clpy
-@var[upper; @text.upper["hello"]]
-@var[parts; @text.split["a,b,c"; ","]]
-@var[before; @text.partition["foo-bar"; "-"]]
-@var[slug; @text.slug["Hello World!"]]
-@var[replaced; @text.sub["pattern"; "replacement"; "text"]]
-@var[encoded; @text.encode["hello"]]
-@var[is_digit; @text.is_numeric["123"]]
-```
-
-### Crypto (`@crypto.*`) — hash, hmac, pbkdf2, scrypt, token, UUID, base64
-
-```clpy
-@var[digest; @crypto.sha256["password"]]
-@var[token; @crypto.token[32]]
-@var[derived; @crypto.pbkdf2["password"; "salt"; 100000]]
-@var[hashed; @crypto.scrypt["password"; "salt"]]
-@var[id; @crypto.uuid[]]
-@var[encoded; @crypto.b64_encode["data"]]
-```
-
-### Log (`@log.*`) — structured logging with file handlers, levels, formatters
-
-This is for **your script's own** application logging:
-
-```clpy
-@log.setup["INFO"]
-@log.info["Application started"]
-@log.warning["Warning message"]
-@log.error["Error occurred"]
-@log.to_file["app.log"]
-@var[logger; @log.get["myapp"]]
-logger.debug("detail")
-```
-
-To write your application log straight to a file with one line:
-
-```clpy
-@log.setup["DEBUG"; "app.log"]     # level + file in one call
-@log.info["written to app.log"]
-```
-
-### Config (`@config.*`) — JSON, TOML, INI, env
-
-```clpy
-@var[data; @config.load["config.json"]]
-@var[value; @config.get["config.json"; "database"; "host"]]
-@config.set["config.json"; "debug"; True]
-@var[env_var; @config.env["DATABASE_URL"]]
-@config.dotenv[".env"]
-```
-
-### Shell (`@shell.*`) — run commands, control processes, manage environment
-
-```clpy
-@var[result; @shell.run["ls -la"]]
-@var[output; @shell.output["echo hello"]]
-@var[lines; @shell.lines["ls"]]
-@var[proc; @shell.bg["sleep 10"]]
-@shell.kill[proc]
-@shell.wait[proc]
-@var[username; @shell.username[]]
-@var[cpu_count; @shell.cpu_count[]]
-```
-
-### Archive (`@archive.*`) — zip, tar, gzip, bzip2, lzma
-
-```clpy
-@archive.zip["data/"; "data.zip"]
-@archive.unzip["data.zip"; "extracted/"]
-@archive.tar["data/"; "data.tar.gz"]
-@archive.bzip2["file.txt"; "file.bz2"]
-@archive.lzma["file.txt"; "file.xz"]
-@var[names; @archive.zip_list["data.zip"]]
-```
-
-### Mail (`@mail.*`) — send/receive SMTP/IMAP
-
-```clpy
-@mail.send["user@example.com"; "Subject"; "Body"]
-@mail.send_html["user@example.com"; "Subject"; "<h1>HTML</h1>"]
-@var[imap; @mail.imap_connect["imap.gmail.com"; "user@gmail.com"; "password"]]
-@var[folders; @mail.imap_list[imap]]
-@var[ids; @mail.imap_search[imap; "UNSEEN"]]
-@var[msg; @mail.imap_fetch[imap; id]]
-@mail.imap_close[imap]
-```
-
-### More: JSON, Math, Time, Color, Store, CSV
-
-```clpy
-@var[text; @json.stringify[data]]
-@var[r; @math.sqrt[16.0]]
-@time.sleep[2]
-@print[@color.green["Success!"]]
-@store.set["key"; "value"]
-@var[rows; @csv.read["data.csv"]]
-```
-
-### Python stdlib wrappers (20 namespaces, new in v2.1)
-
-Direct, one-line access to the most-used Python standard libraries:
-
-```clpy
-# Randomness & sampling
-@var[n; @random.randint[1; 100]]
-@var[pick; @random.choice[items]]
-@random.shuffle[deck]
-
-# Collections & iterators
-@var[counts; @collections.Counter["aabbc"]]
-@var[q; @collections.deque[[1, 2, 3]]]
-@var[combos; @itertools.combinations[items; 2]]
-@var[flat; @itertools.flatten[nested]]
-
-# Functional tools
-@var[total; @functools.reduce[lambda a, b: a + b; nums]]
-@var[add2; @functools.partial[add; 2]]
-
-# Statistics
-@var[avg; @statistics.mean[data]]
-@var[mid; @statistics.median[data]]
-@var[sd; @statistics.stdev[data]]
-
-# Encoding & URLs
-@var[enc; @base64.encode["hello"]]
-@var[safe; @url.quote["a b c"]]
-@var[qs; @url.encode[{"q": "cats"}]]
-
-# Heaps, bisect, operator
-@heapq.heapify[lst]
-@var[lo; @bisect.bisect_left[sorted_lst; 5]]
-@var[by_age; @operator.itemgetter[1]]
-
-# System, IO, copy, pretty-print
-@var[args; @sys.argv[]]
-@var[buf; @io.StringIO[]]
-@var[clone; @copy.deepcopy[obj]]
-@var[pretty; @pprint.format[data]]
-```
-
-Full set: `@random` `@collections` `@itertools` `@functools` `@sys` `@io`
-`@copy` `@base64` `@url` `@statistics` `@contextlib` `@enum` `@dataclasses`
-`@typing` `@threading` `@queue` `@heapq` `@bisect` `@operator` `@pprint`.
-
-### More stdlib wrappers (5 namespaces, new in v2.2)
-
-```clpy
-# Strings & templates
-@var[chars; @string.ascii_letters[]]
-@var[msg; @string.substitute["Hi $name"; {"name": "Bob"}]]
-@var[id; @string.random[12]]
-
-# Binary packing
-@var[data; @struct.pack[">I"; 42]]
-@var[vals; @struct.unpack[">I"; data]]
-
-# Compression & checksums
-@var[c; @zlib.compress[big_text]]
-@var[sum; @zlib.crc32_hex["abc"]]
-
-# Calendar math
-@var[leap; @calendar.is_leap[2024]]
-@var[days; @calendar.days_in_month[2024; 2]]
-
-# Email messages
-@var[m; @email.make["Hi"; "a@b.com"; "c@d.com"; "Hello!"]]
-@var[ok; @email.valid_address["x@y.com"]]
-```
-
-New set: `@string` `@struct` `@zlib` `@calendar` `@email`.
-
-### Data & format wrappers (10 namespaces, new in v2.4)
-
-```clpy
-# XML
-@var[root; @xml.from_string["<a><b>hi</b></a>"]]
-@var[txt; @xml.find_text[root; "b"]]
-
-# TOML (read)
-@var[cfg; @toml.loads["port = 8080"]]
-
-# Fuzzy matching & diffs
-@var[score; @diff.ratio["color"; "colour"]]
-@var[best; @diff.best_match["colur"; ["color", "flavor"]]]
-
-# Exact arithmetic (no float error)
-@var[total; @decimal.add["0.1"; "0.2"]]   # → 0.3 exactly
-@var[third; @fraction.make[1; 3]]          # → 1/3
-
-# Networking, platform, text
-@var[priv; @ip.is_private["10.0.0.1"]]     # → True
-@var[os; @platform.system[]]
-@var[clean; @unicode.strip_accents["café"]]  # → "cafe"
-@var[args; @shlex.split["echo hello world"]]
-```
-
-New set: `@xml` `@toml` `@diff` `@decimal` `@fraction` `@ip` `@platform`
-`@unicode` `@binascii` `@shlex`.
-
-### Media & regex wrappers (4 namespaces, new in v2.5)
-
-```clpy
-# Regex (re module — no @import needed)
-@var[m; @re.search["(\d+)"; "price: 42"]]
-@var[n; @re.group1[m]]                         # "42"
-@var[all; @re.findall["\w+"; "hello world"]]   # ["hello", "world"]
-@var[out; @re.sub["[aeiou]"; "*"; "hello"]]    # "h*ll*"
-
-# YAML (PyYAML)
-@var[data; @yaml.loads["name: Alice\nage: 30"]]
-@var[name; @yaml.get[data; "name"]]            # "Alice"
-@var[text; @yaml.dumps[data]]
-
-# Image (Pillow)
-@var[img; @image.open["photo.png"]]
-@var[w; @image.width[img]]
-@var[resized; @image.resize[img; 800; 600]]
-@image.save[resized; "resized.png"]
-
-# PDF (pdfplumber)
-@var[doc; @pdf.open["report.pdf"]]
-@var[pages; @pdf.page_count[doc]]
-@var[text; @pdf.text[doc]]                     # all text
-@var[pg1; @pdf.text_of[doc; 0]]               # page 0 only
-```
-
-New set: `@re` `@yaml` `@image` `@pdf`.
-
-### Shortcut plugins — shorter syntax for everything
-
-Four configurable shortcut plugins let you drop the namespace prefix on common
-operations and add hundreds of extra convenience methods. All four load
-together without conflicts:
-
-```clpy
-# cruhon-shortcuts (base — every namespace)
-@var[text; @read["notes.txt"]]            # @read → @file.read
-@var[stamp; @now[]]                        # @now → @date.now
-@var[id; @uuid[]]                          # @uuid → @crypto.uuid
-
-# cruhon-shortcuts-pro (math / lists / dicts / text / logic)
-@var[x; @clamp[value; 0; 100]]             # @clamp → @math.clamp
-@var[slug; @snake_case["Hello World"]]     # @snake_case → @text.snake_case
-@var[g; @group_by[items; key_fn]]          # @group_by → @collections.group_by
-
-# cruhon-shortcuts-data (xml / toml / diff / decimal / fraction / ip / …)
-@var[cfg; @toml_load["port = 8080"]]       # @toml_load → @toml.loads
-@var[amt; @money["3.14159"]]               # @money → @decimal.money (2 dp)
-@var[ok; @is_private_ip["10.0.0.1"]]       # @is_private_ip → @ip.is_private
-# cruhon-shortcuts-data also covers @re, @yaml, @image, @pdf (v2.5 namespaces)
-```
-
-Each plugin is fully configurable in its `mod.json` — pick groups, toggle
-global vs. method aliases, disable specific shortcuts, or add your own.
-
-See [`library.md`](library.md) for the full reference on all 1100+ commands.
+## Standard Libraries — 127 Namespaces
+
+All namespaces are available without `@import`. Just call them directly.
+See [`library.md`](library.md) for the complete method reference.
+
+### Core (Cruhon-native)
+
+| Namespace | What it does |
+|---|---|
+| `@file.*` | Read, write, copy, move, glob, mkdir, stat, symlink, chmod… |
+| `@date.*` | now, format, parse, add, diff, timezone, ISO, weekday… |
+| `@text.*` | upper, lower, split, replace, regex, slug, encode, partition… |
+| `@http.*` | GET, POST, PUT, DELETE, upload, auth, async variants… |
+| `@crypto.*` | SHA-256/512, hmac, pbkdf2, scrypt, UUID, token, base64… |
+| `@log.*` | setup, info, warning, error, to_file, get, child, formatter… |
+| `@config.*` | load, save, get, set, keys, dotenv, env (JSON/TOML/INI)… |
+| `@shell.*` | run, output, lines, bg, kill, wait, env, cpu_count… |
+| `@archive.*` | zip, unzip, tar, gzip, bzip2, lzma and all their inverses… |
+| `@mail.*` | send, send_html, IMAP connect/search/fetch, SMTP login… |
+| `@csv.*` | read, write, filter, to_json, append… |
+| `@store.*` | set, get, all, clear, delete (in-memory key-value) |
+| `@color.*` | red, green, blue, yellow, bold, dim, reset… |
+| `@ctx.*` | set, get, push, pop, clear, delete |
+| `@json.*` | load, dump |
+
+### Text & Math
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@math.*` | `math` | sqrt, floor, ceil, pow, log, sin/cos/tan, gcd, clamp… |
+| `@random.*` | `random` | randint, choice, shuffle, sample, gauss, seed… |
+| `@cmath.*` | `cmath` | Complex sqrt, exp, log, polar, rect, phase… |
+| `@decimal.*` | `decimal` | Exact arithmetic: add, sub, mul, div, round, compare… |
+| `@fraction.*` | `fractions` | make, add, sub, mul, div, simplify, to_float… |
+| `@statistics.*` | `statistics` | mean, median, mode, stdev, variance, correlation… |
+| `@textwrap.*` | `textwrap` | wrap, fill, indent, dedent, shorten, columns… |
+| `@string.*` | `string` | ascii_letters, digits, punctuation, capwords, template… |
+| `@unicode.*` | `unicodedata` | name, category, normalize, NFC/NFD, strip_accents… |
+| `@colorsys.*` | `colorsys` | RGB↔HSV, RGB↔HLS, RGB↔YIQ, hex helpers, luminance, blend |
+| `@codecs.*` | `codecs` | rot13, hex, zlib codec, encode/decode, stream wrappers… |
+
+### Data & Formats
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@collections.*` | `collections` | Counter, defaultdict, deque, namedtuple, OrderedDict… |
+| `@itertools.*` | `itertools` | chain, cycle, product, combinations, groupby, flatten… |
+| `@functools.*` | `functools` | reduce, partial, lru_cache, wraps, singledispatch… |
+| `@operator.*` | `operator` | add, sub, mul, itemgetter, attrgetter, lt, gt, and_… |
+| `@xml.*` | `xml.etree.ElementTree` | parse, find, findall, text, attr, children, to_string… |
+| `@toml.*` | `tomllib` | loads, load, dumps, get, has, keys, to_dict… |
+| `@yaml.*` | `pyyaml` | loads, dumps, load_file, dump_file, get, keys… |
+| `@diff.*` | `difflib` | ratio, best_match, ndiff, unified_diff, sequence_matcher… |
+| `@re.*` | `re` | search, match, findall, sub, split, groups, compile… |
+| `@struct.*` | `struct` | pack, unpack, calcsize, pack_into, unpack_from… |
+| `@binascii.*` | `binascii` | hexlify, unhexlify, b2a_base64, a2b_base64, crc32… |
+| `@pickle.*` | `pickle` | dump, dumps, load, loads, to_file, from_file, copy… |
+| `@shelve.*` | `shelve` | open, get, set, delete, keys, values, items, sync… |
+| `@plist.*` | `plistlib` | dumps, loads, to_file, from_file, to_dict… |
+| `@reprlib.*` | `reprlib` | repr, shorten, maxstring, maxlist, maxdict, maxset… |
+| `@graphlib.*` | `graphlib` | sort, is_dag, ancestors, descendants, roots, leaves… |
+
+### File & Path
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@pathlib.*` | `pathlib` | path, join, name, stem, suffix, exists, is_file, mkdir… |
+| `@glob.*` | `glob` | glob, iglob, recursive, escape, fnmatch… |
+| `@tempfile.*` | `tempfile` | file, dir, named, spooled, mkstemp, mkdtemp… |
+| `@fnmatch.*` | `fnmatch` | match, filter, translate, fnmatchcase… |
+| `@fileinput.*` | `fileinput` | lines, input, filename, lineno, close… |
+| `@stat.*` | `stat` | mode_str, is_dir, is_file, is_link, is_socket, permissions… |
+| `@shutil.*` | `shutil` | copy, move, tree, rmtree, disk_usage, which, unpack_archive… |
+| `@filecmp.*` | `filecmp` | equal, shallow, dircmp, same_files, diff_files, compare… |
+| `@linecache.*` | `linecache` | line, lines, count, check, clear… |
+| `@mmap.*` | `mmap` | read, slice, size, find, open, seek, put, flush, close… |
+| `@zipapp.*` | `zipapp` | create, interpreter, is_archive, copy… |
+
+### OS & System
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@os.*` | `os` | env, path, listdir, getcwd, makedirs… |
+| `@sys.*` | `sys` | argv, exit, path, version, platform, getsizeof, stdin… |
+| `@platform.*` | `platform` | system, node, release, version, machine, python_version… |
+| `@gc.*` | `gc` | collect, enable, disable, isenabled, count, threshold… |
+| `@inspect.*` | `inspect` | signature, members, source, module, file, isfunction… |
+| `@traceback.*` | `traceback` | format, print, format_exc, extract, lines, last… |
+| `@warnings.*` | `warnings` | warn, ignore, error, once, always, simplefilter… |
+| `@weakref.*` | `weakref` | ref, proxy, finalize, deref, is_alive… |
+| `@types.*` | `types` | new_class, SimpleNamespace, MappingProxy, is_function… |
+| `@abc.*` | `abc` | abstract, abstractmethod, isabstract, ABC, ABCMeta… |
+| `@signal.*` | `signal` | handler, send, alarm, pause, set_wakeup, getsignal… |
+| `@atexit.*` | `atexit` | register, unregister, handlers… |
+| `@locale.*` | `locale` | setlocale, getlocale, format_number, currency, strxfrm… |
+| `@gettext.*` | `gettext` | translation, gettext, ngettext, bindtextdomain… |
+| `@sysconfig.*` | `sysconfig` | get_path, get_config_var, get_platform, variables… |
+| `@resource.*` | `resource` | getrlimit, setrlimit, getrusage, RLIMIT_CPU, RLIMIT_AS… |
+| `@errno.*` | `errno` | name, description, code, ENOENT, EEXIST, EACCES… |
+| `@getpass.*` | `getpass` | password, user, terminal… |
+
+### Networking
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@http.*` | `requests` / `httpx` | GET/POST/PUT/DELETE, upload, auth, sessions, async… |
+| `@httpx.*` | `httpx` | client, async_client, timeout, follow_redirects… |
+| `@socket.*` | `socket` | connect, send, recv, server, bind, accept, udp, tcp… |
+| `@ssl.*` | `ssl` | wrap, context, load_cert, verify_mode, check_hostname… |
+| `@ftp.*` | `ftplib` | connect, login, list, download, upload, rename, mkdir… |
+| `@pop3.*` | `poplib` | connect, list, retrieve, delete, stat, top, uidl… |
+| `@xmlrpc.*` | `xmlrpc.client` | client, call, multi_call, fault, close… |
+| `@httpserver.*` | `http.server` | serve, serve_async, threaded, stop, close, port… |
+| `@selectors.*` | `selectors` | new, watch_read, watch_write, wait, count, modify… |
+| `@ip.*` | `ipaddress` | address, network, is_private, is_global, hosts, netmask… |
+| `@url.*` | `urllib.parse` | parse, join, quote, unquote, encode, scheme, netloc… |
+| `@html.*` | `html` / `re` | escape, unescape, strip_tags, links, images, text… |
+| `@webbrowser.*` | `webbrowser` | open, open_new, open_tab, get, browsers, controller… |
+| `@mimetypes.*` | `mimetypes` | guess, guess_ext, guess_all, is_text, charset, known… |
+
+### Concurrency
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@asyncio.*` | `asyncio` | run, gather, wait_for, task, lock, queue, semaphore, open… |
+| `@threading.*` | `threading` | Thread, Lock, RLock, Event, Semaphore, Condition, Barrier… |
+| `@multiprocessing.*` | `multiprocessing` | cpus, pool, map, starmap, process, queue, pipe, event… |
+| `@futures.*` | `concurrent.futures` | threads, processes, submit, result, map, wait_first… |
+| `@queue.*` | `queue` | Queue, LifoQueue, PriorityQueue, put, get, empty, full… |
+| `@sched.*` | `sched` | new, run, after, at, cancel, empty, queue… |
+
+### Serialization & Database
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@sqlite.*` | `sqlite3` | open, close, execute, fetchall, fetchone, commit, tables… |
+| `@pickle.*` | `pickle` | dump, load, dumps, loads, to_file, from_file, copy… |
+| `@shelve.*` | `shelve` | open, get, set, delete, keys, items, sync, close… |
+| `@plist.*` | `plistlib` | dumps, loads, to_file, from_file… |
+| `@configparser.*` | `configparser` | load, new, get, set, sections, add_section, save… |
+
+### Testing & Profiling
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@unittest.*` | `unittest` | run, discover, assert_equal, assert_true, mock, patch… |
+| `@doctest.*` | `doctest` | run, testmod, testfile, globs, verbose… |
+| `@timeit.*` | `timeit` | time, repeat, stmt, setup, auto… |
+| `@profile.*` | `cProfile` | run, sort, stats, dump, top, cumulative, callers… |
+| `@tracemalloc.*` | `tracemalloc` | start, stop, snapshot, top, compare, peak, size… |
+
+### Developer Tools
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@ast.*` | `ast` | parse, dump, unparse, walk, names, functions, is_valid… |
+| `@dis.*` | `dis` | bytecode, instructions, opnames, consts, varnames… |
+| `@tokenize.*` | `tokenize` | tokens, names, keywords, comments, ops, numbers, count… |
+| `@keyword.*` | `keyword` | iskeyword, issoftkeyword, all, soft_all, kwlist… |
+| `@importlib.*` | `importlib` | import_module, reload, find_spec, source_hash… |
+| `@inspect.*` | `inspect` | signature, members, source, isfunction, isclass… |
+| `@pdb.*` | `pdb` | bp, pm, run, runeval, runcall, new, set_bp… |
+| `@runpy.*` | `runpy` | module, path, module_ns, path_ns, find, result… |
+| `@numbers.*` | `numbers` | is_number, is_complex, is_real, is_rational, is_integral |
+| `@reprlib.*` | `reprlib` | repr, shorten, maxstring, maxlist, maxdict… |
+
+### Encoding & Compression
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@base64.*` | `base64` | encode, decode, urlsafe, b32, b16, standard, pad… |
+| `@codecs.*` | `codecs` | encode, decode, rot13, hex, zlib codec, reader, writer… |
+| `@binascii.*` | `binascii` | hexlify, unhexlify, b2a_base64, crc32, rlecode… |
+| `@zlib.*` | `zlib` | compress, decompress, crc32, adler32, crc32_hex… |
+| `@struct.*` | `struct` | pack, unpack, calcsize, iter_unpack… |
+| `@archive.*` | `zipfile`/`tarfile`/`gzip`/`bz2`/`lzma` | zip, unzip, tar, gzip, bzip2, lzma and inverses |
+
+### Foreign Function Interface
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@ctypes.*` | `ctypes` | load CDLL, all C scalar types, buffer, pointer, cast… |
+| `@array.*` | `array` | typed compact arrays — append, extend, insert, pop, slice… |
+
+### Utilities
+
+| Namespace | Wraps | Highlights |
+|---|---|---|
+| `@argparse.*` | `argparse` | new, add, run, run_known, parse, parse_dict… |
+| `@dataclasses.*` | `dataclasses` | dataclass, field, asdict, astuple, fields, replace… |
+| `@typing.*` | `typing` | Optional, Union, List, Dict, Any, Callable, TypeVar… |
+| `@enum.*` | `enum` | Enum, IntEnum, StrEnum, Flag, auto, create, names… |
+| `@contextlib.*` | `contextlib` | contextmanager, suppress, redirect_stdout, ExitStack… |
+| `@copy.*` | `copy` | copy, deepcopy, replace… |
+| `@io.*` | `io` | StringIO, BytesIO, read, write, seek, getvalue… |
+| `@heapq.*` | `heapq` | heappush, heappop, heapify, nlargest, nsmallest… |
+| `@bisect.*` | `bisect` | bisect_left, bisect_right, insort, insort_left… |
+| `@calendar.*` | `calendar` | is_leap, days_in_month, month_name, weekday… |
+| `@pprint.*` | `pprint` | pformat, pprint, saferepr, isreadable, isrecursive… |
+| `@shlex.*` | `shlex` | split, join, quote, lex, punctuation_chars… |
+| `@colorsys.*` | `colorsys` | RGB↔HSV/HLS/YIQ, hex_to_rgb, rgb_to_hex, luminance… |
+| `@zipapp.*` | `zipapp` | create, is_archive, interpreter, copy… |
 
 ---
 
-## v2.6 Language Commands — Templates, Pipelines, Spread/Unpack
+## Examples
 
-### Templates
+### HTTP API script
 
 ```clpy
-@template[greeting]
-    Hello, {name}! You have {count} messages.
+@var[res; @http.get["https://jsonplaceholder.typicode.com/todos/1"]]
+@var[todo; @http.json[res]]
+@print[Title: {todo["title"]}]
+@print[Done: {todo["completed"]}]
+```
+
+### File processing
+
+```clpy
+@var[lines; @file.readlines["data.txt"]]
+@for[line; lines]
+    @var[clean; @text.strip[line]]
+    @if[clean]
+        @file.append["output.txt"; "{clean}\n"]
+    @end
+@end
+```
+
+### Async HTTP
+
+```clpy
+@async[fetch_all; urls]
+    @var[tasks; [@asyncio.task[@http.async_get[u]] for u in urls]]
+    @var[results; @asyncio.gather[*tasks]]
+    @return[results]
 @end
 
-@var[msg; @render[greeting; name="Alice"; count=5]]
-@print[{msg}]   # Hello, Alice! You have 5 messages.
+@var[urls; ["https://example.com", "https://httpbin.org/get"]]
+@asyncio.run[fetch_all(urls)]
 ```
 
-### Pipelines
+### CSV → JSON
 
 ```clpy
-@pipeline[normalize; str.strip; str.lower]
-@var[result; @apply[normalize; "  Hello  "]]   # "hello"
+@var[rows; @csv.read["sales.csv"]]
+@var[filtered; @csv.filter[rows; lambda r: float(r["amount"]) > 100]]
+@file.write["big_sales.json"; @json.dump[filtered]]
+@print[Exported {len(filtered)} rows]
 ```
 
-### Multi-variable assignment
+### Parallel processing
 
 ```clpy
-@let[x; 10; y; 20; z; 30]   # x = 10, y = 20, z = 30
+@func[process; item]
+    @return[item * item]
+@end
+
+@var[data; list(range(1000))]
+@var[pool; @futures.threads[8]]
+@var[results; @futures.map[pool; process; data]]
+@print[Sum: {sum(results)}]
 ```
 
-### Spread / unpack
+### Color system conversion
 
 ```clpy
-@var[n; @spread[max; [3, 1, 4, 1, 5]]]     # max(*[3,1,4,1,5]) → 5
-@var[r; @unpack[dict; {"a": 1, "b": 2}]]   # dict(**{"a":1,"b":2})
+@var[rgb; @colorsys.hex_to_rgb["#3498db"]]
+@var[h; @colorsys.to_hls[rgb[0]; rgb[1]; rgb[2]]]
+@print[Hue: {h[0]:.2f}  Lightness: {h[1]:.2f}]
+```
+
+### Tokenize Python source
+
+```clpy
+@var[src; "def add(a, b):\n    return a + b\n"]
+@var[keywords; @tokenize.keywords[src]]
+@for[tok; keywords]
+    @print[keyword: {tok.string}]
+@end
+```
+
+### Run code under debugger
+
+```clpy
+@var[dbg; @pdb.new[]]
+@pdb.set_bp[dbg; "mymodule.py"; 42]
+@pdb.run[dbg; "mymodule.run()"]
 ```
 
 ---
@@ -829,8 +813,6 @@ myproject/
         └── __init__.py
 ```
 
-Create a plugin scaffold:
-
 ```bash
 cruhon new --plugin my-plugin
 ```
@@ -842,24 +824,11 @@ cruhon new --plugin my-plugin
   "name": "my-plugin",
   "version": "1.0.0",
   "description": "What this plugin does",
-  "cruhon": ">=1.5.0"
+  "cruhon": ">=2.0.0"
 }
 ```
 
-Optional fields:
-
-```json
-{
-  "name": "my-plugin",
-  "version": "1.0.0",
-  "cruhon": ">=1.5.0",
-  "author": "Your Name",
-  "license": "MIT",
-  "my_setting": "some_value"
-}
-```
-
-Any extra field is accessible via `api.config("my_setting")` inside the plugin.
+Any extra field is accessible via `api.config("key")` inside the plugin.
 
 ### `register(api)` — Entry Point
 
@@ -867,7 +836,6 @@ Every plugin must have a `register(api)` function in `__init__.py`:
 
 ```python
 def register(api):
-    # Everything you add here becomes part of the language
     api.command("greet", parse_greet, visit_greet)
 ```
 
@@ -876,8 +844,6 @@ def register(api):
 ## Plugin API Reference
 
 ### `api.command(name, parser_fn, visitor_fn)`
-
-Register a new `@command`.
 
 ```python
 from cruhon.core.ast_nodes import Node
@@ -888,7 +854,7 @@ class GreetNode(Node):
     target: str = ""
 
 def parse_greet(parser):
-    parser.advance()               # consume @greet token
+    parser.advance()
     args = parser.parse_args()
     return GreetNode(target=args[0] if args else '"world"', line=0)
 
@@ -899,28 +865,12 @@ def register(api):
     api.command("greet", parse_greet, visit_greet)
 ```
 
-Script:
-
-```clpy
-@greet["Alice"]   # → print("Hello, " + str("Alice"))
-```
-
----
-
 ### `api.block_command(name, visitor_fn, scoped=False)`
-
-Register a block command — opened by `@name[args]`, closed by `@end`.
 
 ```python
 def visit_section(transpiler, node):
-    # node.args   — positional args from the header
-    # node.kwargs — keyword args from the header
-    # node.body   — list of child AST nodes
     title = node.args[0] if node.args else '"Untitled"'
-    body_code = "\n".join(
-        result for n in node.body
-        if (result := n.accept(transpiler))
-    )
+    body_code = "\n".join(r for n in node.body if (r := n.accept(transpiler)))
     return (
         transpiler._line(f'print("=== " + {title} + " ===")') +
         "\n" + body_code
@@ -928,35 +878,18 @@ def visit_section(transpiler, node):
 
 def register(api):
     api.block_command("section", visit_section)
+    # scoped=True → __ctx__ snapshot, changes don't leak
+    api.block_command("isolated", visit_isolated, scoped=True)
 ```
-
-Script:
-
-```clpy
-@section["Introduction"]
-    @print[Welcome to Cruhon.]
-    @print[This is a block command.]
-@end
-```
-
-**`scoped=True`** — `__ctx__` is automatically saved before the block body and
-restored after. Changes inside the block don't leak out:
-
-```python
-api.block_command("isolated", visit_isolated, scoped=True)
-```
-
----
 
 ### `api.override(command, fn)`
 
-Override an existing command. Multiple overrides form a middleware chain —
-first loaded = outermost wrapper.
+Multiple overrides form a middleware chain:
 
 ```python
 def timed_print(transpiler, node, next_fn):
     before = transpiler._line('__t0__ = __import__("time").monotonic()')
-    result = next_fn()   # call the original (or next override)
+    result = next_fn()
     after  = transpiler._line('print(f"[{__import__(\"time\").monotonic()-__t0__:.3f}s]")')
     return before + "\n" + result + "\n" + after
 
@@ -964,154 +897,41 @@ def register(api):
     api.override("print", timed_print)
 ```
 
-A 2-argument function is a terminal override (ignores the chain):
-
-```python
-def silent_print(transpiler, node):
-    return ""   # suppress all @print output
-
-api.override("print", silent_print)
-```
-
----
-
 ### `api.inject(key, value_or_factory)`
 
-Inject a value into the exec() globals for every script run. Scripts access
-it by name directly — no `__ns__` or import needed.
-
-If the value is a callable (no args), it is called **before each exec()** to
-get the value. Otherwise the value is used as-is.
-
 ```python
-import sqlite3
-
 def register(api):
-    # Static value
-    api.inject("APP_VERSION", "2.1.0")
-
-    # Factory: called fresh before each run
+    api.inject("APP_VERSION", "2.9.0")
     api.inject("db", lambda: sqlite3.connect(":memory:"))
-
-    # Object with attributes
-    class Config:
-        debug = True
-        max_retries = 3
-
-    api.inject("cfg", Config())
 ```
-
-Script:
-
-```clpy
-@print[{APP_VERSION}]
-@var[rows; db.execute("SELECT 1").fetchall()]
-@if[cfg.debug]
-    @print[Debug mode is on]
-@end
-```
-
----
 
 ### `api.inject_once(key, factory)`
 
-Like `api.inject()` with a factory, but the factory runs **once at
-registration time** and the resulting object is shared across all script
-runs. Use this for connection pools, singletons, or any expensive resource
-that must persist between runs.
+Factory runs once at load time; shared across all runs:
 
 ```python
 def register(api):
-    # One pool, reused by every run (NOT re-created each time)
     api.inject_once("pool", lambda: ConnectionPool(max_connections=10))
 ```
 
----
-
-### Cleanup: `api.unregister_command` / `remove_hook` / `remove_inject` / `remove_eval_hook`
-
-Every registration can be undone — useful for tests, conditional loading, or
-plugins that reconfigure themselves at runtime.
-
-```python
-def register(api):
-    api.override("print", my_print)
-    api.hook("before_run", warm_cache)
-    api.inject("db_pool", make_pool())
-    api.eval_hook(dollar_env)
-
-def teardown(api):
-    api.unregister_command("print")     # restore default visitor
-    api.remove_hook("before_run", warm_cache)
-    api.remove_inject("db_pool")
-    api.remove_eval_hook(dollar_env)
-```
-
----
-
 ### `api.inline_command(name, handler_fn)`
 
-Register a command that produces an inline Python expression — usable inside
-`@var`, `@print`, and any other argument context.
-
-`handler_fn(parser) -> str`:
-1. Call `parser.advance()` to consume the `@name` token
-2. Optionally call `parser.parse_args()` to get arguments
-3. Return a Python expression string
-
 ```python
-import uuid
-import datetime
-
 def handle_uuid(parser):
     parser.advance()
     parser.parse_args()
     return "str(__import__('uuid').uuid4())"
 
-def handle_now(parser):
-    parser.advance()
-    parser.parse_args()
-    return "__import__('datetime').datetime.now().isoformat()"
-
-def handle_slug(parser):
-    parser.advance()
-    args = parser.parse_args()
-    text = args[0] if args else '""'
-    return f'{text}.lower().replace(" ", "-")'
-
 def register(api):
     api.inline_command("uuid", handle_uuid)
-    api.inline_command("now",  handle_now)
-    api.inline_command("slug", handle_slug)
 ```
-
-Script:
-
-```clpy
-@var[id;    @uuid[]]
-@var[ts;    @now[]]
-@var[slug;  @slug["Hello World"]]
-@print[{id} — {ts}]
-```
-
----
 
 ### `api.eval_hook(fn)`
 
-Hook into value evaluation at transpile-time.
-
-`fn(value: str, context: str) -> str | None`
-
-Return a Python expression string to override the default evaluation.
-Return `None` to let the default rules handle the value.
-
-`context` is `"expr"` (for `@var`, `@return`, etc.) or `"display"` (for `@print`).
-
-Hooks run in registration order. First non-None return wins.
+Hook into value evaluation at transpile-time:
 
 ```python
 def dollar_env(value, context):
-    # $VAR_NAME → os.environ.get("VAR_NAME", "")
     if value.startswith("$") and value[1:].isidentifier():
         return f'__import__("os").environ.get("{value[1:]}", "")'
     return None
@@ -1120,25 +940,10 @@ def register(api):
     api.eval_hook(dollar_env)
 ```
 
-Script:
-
-```clpy
-@var[url;  $DATABASE_URL]
-@var[port; $PORT]
-@print[$GREETING]
-```
-
----
-
 ### `api.ast_hook(node_type, fn)`
-
-Register a parse-time AST hook. `fn(node) -> node` fires on every node of the
-given type after parsing and before transpilation. Mutate the node or return a
-new one.
 
 ```python
 def prefix_vars(node):
-    # Automatically prefix all variable names with "safe_"
     if not node.name.startswith("_"):
         node.name = "safe_" + node.name
     return node
@@ -1147,194 +952,91 @@ def register(api):
     api.ast_hook("VarNode", prefix_vars)
 ```
 
----
-
 ### `api.transform(target, fn)`
 
-Wrap another plugin's block output with additional generated code.
-
-`fn(transpiler, node, code: str) -> str`
+Wrap another plugin's block output:
 
 ```python
 def register(api):
-    # Wrap every @route block with timing code
     api.transform("route", time_route)
 
 def time_route(transpiler, node, code):
     path = node.args[0] if node.args else '"unknown"'
-    before = transpiler._line(f'__t0__ = __import__("time").monotonic()')
+    before = transpiler._line('__t0__ = __import__("time").monotonic()')
     after  = transpiler._line(f'print(f"route {path} took {{__import__(\"time\").monotonic()-__t0__:.3f}}s")')
     return before + "\n" + code + "\n" + after
 ```
 
----
-
-### `api.block_hook(event, fn)`
-
-Register a runtime hook that fires when any plugin block starts or ends.
-
-```python
-entered = []
-
-def on_enter(plugin_name, args):
-    entered.append(plugin_name)
-    print(f"Block @{plugin_name} starting")
-
-def on_exit(plugin_name, args):
-    print(f"Block @{plugin_name} ended")
-
-def register(api):
-    api.block_hook("enter", on_enter)
-    api.block_hook("exit",  on_exit)
-```
-
----
-
 ### `api.hook(event, fn)`
-
-Hook into the full pipeline lifecycle.
 
 | Event | Signature | When |
 |---|---|---|
 | `before_run` | `fn(source=str)` | Before parsing |
-| `after_run` | `fn(source=str, python_code=str)` | After exec finishes (success) |
-| `before_parse` | `fn(source) -> source` | Lexer pre-hook — modify source text |
-| `after_parse` | `fn(ast) -> ast` | Parser post-hook — modify AST |
+| `after_run` | `fn(source=str, python_code=str)` | After exec finishes |
+| `before_parse` | `fn(source) -> source` | Modify source text |
+| `after_parse` | `fn(ast) -> ast` | Modify AST |
 | `before_transpile` | `fn(ast) -> ast` | Transpiler pre-hook |
-| `after_transpile` | `fn(code) -> code` | Modify generated Python code |
-| `on_error` | `fn(error=exc)` | On **any** error — including `ParseError` and `RunError` |
+| `after_transpile` | `fn(code) -> code` | Modify generated Python |
+| `on_error` | `fn(error=exc)` | On any error |
 
 ```python
 def register(api):
-    api.hook("before_run",   lambda source: print("[run start]"))
-    api.hook("after_run",    lambda source, python_code: print("[run end]"))
-    api.hook("on_error",     lambda error: print(f"[error] {error}"))
-    api.hook("after_transpile", lambda code: code.replace("pass", "pass  # noop"))
+    api.hook("before_run", lambda source: print("[run start]"))
+    api.hook("on_error",   lambda error: print(f"[error] {error}"))
 ```
 
----
-
-### `api.expose(key, value)` / `api.consume(plugin, key, default?)`
-
-Share values between plugins.
+### `api.expose` / `api.consume`
 
 ```python
-# Plugin A — publishes a utility
+# Plugin A
 def register(api):
     api.expose("slugify", lambda s: s.lower().replace(" ", "-"))
-    api.expose("version", "2.0")
-```
 
-```python
-# Plugin B — uses Plugin A's utility
+# Plugin B
 def register(api):
     slugify = api.consume("plugin-a", "slugify")
-    version = api.consume("plugin-a", "version", default="1.0")
-
-    def visit_slug(transpiler, node):
-        # use slugify at register-time (Python level)
-        ...
 ```
 
----
-
 ### `api.namespace(name)`
-
-Register a mod namespace for runtime dispatch.
 
 ```python
 def register(api):
     ns = api.namespace("db")
-
-    def handle_query(args):
-        sql = args[0] if args else '""'
-        return f'__db_conn__.execute({sql}).fetchall()'
-
-    ns.register("query", handle_query)
-    ns.hook("init",    lambda ns: print("db namespace ready"))
-    ns.hook("destroy", lambda ns: print("db namespace closed"))
+    ns.register("query", lambda args: f'__db__.execute({args[0]}).fetchall()')
+    ns.hook("init",    lambda ns: print("db ready"))
+    ns.hook("destroy", lambda ns: print("db closed"))
 ```
 
-Script:
-
-```clpy
-@var[rows; @db.query["SELECT * FROM users"]]
-```
-
----
-
-### `api.require(dependency)`
-
-Declare a dependency. A warning is printed at load time if not satisfied.
+### Cleanup
 
 ```python
-def register(api):
-    api.require("cruhon-utils")          # exact name
-    api.require("cruhon-utils >= 1.2.0") # with version constraint
+api.unregister_command("print")
+api.remove_hook("before_run", fn)
+api.remove_inject("db_pool")
+api.remove_eval_hook(dollar_env)
 ```
 
----
-
-### `api.is_loaded(name)` / `api.config(key, default?)`
+### Other helpers
 
 ```python
-def register(api):
-    if api.is_loaded("cruhon-redis"):
-        cache = api.consume("cruhon-redis", "cache_backend")
-    else:
-        cache = memory_cache
-
-    # Read from mod.json
-    prefix = api.config("command_prefix", default="my")
-    debug  = api.config("debug", default=False)
-```
-
----
-
-### `api.alias(name, target)`
-
-Register a command alias.
-
-```python
-def register(api):
-    api.alias("say", "print")   # @say[...] → same as @print[...]
-```
-
----
-
-### `api.lexer_hook(fn)` / `api.token_hook(fn)` / `api.syntax(token_type)`
-
-Low-level lexer extensions.
-
-```python
-def register(api):
-    # Transform source text before tokenization
-    api.lexer_hook(lambda src: src.replace("§", "@"))
-
-    # Transform token list after tokenization
-    api.token_hook(lambda tokens: [t for t in tokens if t.type != "COMMENT"])
-
-    # Register a new token type
-    api.syntax("DOLLAR")
+api.alias("say", "print")           # @say → @print
+api.require("cruhon-utils >= 1.2.0")
+api.is_loaded("cruhon-redis")
+api.config("my_setting", default="x")
+api.block_hook("enter", on_enter)   # runtime block start/end events
+api.lexer_hook(lambda src: src.replace("§", "@"))
+api.token_hook(lambda toks: [t for t in toks if t.type != "COMMENT"])
 ```
 
 ---
 
 ## Complete Plugin Example
 
-A full plugin that demonstrates the key APIs:
-
 ```python
 """
 mods/cruhon-logger/__init__.py
-
-Adds:
-  @log["message"]          — structured log line
-  @log.timed[...] @end     — block with elapsed time
-  api.inject("logger", ...)— injects logger into all scripts
+Adds @log["msg"] and @log.timed[label] ... @end
 """
-
-import time
 import datetime
 
 
@@ -1352,8 +1054,6 @@ class Logger:
 _logger = Logger()
 
 
-# ── @log["message"] ──────────────────────────────────────────
-
 def parse_log(parser):
     from cruhon.core.ast_nodes import Node
     from dataclasses import dataclass
@@ -1364,28 +1064,23 @@ def parse_log(parser):
 
     parser.advance()
     args = parser.parse_args()
-    msg = args[0] if args else '""'
-    return LogNode(msg=msg, line=0)
+    return LogNode(msg=args[0] if args else '""', line=0)
 
 
 def visit_log(transpiler, node):
     return transpiler._line(f'logger.log({node.msg})', node.line)
 
 
-# ── @log.timed[label] ... @end ────────────────────────────────
-
 def visit_timed(transpiler, node):
     label = node.args[0] if node.args else '"block"'
     body = "\n".join(r for n in node.body if (r := n.accept(transpiler)))
     t = transpiler
     return "\n".join([
-        t._line(f'__t0__ = __import__("time").monotonic()'),
+        t._line('__t0__ = __import__("time").monotonic()'),
         body or t._line("pass"),
-        t._line(f'logger.log(f"{label} completed in {{__import__(\"time\").monotonic()-__t0__:.3f}}s")'),
+        t._line(f'logger.log(f"{label} took {{__import__(\"time\").monotonic()-__t0__:.3f}}s")'),
     ])
 
-
-# ── register ─────────────────────────────────────────────────
 
 def register(api):
     api.inject("logger", lambda: _logger)
@@ -1394,7 +1089,7 @@ def register(api):
     api.expose("get_log_lines", lambda: _logger.lines)
 ```
 
-Script using this plugin:
+Usage:
 
 ```clpy
 @log["Script started"]
@@ -1412,19 +1107,16 @@ Script using this plugin:
 
 ## Publishing a Plugin
 
-Pip-installable plugins are auto-discovered when their package name starts with `cruhon-`.
-
 ```
 cruhon-logger/
 ├── pyproject.toml
 └── cruhon_logger/
-    ├── __init__.py   ← must contain register(api)
+    ├── __init__.py
     └── mod.json
 ```
 
-`pyproject.toml`:
-
 ```toml
+# pyproject.toml
 [project]
 name = "cruhon-logger"
 version = "1.0.0"
@@ -1433,22 +1125,37 @@ version = "1.0.0"
 cruhon-logger = "cruhon_logger:register"
 ```
 
-Install and run:
-
 ```bash
 pip install cruhon-logger
-cruhon run script.clpy   # plugin is loaded automatically
-cruhon mods              # see it in the loaded list
+cruhon run script.clpy   # plugin auto-loaded
+cruhon mods              # see it in the list
 ```
 
-### Load Order
+**Load order:** core → stdlib → pip plugins (alphabetical) → local `mods/` (alphabetical)
 
-1. `core` (built-in, always first)
-2. `stdlib` (built-in, always second)
-3. pip plugins (`cruhon-*` packages, sorted alphabetically)
-4. local plugins (`mods/` subfolders, sorted alphabetically)
+---
 
-First loaded = outermost in override chains.
+## Shortcut Plugins
+
+Four configurable shortcut plugins add shorter aliases and extra convenience
+methods. All four load together without conflicts:
+
+```clpy
+# cruhon-shortcuts (base)
+@var[text; @read["notes.txt"]]         # @read → @file.read
+@var[stamp; @now[]]                     # @now  → @date.now
+@var[id; @uuid[]]                       # @uuid → @crypto.uuid
+
+# cruhon-shortcuts-pro (math / lists / dicts / text / logic)
+@var[x; @clamp[value; 0; 100]]
+@var[slug; @snake_case["Hello World"]]
+@var[g; @group_by[items; key_fn]]
+
+# cruhon-shortcuts-data (xml / toml / diff / decimal / re / yaml / image / pdf)
+@var[cfg; @toml_load["port = 8080"]]
+@var[amt; @money["3.14159"]]            # decimal.money → 2dp
+@var[ok; @is_private_ip["10.0.0.1"]]
+```
 
 ---
 
