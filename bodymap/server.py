@@ -75,6 +75,8 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+VERSION = "tasks-v4"  # Çalışan sürümü doğrulamak için
+
 # ══════════════════════════════════════════════════════════════════
 #  PATHS
 # ══════════════════════════════════════════════════════════════════
@@ -1353,7 +1355,7 @@ async def list_exports():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "trimesh": HAS_TRIMESH, "max_frames": MAX_FRAMES}
+    return {"status": "ok", "version": VERSION, "trimesh": HAS_TRIMESH, "max_frames": MAX_FRAMES}
 
 
 # ── WebSocket ──────────────────────────────────────────────────
@@ -1368,6 +1370,7 @@ async def ws_endpoint(ws: WebSocket):
     face_ok = holistic._face_lm is not None
     pose_ok = holistic._pose_lm is not None
     hand_ok = holistic._hand_lm is not None
+    sess.log(f"Sürüm: {VERSION}", "SYSTEM")
     sess.log(f"Yüz:{('✓' if face_ok else '✗')} Vücut:{('✓' if pose_ok else '✗')} El:{('✓' if hand_ok else '✗')} | trimesh:{'VAR' if HAS_TRIMESH else 'YOK'}", "OK")
     if not face_ok and not pose_ok:
         sess.log("Model dosyaları bulunamadı — /home/bodymap/download_models.sh çalıştırın", "WARN")
@@ -1430,23 +1433,35 @@ async def ws_endpoint(ws: WebSocket):
                 # Yüz
                 if face_sm and sess.target in ("face", "full"):
                     detected = True
-                    draw_face(frame, face_sm, sess.style, sess.active_regions)
+                    try:
+                        draw_face(frame, face_sm, sess.style, sess.active_regions)
+                    except Exception as e:
+                        logging.warning(f"draw_face: {e}")
                     if sess.face_crop_enabled and clean is not None:
-                        face_crop_b64 = encode_crop(
-                            clean, face_sm, w, h,
-                            sess.crop_padding, min(sess.jpeg_quality + 10, 95)
-                        )
+                        try:
+                            face_crop_b64 = encode_crop(
+                                clean, face_sm, w, h,
+                                sess.crop_padding, min(sess.jpeg_quality + 10, 95)
+                            )
+                        except Exception as e:
+                            logging.warning(f"encode_crop: {e}")
 
                 # Vücut
                 if pose_sm and sess.target in ("body", "full"):
                     detected = True
-                    draw_pose(frame, pose_sm, sess.style)
+                    try:
+                        draw_pose(frame, pose_sm, sess.style)
+                    except Exception as e:
+                        logging.warning(f"draw_pose: {e}")
 
                 # Eller
                 if sess.target in ("body", "full"):
                     if handl_sm or handr_sm:
                         detected = True
-                    draw_hands(frame, handl_sm, handr_sm, sess.style)
+                    try:
+                        draw_hands(frame, handl_sm, handr_sm, sess.style)
+                    except Exception as e:
+                        logging.warning(f"draw_hands: {e}")
 
                 # Kayıt — ortak blok (kalite filtresi uygula)
                 if sess.recording and not sess.at_frame_limit() and is_quality_frame(face_sm, pose_sm):
@@ -1779,5 +1794,6 @@ if __name__ == "__main__":
     print("╔════════════════════════════════╗")
     print("║  BodyMap  —  Haritalama Sunucu ║")
     print("╚════════════════════════════════╝")
+    print(f"  Sürüm: {VERSION}")
     print(f"  → http://localhost:8000")
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
