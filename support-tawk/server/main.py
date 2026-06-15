@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from server.config import config
-from server.database import database, Agent, Conversation, Message, init_db
+from server.database import database, Agent, Conversation, Message, Setting, init_db
 from server.auth import hash_password
 from server.routes.chat import router as chat_router
 from server.routes.admin import router as admin_router
@@ -106,15 +106,16 @@ def root():
 
 @app.get("/api/config")
 def public_config():
+    overrides = {s.key: s.value for s in Setting.select()}
     return {
-        "site_name": config.site.name,
-        "widget_color": config.chat.widget_color,
-        "welcome_message": config.chat.welcome_message,
-        "offline_message": config.chat.offline_message,
+        "site_name": overrides.get("site_name", config.site.name),
+        "widget_color": overrides.get("widget_color", config.chat.widget_color),
+        "welcome_message": overrides.get("welcome_message", config.chat.welcome_message),
+        "offline_message": overrides.get("offline_message", config.chat.offline_message),
         "response_time_text": config.chat.response_time_text,
-        "notification_sound": config.chat.notification_sound,
+        "notification_sound": overrides.get("notification_sound", "true") != "false",
         "logo_url": config.site.logo_url,
-        "proactive_delay_seconds": getattr(config.chat, "proactive_delay_seconds", 0),
+        "proactive_delay_seconds": int(overrides.get("proactive_delay_seconds", "0")),
     }
 
 

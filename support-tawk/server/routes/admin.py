@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 from ..database import (
     Agent, Conversation, Message, CannedResponse,
-    Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow
+    Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting
 )
 from ..auth import (
     hash_password, verify_password, create_token,
@@ -95,6 +95,21 @@ class BotFlowUpdate(BaseModel):
     name: Optional[str] = None
     greeting: Optional[str] = None
     options_json: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    display_name: Optional[str] = None
+    password: Optional[str] = None
+    avatar_color: Optional[str] = None
+
+
+class AppSettingsUpdate(BaseModel):
+    site_name: Optional[str] = None
+    widget_color: Optional[str] = None
+    welcome_message: Optional[str] = None
+    offline_message: Optional[str] = None
+    proactive_delay_seconds: Optional[int] = None
+    notification_sound: Optional[bool] = None
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -346,7 +361,7 @@ async def send_message(req: SendMessageRequest, agent: Agent = Depends(get_curre
         "message": _msg_dict(msg),
     }
     await manager.send_to_visitor(conv.visitor_id, payload)
-    await manager.broadcast_to_watchers(conv.id, payload)
+    await manager.broadcast_to_watchers_except(conv.id, payload, agent.id)
     return _msg_dict(msg)
 
 
@@ -492,6 +507,63 @@ def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require
 @router.delete("/agents/{agent_id}")
 def delete_agent(agent_id: int, admin: Agent = Depends(require_admin)):
     Agent.delete().where(Agent.id == agent_id).execute()
+    return {"ok": True}
+
+
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+@router.get("/profile")
+def get_profile(agent: Agent = Depends(get_current_agent)):
+    return {
+        "id": agent.id,
+        "username": agent.username,
+        "display_name": agent.display_name,
+        "role": agent.role,
+        "avatar_color": getattr(agent, "avatar_color", "#6366f1"),
+    }
+
+
+@router.patch("/profile")
+def update_profile(req: ProfileUpdate, agent: Agent = Depends(get_current_agent)):
+    updates: dict = {}
+    if req.display_name is not None:
+        updates["display_name"] = req.display_name
+    if req.password is not None:
+        updates["password_hash"] = hash_password(req.password)
+    if req.avatar_color is not None:
+        updates["avatar_color"] = req.avatar_color
+    if updates:
+        Agent.update(**updates).where(Agent.id == agent.id).execute()
+    return {"ok": True}
+
+
+# ── Site Settings ─────────────────────────────────────────────────────────────
+
+@router.get("/settings")
+def get_site_settings(admin: Agent = Depends(require_admin)):
+    return {s.key: s.value for s in Setting.select()}
+
+
+@router.put("/settings")
+def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_admin)):
+    data: Dict[str, Any] = {}
+    if req.site_name is not None:
+        data["site_name"] = req.site_name
+    if req.widget_color is not None:
+        data["widget_color"] = req.widget_color
+    if req.welcome_message is not None:
+        data["welcome_message"] = req.welcome_message
+    if req.offline_message is not None:
+        data["offline_message"] = req.offline_message
+    if req.proactive_delay_seconds is not None:
+        data["proactive_delay_seconds"] = str(req.proactive_delay_seconds)
+    if req.notification_sound is not None:
+        data["notification_sound"] = "true" if req.notification_sound else "false"
+    for key, value in data.items():
+        (Setting.insert(key=key, value=str(value), updated_at=datetime.utcnow())
+         .on_conflict(conflict_target=[Setting.key],
+                      update={Setting.value: str(value), Setting.updated_at: datetime.utcnow()})
+         .execute())
     return {"ok": True}
 
 

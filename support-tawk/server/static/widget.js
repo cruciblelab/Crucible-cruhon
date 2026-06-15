@@ -47,6 +47,8 @@
     bot_shown: false,
     emoji_open: false,
     proactive_timer: null,
+    at_bottom: true,
+    new_msg_count: 0,
   };
 
   // ── Markdown renderer ─────────────────────────────────────────────────────
@@ -81,9 +83,12 @@
     "#st-info-form input { padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; outline:none; transition:border-color .2s; }",
     "#st-info-form input:focus { border-color:var(--st-color); }",
     "#st-info-form button { padding:11px; border:none; border-radius:8px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }",
-    "#st-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; }",
+    "#st-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }",
     "#st-messages::-webkit-scrollbar { width:4px; }",
     "#st-messages::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:2px; }",
+    "#st-scroll-btn { display:none; position:absolute; bottom:70px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; border:none; border-radius:20px; padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); gap:5px; align-items:center; }",
+    "#st-scroll-btn.show { display:flex; }",
+    "#st-scroll-badge { background:#ef4444; color:#fff; border-radius:10px; padding:1px 6px; font-size:11px; font-weight:700; }",
     ".st-msg { max-width:82%; display:flex; flex-direction:column; gap:3px; }",
     ".st-msg.visitor { align-self:flex-end; align-items:flex-end; }",
     ".st-msg.agent, .st-msg.bot, .st-msg.system { align-self:flex-start; align-items:flex-start; }",
@@ -141,7 +146,7 @@
     '    <div style="flex:1"><div class="st-title">Destek</div><div class="st-status">Yükleniyor...</div></div>',
     '    <button class="st-close" aria-label="Kapat">✕</button>',
     '  </div>',
-    '  <div id="st-body">',
+    '  <div id="st-body" style="position:relative;flex:1;display:flex;flex-direction:column;overflow:hidden">',
     '    <div id="st-info-form" style="display:none">',
     '      <h3>Merhaba! 👋</h3>',
     '      <p>Sohbet başlatmak için bilgilerinizi girin.</p>',
@@ -149,7 +154,8 @@
     '      <input id="st-email-input" type="email" placeholder="E-posta (isteğe bağlı)" maxlength="128" />',
     '      <button id="st-start-btn">Sohbeti Başlat</button>',
     '    </div>',
-    '    <div id="st-chat-area" style="display:none; flex-direction:column; height:100%; overflow:hidden; display:flex; flex:1;">',
+    '    <div id="st-chat-area" style="display:none; flex-direction:column; height:100%; overflow:hidden; display:flex; flex:1; position:relative;">',
+    '      <button id="st-scroll-btn"><span>↓ Yeni mesaj</span><span id="st-scroll-badge" class="hidden">0</span></button>',
     '      <div id="st-messages"></div>',
     '      <div id="st-typing"></div>',
     '      <div id="st-rating-form">',
@@ -207,6 +213,25 @@
   var emojiBtn = document.getElementById("st-emoji-btn");
   var emojiPicker = document.getElementById("st-emoji-picker");
   var emojiGrid = document.getElementById("st-emoji-grid");
+  var scrollBtn = document.getElementById("st-scroll-btn");
+  var scrollBadge = document.getElementById("st-scroll-badge");
+
+  // Smart scroll tracking
+  messagesEl.addEventListener("scroll", function() {
+    var gap = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+    state.at_bottom = gap < 60;
+    if (state.at_bottom) {
+      state.new_msg_count = 0;
+      scrollBtn.classList.remove("show");
+      scrollBadge.classList.add("hidden");
+    }
+  });
+
+  scrollBtn.addEventListener("click", function() {
+    scrollBottom();
+    state.new_msg_count = 0;
+    scrollBtn.classList.remove("show");
+  });
 
   // Build emoji grid
   emojiGrid.innerHTML = EMOJIS.map(function(e) {
@@ -461,7 +486,7 @@
 
     } else if (data.type === "message") {
       appendMsg(data.message);
-      scrollBottom();
+      maybeScrollBottom();
       if (!state.open || document.hidden) {
         addUnread();
         playSound();
@@ -551,6 +576,20 @@
 
   function scrollBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    state.at_bottom = true;
+    state.new_msg_count = 0;
+    scrollBtn.classList.remove("show");
+  }
+
+  function maybeScrollBottom() {
+    if (state.at_bottom) {
+      scrollBottom();
+    } else {
+      state.new_msg_count++;
+      scrollBtn.classList.add("show");
+      scrollBadge.textContent = state.new_msg_count;
+      scrollBadge.classList.remove("hidden");
+    }
   }
 
   function formatTime(iso) {
@@ -564,6 +603,15 @@
   function sendMessage() {
     var content = inputEl.value.trim();
     if (!content || !state.ws || state.ws.readyState !== 1) return;
+
+    // Immediately show visitor's own message (optimistic)
+    appendMsg({
+      sender_type: "visitor",
+      content: content,
+      created_at: new Date().toISOString(),
+    });
+    scrollBottom();
+
     state.ws.send(JSON.stringify({
       type: "message",
       content: content,

@@ -45,6 +45,7 @@ class Agent(BaseModel):
     role = CharField(max_length=16, default="agent")  # admin | agent
     is_active = BooleanField(default=True)
     is_online = BooleanField(default=False)
+    avatar_color = CharField(max_length=20, default="#6366f1")
     created_at = DateTimeField(default=datetime.utcnow)
 
     class Meta:
@@ -156,9 +157,22 @@ class BotFlow(BaseModel):
         table_name = "bot_flows"
 
 
+class Setting(BaseModel):
+    key = CharField(unique=True, max_length=64, primary_key=True)
+    value = TextField(default="")
+    updated_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "settings"
+
+
 def init_db():
     with database:
         database.create_tables([
             Agent, Conversation, Message, CannedResponse,
-            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow
+            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting
         ], safe=True)
+        # Migrations for new columns on existing tables
+        try:
+            database.execute_sql("ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'")
+        except Exception:
+            pass

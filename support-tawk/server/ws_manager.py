@@ -74,6 +74,11 @@ class ConnectionManager:
         for agent_id in list(self._watching.get(conversation_id, set())):
             await self.send_to_agent(agent_id, data)
 
+    async def broadcast_to_watchers_except(self, conversation_id: int, data: dict, except_agent_id: int):
+        for agent_id in list(self._watching.get(conversation_id, set())):
+            if agent_id != except_agent_id:
+                await self.send_to_agent(agent_id, data)
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def online_agents(self) -> list[int]:
