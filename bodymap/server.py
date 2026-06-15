@@ -38,12 +38,33 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from _mp_connections import (
-    POSE_CONNECTIONS as _POSE_CONN,
-    HAND_CONNECTIONS as _HAND_CONN,
-    FACEMESH_TESSELATION as _TESS,
-    FACEMESH_CONTOURS as _CONT,
-)
+# ── Bağlantı sabitleri (mediapipe.solutions yerine) ─────────────────
+_POSE_CONN = frozenset([
+    (0,1),(1,2),(2,3),(3,7),(0,4),(4,5),(5,6),(6,8),(9,10),
+    (11,12),(11,13),(13,15),(15,17),(15,19),(15,21),(17,19),
+    (12,14),(14,16),(16,18),(16,20),(16,22),(18,20),
+    (11,23),(12,24),(23,24),(23,25),(25,27),(27,29),(27,31),(29,31),
+    (24,26),(26,28),(28,30),(28,32),(30,32),
+])
+_HAND_CONN = frozenset([
+    (0,1),(1,2),(2,3),(3,4),(0,5),(5,6),(6,7),(7,8),
+    (5,9),(9,10),(10,11),(11,12),(9,13),(13,14),(14,15),(15,16),
+    (13,17),(0,17),(17,18),(18,19),(19,20),
+])
+_LIPS = frozenset([
+    (61,185),(185,40),(40,39),(39,37),(37,0),(0,267),(267,269),(269,270),(270,409),(409,291),
+    (61,146),(146,91),(91,181),(181,84),(84,17),(17,314),(314,405),(405,321),(321,375),(375,291),
+    (78,191),(191,80),(80,81),(81,82),(82,13),(13,312),(312,311),(311,310),(310,415),(415,308),
+    (78,95),(95,88),(88,178),(178,87),(87,14),(14,317),(317,402),(402,318),(318,324),(324,308),
+])
+_L_EYE = frozenset([(263,249),(249,390),(390,373),(373,374),(374,380),(380,381),(381,382),(382,362),(263,466),(466,388),(388,387),(387,386),(386,385),(385,384),(384,398),(398,362)])
+_R_EYE = frozenset([(33,7),(7,163),(163,144),(144,145),(145,153),(153,154),(154,155),(155,133),(33,246),(246,161),(161,160),(160,159),(159,158),(158,157),(157,173),(173,133)])
+_L_BROW = frozenset([(276,283),(283,282),(282,295),(295,285),(300,293),(293,334),(334,296),(296,336)])
+_R_BROW = frozenset([(46,53),(53,52),(52,65),(65,55),(70,63),(63,105),(105,66),(66,107)])
+_OVAL = frozenset([(10,338),(338,297),(297,332),(332,284),(284,251),(251,389),(389,356),(356,454),(454,323),(323,361),(361,288),(288,397),(397,365),(365,379),(379,378),(378,400),(400,377),(377,152),(152,148),(148,176),(176,149),(149,150),(150,136),(136,172),(172,58),(58,132),(132,93),(93,234),(234,127),(127,162),(162,21),(21,54),(54,103),(103,67),(67,109),(109,10)])
+_NOSE = frozenset([(168,6),(6,197),(197,195),(195,5),(5,4),(4,1),(1,19),(19,94),(94,2),(98,97),(97,2),(2,326),(326,327),(327,294),(294,278),(278,344),(344,440),(440,275),(275,4),(4,45),(45,220),(220,115),(115,48),(48,64),(64,98)])
+_CONT = _LIPS | _L_EYE | _R_EYE | _L_BROW | _R_BROW | _OVAL | _NOSE
+_TESS = _CONT
 
 try:
     import trimesh
@@ -323,8 +344,14 @@ class HolisticRef:
 
     def process(self, rgb: np.ndarray) -> _HolisticResult:
         ts  = self._next_ts()
-        img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         out = _HolisticResult()
+
+        try:
+            rgb_c = np.ascontiguousarray(rgb)
+            img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_c)
+        except Exception as e:
+            logging.warning(f"mp.Image oluşturulamadı: {e}")
+            return out
 
         if self._face_lm:
             try:
@@ -332,7 +359,7 @@ class HolisticRef:
                 if fr.face_landmarks:
                     out.face_landmarks = _LandmarkList(fr.face_landmarks[0])
             except Exception as e:
-                logging.debug(f"face detect: {e}")
+                logging.warning(f"face detect: {e}")
 
         if self._pose_lm:
             try:
@@ -342,7 +369,7 @@ class HolisticRef:
                     vis = [getattr(lm, 'visibility', 1.0) for lm in lms]
                     out.pose_landmarks = _LandmarkList(lms, vis)
             except Exception as e:
-                logging.debug(f"pose detect: {e}")
+                logging.warning(f"pose detect: {e}")
 
         if self._hand_lm:
             try:
@@ -350,14 +377,14 @@ class HolisticRef:
                 for i, hlist in enumerate(hr.handedness):
                     if i >= len(hr.hand_landmarks):
                         break
-                    label = hlist[0].category_name  # "Left" | "Right"
+                    label = hlist[0].category_name
                     lm_list = _LandmarkList(hr.hand_landmarks[i])
                     if label == "Left":
                         out.left_hand_landmarks  = lm_list
                     else:
                         out.right_hand_landmarks = lm_list
             except Exception as e:
-                logging.debug(f"hand detect: {e}")
+                logging.warning(f"hand detect: {e}")
 
         return out
 
@@ -1338,7 +1365,12 @@ async def ws_endpoint(ws: WebSocket):
     holistic = HolisticRef(complexity=1)
 
     sess.log("BodyMap bağlantısı kuruldu", "SYSTEM")
-    sess.log(f"MediaPipe Holistic hazır | trimesh: {'VAR' if HAS_TRIMESH else 'YOK'}", "OK")
+    face_ok = holistic._face_lm is not None
+    pose_ok = holistic._pose_lm is not None
+    hand_ok = holistic._hand_lm is not None
+    sess.log(f"Yüz:{('✓' if face_ok else '✗')} Vücut:{('✓' if pose_ok else '✗')} El:{('✓' if hand_ok else '✗')} | trimesh:{'VAR' if HAS_TRIMESH else 'YOK'}", "OK")
+    if not face_ok and not pose_ok:
+        sess.log("Model dosyaları bulunamadı — /home/bodymap/download_models.sh çalıştırın", "WARN")
     sess.log(f"Max kayıt: {MAX_FRAMES} frame", "INFO")
 
     async def flush():
@@ -1377,9 +1409,7 @@ async def ws_endpoint(ws: WebSocket):
                 # Ön-işlem: sadece MediaPipe girişine uygulanır, gösterim karesi etkilenmez
                 mp_frame = sess.preprocess.apply(frame)
                 rgb = cv2.cvtColor(mp_frame, cv2.COLOR_BGR2RGB)
-                rgb.flags.writeable = False
                 res = holistic.process(rgb)
-                rgb.flags.writeable = True
 
                 # EMA stabilizasyon — smoothed wrapper'lar oluştur
                 def _smooth(key, mp_lms):

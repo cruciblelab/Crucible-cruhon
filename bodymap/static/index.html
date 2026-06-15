@@ -1129,9 +1129,9 @@ function assessFrameQuality(ctx, w, h) {
     const sharpness = lapCount > 0 ? lapSum / lapCount : 0;
 
     return { brightness, sharpness,
-             tooBlurry: sharpness < 3.0,
-             tooDark: brightness < 50,
-             tooBright: brightness > 220 };
+             tooBlurry: sharpness < 1.2,
+             tooDark: brightness < 25,
+             tooBright: brightness > 240 };
 }
 
 function showQualWarn(msg) {
