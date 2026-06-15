@@ -32,10 +32,18 @@ import struct
 import cv2
 import mediapipe as mp
 import numpy as np
+import urllib.request
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+from _mp_connections import (
+    POSE_CONNECTIONS as _POSE_CONN,
+    HAND_CONNECTIONS as _HAND_CONN,
+    FACEMESH_TESSELATION as _TESS,
+    FACEMESH_CONTOURS as _CONT,
+)
 
 try:
     import trimesh
@@ -55,14 +63,43 @@ STATIC_DIR = BASE_DIR / "static"
 EXPORT_DIR = BASE_DIR / "exports"
 STATIC_DIR.mkdir(exist_ok=True)
 EXPORT_DIR.mkdir(exist_ok=True)
+MODEL_DIR = BASE_DIR / "models"
+MODEL_DIR.mkdir(exist_ok=True)
+
+# ══════════════════════════════════════════════════════════════════
+#  MODEL DOSYALARI — otomatik indir
+# ══════════════════════════════════════════════════════════════════
+
+_MODEL_URLS = {
+    "face_landmarker.task":
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    "pose_landmarker_lite.task":
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    "pose_landmarker_full.task":
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+    "hand_landmarker.task":
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+}
+
+def _ensure_models():
+    missing = [f for f in _MODEL_URLS if not (MODEL_DIR / f).exists()]
+    if not missing:
+        return
+    logging.info(f"Model dosyaları indiriliyor: {missing}")
+    for fname in missing:
+        dest = MODEL_DIR / fname
+        try:
+            logging.info(f"İndiriliyor {fname} …")
+            urllib.request.urlretrieve(_MODEL_URLS[fname], dest)
+            logging.info(f"✓ {fname} ({dest.stat().st_size // (1024*1024)} MB)")
+        except Exception as e:
+            logging.error(f"✗ {fname} indirilemedi: {e}")
+
+_ensure_models()
 
 # ══════════════════════════════════════════════════════════════════
 #  MEDİAPİPE SABİTLERİ
 # ══════════════════════════════════════════════════════════════════
-
-mp_holistic  = mp.solutions.holistic
-mp_face_mesh = mp.solutions.face_mesh
-mp_drawing   = mp.solutions.drawing_utils
 
 FACE_REGIONS = {
     "Sol Kaş":        [336,296,334,293,300,276,283,282,295,285],
@@ -107,7 +144,7 @@ POSE_LANDMARKS = {
     31:"Sol Ayak Ucu",32:"Sağ Ayak Ucu",
 }
 
-POSE_CONNECTIONS = list(mp_holistic.POSE_CONNECTIONS)
+POSE_CONNECTIONS = list(_POSE_CONN)
 
 STYLES = {
     "wireframe": {"name": "Çizgili",      "desc": "Tel kafes"},
@@ -150,55 +187,204 @@ _TESS_CACHE: Optional[list] = None
 def get_tris_cached() -> list:
     global _TESS_CACHE
     if _TESS_CACHE is None:
-        tess = list(mp_face_mesh.FACEMESH_TESSELATION)
-        _TESS_CACHE = _tris_from_tess(tess, 478)
+        _TESS_CACHE = _tris_from_tess(list(_TESS), 478)
     return _TESS_CACHE
 
 
 # ══════════════════════════════════════════════════════════════════
-#  HOLİSTİC SARMALAYICI (dinamik model kalitesi)
+#  MEDİAPİPE TASKS API ADAPTÖRÜ
+# ══════════════════════════════════════════════════════════════════
+
+class _NLM:
+    __slots__ = ('x', 'y', 'z', 'visibility')
+    def __init__(self, x: float, y: float, z: float, visibility: float = 1.0):
+        self.x, self.y, self.z, self.visibility = x, y, z, visibility
+
+class _LandmarkList:
+    def __init__(self, landmarks, visibilities=None):
+        if visibilities is None:
+            visibilities = [1.0] * len(landmarks)
+        self.landmark = [
+            _NLM(float(lm.x), float(lm.y), float(lm.z), float(vis))
+            for lm, vis in zip(landmarks, visibilities)
+        ]
+
+class _HolisticResult:
+    __slots__ = ('face_landmarks', 'pose_landmarks', 'left_hand_landmarks', 'right_hand_landmarks')
+    def __init__(self):
+        self.face_landmarks       = None
+        self.pose_landmarks       = None
+        self.left_hand_landmarks  = None
+        self.right_hand_landmarks = None
+
+
+# ══════════════════════════════════════════════════════════════════
+#  HOLİSTİC SARMALAYICI (Tasks API — MediaPipe 0.10.x)
 # ══════════════════════════════════════════════════════════════════
 
 class HolisticRef:
-    """MediaPipe Holistic sarmalayıcısı — runtime'da tüm parametreler değiştirilebilir."""
+    """FaceLandmarker + PoseLandmarker + HandLandmarker — Tasks API sarmalayıcısı."""
     def __init__(self, complexity: int = 1, det_conf: float = 0.5, track_conf: float = 0.5):
         self.complexity  = complexity
         self.det_conf    = det_conf
         self.track_conf  = track_conf
+        self._ts_ms: int = 0
+        self._face_lm    = None
+        self._pose_lm    = None
+        self._hand_lm    = None
         self._create()
 
-    def _create(self):
-        self.model = mp_holistic.Holistic(
-            static_image_mode=False,
-            model_complexity=self.complexity,
-            smooth_landmarks=True,
-            enable_segmentation=False,
-            smooth_segmentation=False,
-            min_detection_confidence=self.det_conf,
-            min_tracking_confidence=self.track_conf,
-        )
+    def _next_ts(self) -> int:
+        self._ts_ms = max(self._ts_ms + 1, int(time.monotonic() * 1000))
+        return self._ts_ms
 
-    def process(self, rgb):
-        return self.model.process(rgb)
+    def _create(self):
+        try:
+            from mediapipe.tasks import python as _mpt
+            from mediapipe.tasks.python import vision as _mpv
+        except ImportError as e:
+            logging.error(f"MediaPipe Tasks API yüklenemedi: {e}")
+            return
+
+        dc = self.det_conf
+        tc = self.track_conf
+
+        pose_files = {
+            0: "pose_landmarker_lite.task",
+            1: "pose_landmarker_full.task",
+            2: "pose_landmarker_full.task",  # heavy model ayrıca indirilmeli
+        }
+        pose_file = pose_files.get(self.complexity, "pose_landmarker_full.task")
+        pose_path = MODEL_DIR / pose_file
+        if not pose_path.exists():
+            for fb in ("pose_landmarker_full.task", "pose_landmarker_lite.task"):
+                if (MODEL_DIR / fb).exists():
+                    pose_path = MODEL_DIR / fb
+                    break
+
+        face_path = MODEL_DIR / "face_landmarker.task"
+        hand_path = MODEL_DIR / "hand_landmarker.task"
+
+        if face_path.exists():
+            try:
+                self._face_lm = _mpv.FaceLandmarker.create_from_options(
+                    _mpv.FaceLandmarkerOptions(
+                        base_options=_mpt.BaseOptions(model_asset_path=str(face_path)),
+                        running_mode=_mpv.RunningMode.VIDEO,
+                        num_faces=1,
+                        min_face_detection_confidence=dc,
+                        min_face_presence_confidence=dc,
+                        min_tracking_confidence=tc,
+                        output_face_blendshapes=False,
+                        output_facial_transformation_matrixes=False,
+                    )
+                )
+                logging.info("FaceLandmarker ✓")
+            except Exception as e:
+                logging.warning(f"FaceLandmarker yüklenemedi: {e}")
+        else:
+            logging.warning(f"Model eksik: {face_path} — download_models.sh çalıştırın")
+
+        if pose_path.exists():
+            try:
+                self._pose_lm = _mpv.PoseLandmarker.create_from_options(
+                    _mpv.PoseLandmarkerOptions(
+                        base_options=_mpt.BaseOptions(model_asset_path=str(pose_path)),
+                        running_mode=_mpv.RunningMode.VIDEO,
+                        num_poses=1,
+                        min_pose_detection_confidence=dc,
+                        min_pose_presence_confidence=dc,
+                        min_tracking_confidence=tc,
+                    )
+                )
+                logging.info(f"PoseLandmarker ✓ ({pose_path.name})")
+            except Exception as e:
+                logging.warning(f"PoseLandmarker yüklenemedi: {e}")
+        else:
+            logging.warning(f"Model eksik: {pose_path}")
+
+        if hand_path.exists():
+            try:
+                self._hand_lm = _mpv.HandLandmarker.create_from_options(
+                    _mpv.HandLandmarkerOptions(
+                        base_options=_mpt.BaseOptions(model_asset_path=str(hand_path)),
+                        running_mode=_mpv.RunningMode.VIDEO,
+                        num_hands=2,
+                        min_hand_detection_confidence=dc,
+                        min_hand_presence_confidence=dc,
+                        min_tracking_confidence=tc,
+                    )
+                )
+                logging.info("HandLandmarker ✓")
+            except Exception as e:
+                logging.warning(f"HandLandmarker yüklenemedi: {e}")
+        else:
+            logging.warning(f"Model eksik: {hand_path}")
+
+    def process(self, rgb: np.ndarray) -> _HolisticResult:
+        ts  = self._next_ts()
+        img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        out = _HolisticResult()
+
+        if self._face_lm:
+            try:
+                fr = self._face_lm.detect_for_video(img, ts)
+                if fr.face_landmarks:
+                    out.face_landmarks = _LandmarkList(fr.face_landmarks[0])
+            except Exception as e:
+                logging.debug(f"face detect: {e}")
+
+        if self._pose_lm:
+            try:
+                pr = self._pose_lm.detect_for_video(img, ts)
+                if pr.pose_landmarks:
+                    lms = pr.pose_landmarks[0]
+                    vis = [getattr(lm, 'visibility', 1.0) for lm in lms]
+                    out.pose_landmarks = _LandmarkList(lms, vis)
+            except Exception as e:
+                logging.debug(f"pose detect: {e}")
+
+        if self._hand_lm:
+            try:
+                hr = self._hand_lm.detect_for_video(img, ts)
+                for i, hlist in enumerate(hr.handedness):
+                    if i >= len(hr.hand_landmarks):
+                        break
+                    label = hlist[0].category_name  # "Left" | "Right"
+                    lm_list = _LandmarkList(hr.hand_landmarks[i])
+                    if label == "Left":
+                        out.left_hand_landmarks  = lm_list
+                    else:
+                        out.right_hand_landmarks = lm_list
+            except Exception as e:
+                logging.debug(f"hand detect: {e}")
+
+        return out
 
     def update(self, complexity: int = None, det_conf: float = None,
                track_conf: float = None) -> bool:
-        """Parametreleri güncelle; değişiklik varsa modeli yeniden oluştur."""
         changed = False
-        if complexity  is not None and complexity  != self.complexity:  self.complexity  = complexity;  changed = True
-        if det_conf    is not None and det_conf    != self.det_conf:    self.det_conf    = det_conf;    changed = True
-        if track_conf  is not None and track_conf  != self.track_conf:  self.track_conf  = track_conf;  changed = True
+        if complexity is not None and complexity != self.complexity:
+            self.complexity = complexity; changed = True
+        if det_conf   is not None and det_conf   != self.det_conf:
+            self.det_conf   = det_conf;   changed = True
+        if track_conf is not None and track_conf != self.track_conf:
+            self.track_conf = track_conf; changed = True
         if changed:
-            self.model.close()
+            self.close()
+            self._ts_ms = 0
             self._create()
         return changed
 
-    # Geriye dönük uyumluluk
     def set_complexity(self, complexity: int) -> bool:
         return self.update(complexity=complexity)
 
     def close(self):
-        self.model.close()
+        for lm in (self._face_lm, self._pose_lm, self._hand_lm):
+            if lm:
+                try: lm.close()
+                except: pass
+        self._face_lm = self._pose_lm = self._hand_lm = None
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -763,8 +949,8 @@ def draw_face(frame: np.ndarray, face_lms, style: str, active_regions: list):
     h, w = frame.shape[:2]
     pts  = _pts(face_lms.landmark, w, h)
     z    = _z_norm(face_lms.landmark)
-    tess = list(mp_face_mesh.FACEMESH_TESSELATION)
-    cont = list(mp_face_mesh.FACEMESH_CONTOURS)
+    tess = list(_TESS)
+    cont = list(_CONT)
 
     if style == "mold":
         # Siyah arka plana beyaz tel kafes — renksiz kalıp görünümü
@@ -863,7 +1049,7 @@ def draw_pose(frame: np.ndarray, pose_lms, style: str):
 
 def draw_hands(frame: np.ndarray, left_lms, right_lms, style: str):
     h, w = frame.shape[:2]
-    HAND_CONN = list(mp.solutions.hands.HAND_CONNECTIONS)
+    HAND_CONN = list(_HAND_CONN)
     hand_col = {
         "wireframe":(0,200,100),"dots":(0,200,100),"filled":(0,180,80),
         "regions":(200,180,0),"depth":(200,100,0),"xray":(100,50,255),
@@ -982,7 +1168,7 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         # Medyan yüz mesh'i (frontal referans)
         pts     = np.median(stacked, axis=0)
         pts    -= pts.mean(axis=0)
-        tess    = list(mp_face_mesh.FACEMESH_TESSELATION)
+        tess    = list(_TESS)
         tris    = np.array(_tris_from_tess(tess, len(pts)), dtype=np.int32)
         mesh    = trimesh.Trimesh(vertices=pts, faces=tris, process=False)
         mesh.export(str(out / "face_mesh.obj"))
@@ -1041,12 +1227,11 @@ def build_export(session: Session, log_cb) -> Optional[Path]:
         try:
             pts_med = np.median(np.stack(session.frames_xyz), axis=0)
             pts_med -= pts_med.mean(axis=0)
-            tess_conn = list(mp_face_mesh.FACEMESH_TESSELATION)
+            tess_conn = list(_TESS)
             wf_text = build_wireframe_obj(pts_med, tess_conn)
             with open(out / "face_wireframe.obj", "w", encoding="utf-8") as f:
                 f.write(wf_text)
-            # Kontur versiyonu da ekle
-            cont_conn = list(mp_face_mesh.FACEMESH_CONTOURS)
+            cont_conn = list(_CONT)
             wf_cont = build_wireframe_obj(pts_med, cont_conn)
             with open(out / "face_contour.obj", "w", encoding="utf-8") as f:
                 f.write(wf_cont)
