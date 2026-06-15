@@ -4,7 +4,8 @@ import asyncio
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
-from ..database import Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule
+from ..database import Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
+from ..webhook_sender import fire_event
 from ..ws_manager import manager
 from ..config import config
 from ..ai_handler import handle_ai_reply
@@ -41,6 +42,45 @@ def _conv_dict(conv: Conversation) -> dict:
         "created_at": conv.created_at.isoformat(),
         "updated_at": conv.updated_at.isoformat(),
     }
+
+
+class OfflineMessageRequest(BaseModel):
+    visitor_id: str = ""
+    visitor_name: str = ""
+    visitor_email: str = ""
+    message: str
+    page_url: str = ""
+
+
+@router.post("/api/offline-message")
+async def submit_offline_message(req: OfflineMessageRequest):
+    if not req.message.strip():
+        raise HTTPException(400, "Mesaj boş olamaz")
+    om = OfflineMessage.create(
+        visitor_id=req.visitor_id,
+        visitor_name=req.visitor_name,
+        visitor_email=req.visitor_email,
+        message=req.message.strip(),
+        page_url=req.page_url,
+    )
+    asyncio.create_task(fire_event("offline_message", {
+        "visitor_name": req.visitor_name,
+        "visitor_email": req.visitor_email,
+        "message": req.message.strip(),
+        "page_url": req.page_url,
+    }))
+    await manager.broadcast_to_agents({
+        "type": "offline_message",
+        "offline_message": {
+            "id": om.id,
+            "visitor_name": req.visitor_name,
+            "visitor_email": req.visitor_email,
+            "message": req.message,
+            "page_url": req.page_url,
+            "created_at": om.created_at.isoformat(),
+        }
+    })
+    return {"ok": True}
 
 
 @router.post("/api/rating/{conv_id}")
@@ -122,6 +162,9 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
             "type": "new_conversation",
             "conversation": _conv_dict(conv),
         })
+        asyncio.create_task(fire_event("new_conversation", {
+            "conversation": _conv_dict(conv),
+        }))
 
     # Send history
     history = list(conv.messages.order_by(Message.created_at))
@@ -179,6 +222,11 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
 
                 await manager.broadcast_to_watchers(conv.id, payload)
                 await manager.broadcast_to_agents({**payload, "visitor_name": visitor_name})
+                asyncio.create_task(fire_event("new_message", {
+                    "conversation_id": conv.id,
+                    "message": _msg_dict(msg),
+                    "visitor_name": visitor_name,
+                }))
 
                 # AI auto-reply if no agent assigned and AI enabled
                 if conv.status == "open" and config.ai.enabled and config.ai.auto_reply:
@@ -195,6 +243,30 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                     Message.conversation == conv,
                     Message.sender_type != "visitor"
                 ).execute()
+
+            elif msg_type == "page_view":
+                url = str(data.get("url", ""))[:1024]
+                title = str(data.get("title", ""))[:256]
+                if url:
+                    VisitorPageView.create(visitor_id=visitor_id, url=url, title=title)
+                    if conv:
+                        Conversation.update(page_url=url, updated_at=datetime.utcnow()).where(Conversation.id == conv.id).execute()
+                        await manager.broadcast_to_agents({
+                            "type": "visitor_page_view",
+                            "visitor_id": visitor_id,
+                            "conversation_id": conv.id if conv else None,
+                            "url": url,
+                            "title": title,
+                        })
+
+            elif msg_type == "visitor_field":
+                key = str(data.get("key", ""))[:64]
+                value = str(data.get("value", ""))
+                if key:
+                    (VisitorField.insert(visitor_id=visitor_id, key=key, value=value)
+                     .on_conflict(conflict_target=[VisitorField.visitor_id, VisitorField.key],
+                                  update={VisitorField.value: value})
+                     .execute())
 
     except WebSocketDisconnect:
         manager.disconnect_visitor(visitor_id)

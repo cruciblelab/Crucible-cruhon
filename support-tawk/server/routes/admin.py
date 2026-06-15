@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from ..database import (
     Agent, Conversation, Message, CannedResponse,
-    Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting
+    Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
+    Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
 )
+from ..webhook_sender import fire_event
 from ..auth import (
     hash_password, verify_password, create_token,
     get_current_agent, require_admin, verify_ws_token
@@ -19,6 +21,10 @@ from ..ws_manager import manager
 from ..config import config
 
 router = APIRouter(prefix="/api/admin")
+
+
+def _audit(agent_name: str, action: str, target_type: str = "", target_id: int = None, details: str = ""):
+    AuditLog.create(agent_name=agent_name, action=action, target_type=target_type, target_id=target_id, details=details)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -110,6 +116,29 @@ class AppSettingsUpdate(BaseModel):
     offline_message: Optional[str] = None
     proactive_delay_seconds: Optional[int] = None
     notification_sound: Optional[bool] = None
+
+
+class NoteCreate(BaseModel):
+    content: str
+
+class WebhookCreate(BaseModel):
+    name: str = "Webhook"
+    type: str
+    url: str
+    telegram_chat_id: str = ""
+    events_json: str = '["new_conversation","new_message","offline_message"]'
+    is_enabled: bool = True
+
+class WebhookUpdate(BaseModel):
+    name: Optional[str] = None
+    url: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    events_json: Optional[str] = None
+    is_enabled: Optional[bool] = None
+
+class VisitorFieldCreate(BaseModel):
+    key: str
+    value: str
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -296,6 +325,7 @@ async def assign_conversation(req: AssignRequest, agent: Agent = Depends(get_cur
         assigned_to=agent,
         updated_at=datetime.utcnow()
     ).where(Conversation.id == conv.id).execute()
+    _audit(agent.display_name or agent.username, "assign", "conversation", conv.id, "Atandı")
 
     sys_msg = Message.create(
         conversation=conv,
@@ -325,6 +355,7 @@ async def close_conversation(req: CloseRequest, agent: Agent = Depends(get_curre
         closed_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     ).where(Conversation.id == conv.id).execute()
+    _audit(agent.display_name or agent.username, "close", "conversation", conv.id)
 
     await manager.send_to_visitor(conv.visitor_id, {
         "type": "conversation_closed",
@@ -378,6 +409,7 @@ async def transfer_conversation(req: TransferRequest, agent: Agent = Depends(get
         status="assigned",
         updated_at=datetime.utcnow()
     ).where(Conversation.id == conv.id).execute()
+    _audit(agent.display_name or agent.username, "transfer", "conversation", conv.id, f"→ {target.display_name or target.username}")
     sys_msg = Message.create(
         conversation=conv,
         sender_type="system",
@@ -436,6 +468,14 @@ async def agent_ws(ws: WebSocket, token: str):
 
             if action == "watch":
                 manager.watch(agent.id, int(data["conversation_id"]))
+                # Mark visitor messages as read + notify visitor
+                conv_obj = Conversation.get_or_none(Conversation.id == int(data["conversation_id"]))
+                if conv_obj:
+                    updated = (Message.update(is_read=True)
+                               .where(Message.conversation == conv_obj, Message.sender_type == "visitor", Message.is_read == False)
+                               .execute())
+                    if updated > 0:
+                        await manager.send_to_visitor(conv_obj.visitor_id, {"type": "messages_read"})
             elif action == "unwatch":
                 manager.unwatch(agent.id, int(data["conversation_id"]))
             elif action == "typing":
@@ -482,6 +522,7 @@ def create_agent(req: AgentCreate, admin: Agent = Depends(require_admin)):
         display_name=req.display_name or req.username,
         role=req.role,
     )
+    _audit(admin.display_name or admin.username, "create_agent", "agent", a.id, req.username)
     return {"id": a.id, "username": a.username, "role": a.role}
 
 
@@ -506,6 +547,7 @@ def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require
 
 @router.delete("/agents/{agent_id}")
 def delete_agent(agent_id: int, admin: Agent = Depends(require_admin)):
+    _audit(admin.display_name or admin.username, "delete_agent", "agent", agent_id)
     Agent.delete().where(Agent.id == agent_id).execute()
     return {"ok": True}
 
@@ -644,11 +686,13 @@ def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(get_current_agent
     if BlacklistedIP.get_or_none(BlacklistedIP.ip == req.ip):
         raise HTTPException(400, "Bu IP zaten yasaklı")
     b = BlacklistedIP.create(ip=req.ip, reason=req.reason, blocked_by=agent)
+    _audit(agent.display_name or agent.username, "blacklist_add", "ip", b.id, req.ip)
     return {"id": b.id, "ip": b.ip}
 
 
 @router.delete("/blacklist/{bl_id}")
 def remove_blacklist(bl_id: int, agent: Agent = Depends(get_current_agent)):
+    _audit(agent.display_name or agent.username, "blacklist_remove", "ip", bl_id)
     BlacklistedIP.delete().where(BlacklistedIP.id == bl_id).execute()
     return {"ok": True}
 
@@ -812,4 +856,187 @@ def activate_botflow(flow_id: int, agent: Agent = Depends(get_current_agent)):
         raise HTTPException(404, "Bot akışı bulunamadı")
     BotFlow.update(is_active=False).execute()
     BotFlow.update(is_active=True).where(BotFlow.id == flow_id).execute()
+    return {"ok": True}
+
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+
+@router.get("/conversations/{conv_id}/notes")
+def get_notes(conv_id: int, agent: Agent = Depends(get_current_agent)):
+    conv = Conversation.get_or_none(Conversation.id == conv_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    return [
+        {"id": n.id, "content": n.content, "agent_name": n.agent_name, "created_at": n.created_at.isoformat()}
+        for n in Note.select().where(Note.conversation == conv).order_by(Note.created_at)
+    ]
+
+@router.post("/conversations/{conv_id}/notes")
+def create_note(conv_id: int, req: NoteCreate, agent: Agent = Depends(get_current_agent)):
+    conv = Conversation.get_or_none(Conversation.id == conv_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    n = Note.create(
+        conversation=conv,
+        agent=agent,
+        agent_name=agent.display_name or agent.username,
+        content=req.content.strip(),
+    )
+    return {"id": n.id, "content": n.content, "agent_name": n.agent_name, "created_at": n.created_at.isoformat()}
+
+@router.delete("/conversations/{conv_id}/notes/{note_id}")
+def delete_note(conv_id: int, note_id: int, agent: Agent = Depends(get_current_agent)):
+    Note.delete().where(Note.id == note_id, Note.conversation_id == conv_id).execute()
+    return {"ok": True}
+
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+
+@router.get("/webhooks")
+def list_webhooks(admin: Agent = Depends(require_admin)):
+    return [
+        {"id": w.id, "name": w.name, "type": w.type, "url": w.url,
+         "telegram_chat_id": w.telegram_chat_id, "events_json": w.events_json,
+         "is_enabled": w.is_enabled, "created_at": w.created_at.isoformat()}
+        for w in WebhookConfig.select().order_by(WebhookConfig.created_at)
+    ]
+
+@router.post("/webhooks")
+def create_webhook(req: WebhookCreate, admin: Agent = Depends(require_admin)):
+    w = WebhookConfig.create(
+        name=req.name, type=req.type, url=req.url,
+        telegram_chat_id=req.telegram_chat_id, events_json=req.events_json,
+        is_enabled=req.is_enabled,
+    )
+    _audit(admin.display_name or admin.username, "webhook_create", "webhook", w.id, f"{req.type}: {req.name}")
+    return {"id": w.id, "name": w.name}
+
+@router.patch("/webhooks/{webhook_id}")
+def update_webhook(webhook_id: int, req: WebhookUpdate, admin: Agent = Depends(require_admin)):
+    w = WebhookConfig.get_or_none(WebhookConfig.id == webhook_id)
+    if not w:
+        raise HTTPException(404, "Webhook bulunamadı")
+    updates = {}
+    if req.name is not None: updates["name"] = req.name
+    if req.url is not None: updates["url"] = req.url
+    if req.telegram_chat_id is not None: updates["telegram_chat_id"] = req.telegram_chat_id
+    if req.events_json is not None: updates["events_json"] = req.events_json
+    if req.is_enabled is not None: updates["is_enabled"] = req.is_enabled
+    if updates:
+        WebhookConfig.update(**updates).where(WebhookConfig.id == webhook_id).execute()
+    return {"ok": True}
+
+@router.delete("/webhooks/{webhook_id}")
+def delete_webhook(webhook_id: int, admin: Agent = Depends(require_admin)):
+    WebhookConfig.delete().where(WebhookConfig.id == webhook_id).execute()
+    return {"ok": True}
+
+@router.post("/webhooks/{webhook_id}/test")
+async def test_webhook(webhook_id: int, admin: Agent = Depends(require_admin)):
+    w = WebhookConfig.get_or_none(WebhookConfig.id == webhook_id)
+    if not w:
+        raise HTTPException(404, "Webhook bulunamadı")
+    await fire_event("test", {"message": "Support Tawk test webhook", "webhook_id": webhook_id})
+    return {"ok": True}
+
+
+# ── Visitor history ───────────────────────────────────────────────────────────
+
+@router.get("/visitors/{visitor_id}/history")
+def visitor_history(visitor_id: str, agent: Agent = Depends(get_current_agent)):
+    convs = (Conversation.select()
+             .where(Conversation.visitor_id == visitor_id)
+             .order_by(Conversation.created_at.desc())
+             .limit(20))
+    return [_conv_summary(c) for c in convs]
+
+@router.get("/visitors/{visitor_id}/pages")
+def visitor_pages(visitor_id: str, agent: Agent = Depends(get_current_agent)):
+    pages = (VisitorPageView.select()
+             .where(VisitorPageView.visitor_id == visitor_id)
+             .order_by(VisitorPageView.created_at.desc())
+             .limit(50))
+    return [{"url": p.url, "title": p.title, "created_at": p.created_at.isoformat()} for p in pages]
+
+@router.get("/visitors/{visitor_id}/fields")
+def get_visitor_fields(visitor_id: str, agent: Agent = Depends(get_current_agent)):
+    return [{"key": f.key, "value": f.value} for f in VisitorField.select().where(VisitorField.visitor_id == visitor_id)]
+
+@router.post("/visitors/{visitor_id}/fields")
+def set_visitor_field(visitor_id: str, req: VisitorFieldCreate, agent: Agent = Depends(get_current_agent)):
+    (VisitorField.insert(visitor_id=visitor_id, key=req.key, value=req.value)
+     .on_conflict(conflict_target=[VisitorField.visitor_id, VisitorField.key],
+                  update={VisitorField.value: req.value})
+     .execute())
+    return {"ok": True}
+
+@router.delete("/visitors/{visitor_id}/fields/{key}")
+def delete_visitor_field(visitor_id: str, key: str, agent: Agent = Depends(get_current_agent)):
+    VisitorField.delete().where(VisitorField.visitor_id == visitor_id, VisitorField.key == key).execute()
+    return {"ok": True}
+
+
+# ── Live visitors ─────────────────────────────────────────────────────────────
+
+@router.get("/live-visitors")
+def live_visitors(agent: Agent = Depends(get_current_agent)):
+    from ..ws_manager import manager
+    visitor_ids = list(manager.live_visitors().keys())
+    result = []
+    for vid in visitor_ids:
+        conv = (Conversation.select()
+                .where(Conversation.visitor_id == vid, Conversation.status != "closed")
+                .order_by(Conversation.updated_at.desc())
+                .first())
+        last_page = (VisitorPageView.select()
+                     .where(VisitorPageView.visitor_id == vid)
+                     .order_by(VisitorPageView.created_at.desc())
+                     .first())
+        result.append({
+            "visitor_id": vid,
+            "conversation_id": conv.id if conv else None,
+            "visitor_name": conv.visitor_name if conv else "Ziyaretçi",
+            "current_url": last_page.url if last_page else (conv.page_url if conv else ""),
+            "current_title": last_page.title if last_page else "",
+            "status": conv.status if conv else "browsing",
+            "connected_at": manager.live_visitors()[vid],
+        })
+    return result
+
+
+# ── Audit Log ─────────────────────────────────────────────────────────────────
+
+@router.get("/audit-log")
+def get_audit_log(
+    limit: int = 100,
+    offset: int = 0,
+    agent: Agent = Depends(require_admin)
+):
+    logs = (AuditLog.select()
+            .order_by(AuditLog.created_at.desc())
+            .limit(limit)
+            .offset(offset))
+    return [
+        {"id": l.id, "agent_name": l.agent_name, "action": l.action,
+         "target_type": l.target_type, "target_id": l.target_id,
+         "details": l.details, "created_at": l.created_at.isoformat()}
+        for l in logs
+    ]
+
+
+# ── Offline Messages ──────────────────────────────────────────────────────────
+
+@router.get("/offline-messages")
+def list_offline_messages(agent: Agent = Depends(get_current_agent)):
+    msgs = OfflineMessage.select().order_by(OfflineMessage.created_at.desc()).limit(100)
+    return [
+        {"id": m.id, "visitor_name": m.visitor_name, "visitor_email": m.visitor_email,
+         "message": m.message, "page_url": m.page_url, "is_read": m.is_read,
+         "created_at": m.created_at.isoformat()}
+        for m in msgs
+    ]
+
+@router.patch("/offline-messages/{msg_id}/read")
+def mark_offline_read(msg_id: int, agent: Agent = Depends(get_current_agent)):
+    OfflineMessage.update(is_read=True).where(OfflineMessage.id == msg_id).execute()
     return {"ok": True}

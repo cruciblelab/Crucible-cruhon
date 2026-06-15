@@ -14,15 +14,18 @@ class ConnectionManager:
         self._agents: Dict[int, WebSocket] = {}
         # conversation_id → set of agent_ids watching it
         self._watching: Dict[int, Set[int]] = {}
+        self._visitor_connected_at: Dict[str, str] = {}
 
     # ── Visitor ──────────────────────────────────────────────────────────────
 
     async def connect_visitor(self, visitor_id: str, ws: WebSocket):
         await ws.accept()
         self._visitors[visitor_id] = ws
+        self._visitor_connected_at[visitor_id] = datetime.utcnow().isoformat()
 
     def disconnect_visitor(self, visitor_id: str):
         self._visitors.pop(visitor_id, None)
+        self._visitor_connected_at.pop(visitor_id, None)
 
     async def send_to_visitor(self, visitor_id: str, data: dict):
         ws = self._visitors.get(visitor_id)
@@ -92,6 +95,9 @@ class ConnectionManager:
 
     def visitor_count(self) -> int:
         return len(self._visitors)
+
+    def live_visitors(self) -> dict:
+        return {vid: self._visitor_connected_at.get(vid, "") for vid in self._visitors}
 
 
 manager = ConnectionManager()

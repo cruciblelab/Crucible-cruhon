@@ -49,6 +49,8 @@
     proactive_timer: null,
     at_bottom: true,
     new_msg_count: 0,
+    offline_mode: false,
+    waiting: false,
   };
 
   // ── Markdown renderer ─────────────────────────────────────────────────────
@@ -111,6 +113,12 @@
     ".st-star.active { opacity:1; }",
     "#st-rating-comment { padding:8px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none; outline:none; width:100%; }",
     "#st-rating-submit { padding:8px 16px; border:none; border-radius:8px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }",
+    "#st-offline-form { padding:20px; display:flex; flex-direction:column; gap:12px; }",
+    "#st-offline-form h3 { margin:0; font-size:15px; color:#1e293b; }",
+    "#st-offline-form p { margin:0; font-size:13px; color:#64748b; }",
+    "#st-offline-form input, #st-offline-form textarea { padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; outline:none; }",
+    "#st-wait-mode { padding:20px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px; }",
+    ".st-read-status { font-size:10px; color:#cbd5e1; text-align:right; padding:0 4px; }",
     "#st-input-area { padding:10px 12px; border-top:1px solid #f1f5f9; display:flex; align-items:flex-end; gap:8px; }",
     "#st-input { flex:1; resize:none; border:1px solid #e2e8f0; border-radius:10px; padding:9px 12px; font-size:13.5px; outline:none; max-height:120px; line-height:1.4; transition:border-color .2s; }",
     "#st-input:focus { border-color:var(--st-color); }",
@@ -147,6 +155,21 @@
     '    <button class="st-close" aria-label="Kapat">✕</button>',
     '  </div>',
     '  <div id="st-body" style="position:relative;flex:1;display:flex;flex-direction:column;overflow:hidden">',
+    '    <div id="st-offline-form" style="display:none">',
+    '      <h3>📬 Mesaj Bırakın</h3>',
+    '      <p>Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.</p>',
+    '      <input id="st-ol-name" type="text" placeholder="Adınız">',
+    '      <input id="st-ol-email" type="email" placeholder="E-posta adresiniz">',
+    '      <textarea id="st-ol-msg" rows="4" placeholder="Mesajınız..."></textarea>',
+    '      <button id="st-ol-submit" style="padding:11px;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Gönder</button>',
+    '      <button id="st-ol-wait" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#64748b">Temsilci bekle</button>',
+    '    </div>',
+    '    <div id="st-wait-mode" style="display:none">',
+    '      <div style="font-size:40px">⏳</div>',
+    '      <div style="font-size:14px;font-weight:600;color:#1e293b">Temsilci bekleniyor...</div>',
+    '      <div style="font-size:13px;color:#64748b">Temsilci çevrimiçi olduğunda otomatik bağlanacaksınız.</div>',
+    '      <button id="st-cancel-wait" style="padding:8px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#64748b">İptal</button>',
+    '    </div>',
     '    <div id="st-info-form" style="display:none">',
     '      <h3>Merhaba! 👋</h3>',
     '      <p>Sohbet başlatmak için bilgilerinizi girin.</p>',
@@ -215,6 +238,14 @@
   var emojiGrid = document.getElementById("st-emoji-grid");
   var scrollBtn = document.getElementById("st-scroll-btn");
   var scrollBadge = document.getElementById("st-scroll-badge");
+  var offlineForm = document.getElementById("st-offline-form");
+  var waitMode = document.getElementById("st-wait-mode");
+  var olNameInput = document.getElementById("st-ol-name");
+  var olEmailInput = document.getElementById("st-ol-email");
+  var olMsgInput = document.getElementById("st-ol-msg");
+  var olSubmitBtn = document.getElementById("st-ol-submit");
+  var olWaitBtn = document.getElementById("st-ol-wait");
+  var cancelWaitBtn = document.getElementById("st-cancel-wait");
 
   // Smart scroll tracking
   messagesEl.addEventListener("scroll", function() {
@@ -329,8 +360,18 @@
     clearUnread();
     if (!state.ws || state.ws.readyState > 1) {
       if (state.info_given) {
-        showChat();
-        connectWS();
+        // Check if agents are online
+        fetch(SERVER + "/api/schedule/status").then(function(r) { return r.json(); }).then(function(d) {
+          if (!d.available) {
+            showOfflineForm();
+          } else {
+            showChat();
+            connectWS();
+          }
+        }).catch(function() {
+          showChat();
+          connectWS();
+        });
       } else {
         showInfoForm();
       }
@@ -358,6 +399,54 @@
     infoForm.style.display = "none";
     chatArea.style.display = "flex";
   }
+
+  function showOfflineForm() {
+    infoForm.style.display = "none";
+    chatArea.style.display = "none";
+    offlineForm.style.display = "flex";
+    waitMode.style.display = "none";
+  }
+
+  function showWaitMode() {
+    infoForm.style.display = "none";
+    chatArea.style.display = "none";
+    offlineForm.style.display = "none";
+    waitMode.style.display = "flex";
+    connectWS();
+  }
+
+  if (olSubmitBtn) olSubmitBtn.addEventListener("click", function() {
+    var name = olNameInput.value.trim();
+    var email = olEmailInput.value.trim();
+    var msg = olMsgInput.value.trim();
+    if (!msg) { olMsgInput.focus(); return; }
+    olSubmitBtn.disabled = true;
+    fetch(SERVER + "/api/offline-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        visitor_id: VISITOR_ID,
+        visitor_name: name || state.name || "Ziyaretçi",
+        visitor_email: email || state.email || "",
+        message: msg,
+        page_url: window.location.href,
+      }),
+    }).then(function() {
+      offlineForm.innerHTML = '<div style="padding:20px;text-align:center"><p style="color:#22c55e;font-weight:500;font-size:14px">✅ Mesajınız alındı! En kısa sürede size döneceğiz.</p></div>';
+    }).catch(function() {
+      olSubmitBtn.disabled = false;
+      appendSystemMsg("Mesaj gönderilemedi.");
+    });
+  });
+
+  if (olWaitBtn) olWaitBtn.addEventListener("click", function() {
+    showWaitMode();
+  });
+
+  if (cancelWaitBtn) cancelWaitBtn.addEventListener("click", function() {
+    waitMode.style.display = "none";
+    offlineForm.style.display = "flex";
+  });
 
   startBtn.addEventListener("click", function () {
     var name = nameInput.value.trim();

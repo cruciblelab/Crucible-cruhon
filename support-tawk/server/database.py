@@ -165,11 +165,76 @@ class Setting(BaseModel):
         table_name = "settings"
 
 
+class Note(BaseModel):
+    id = AutoField()
+    conversation = ForeignKeyField(Conversation, backref="notes", on_delete="CASCADE")
+    agent = ForeignKeyField(Agent, null=True, on_delete="SET NULL")
+    agent_name = CharField(max_length=128, default="")
+    content = TextField()
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "notes"
+
+class WebhookConfig(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=64, default="Webhook")
+    type = CharField(max_length=32)  # slack | discord | telegram | generic
+    url = CharField(max_length=1024)
+    telegram_chat_id = CharField(max_length=64, default="")
+    events_json = TextField(default='["new_conversation","new_message","offline_message"]')
+    is_enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "webhook_configs"
+
+class VisitorPageView(BaseModel):
+    id = AutoField()
+    visitor_id = CharField(max_length=64, index=True)
+    url = CharField(max_length=1024, default="")
+    title = CharField(max_length=256, default="")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "visitor_page_views"
+
+class VisitorField(BaseModel):
+    id = AutoField()
+    visitor_id = CharField(max_length=64)
+    key = CharField(max_length=64)
+    value = TextField(default="")
+    class Meta:
+        table_name = "visitor_fields"
+        indexes = ((("visitor_id", "key"), True),)
+
+class AuditLog(BaseModel):
+    id = AutoField()
+    agent_name = CharField(max_length=128, default="Sistem")
+    action = CharField(max_length=64)
+    target_type = CharField(max_length=32, default="")
+    target_id = IntegerField(null=True)
+    details = TextField(default="")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "audit_logs"
+
+class OfflineMessage(BaseModel):
+    id = AutoField()
+    visitor_id = CharField(max_length=64, default="")
+    visitor_name = CharField(max_length=128, default="")
+    visitor_email = CharField(max_length=256, default="")
+    message = TextField()
+    page_url = CharField(max_length=1024, default="")
+    is_read = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "offline_messages"
+
+
 def init_db():
     with database:
         database.create_tables([
             Agent, Conversation, Message, CannedResponse,
-            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting
+            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
+            Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
         ], safe=True)
         # Migrations for new columns on existing tables
         try:
