@@ -16,3 +16,5 @@ venv/
 .mypy_cache/
 *.py.bak
 .claude/
+bodymap/models/
+*.task
