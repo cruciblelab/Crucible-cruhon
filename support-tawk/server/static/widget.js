@@ -149,7 +149,7 @@
     ".st-bubble-pop { background:#fff; color:#1e293b; padding:10px 14px; border-radius:14px 14px 4px 14px; box-shadow:0 4px 20px rgba(0,0,0,.15); font-size:13.5px; line-height:1.4; cursor:pointer; position:relative; animation:st-pop .3s ease; }",
     ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
     "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
-    "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
+    "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-wrapper.st-chat-open #st-btn { display:none; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
   ].join("\n");
   document.head.appendChild(style);
 
@@ -457,6 +457,7 @@
   function openChat() {
     state.open = true;
     win.classList.add("open");
+    wrapper.classList.add("st-chat-open");
     hideProactiveBubbles();
     clearUnread();
     // Herkes anında sohbet edebilir — form/bekleme zorunlu değil.
@@ -470,6 +471,7 @@
   function closeChat() {
     state.open = false;
     win.classList.remove("open");
+    wrapper.classList.remove("st-chat-open");
   }
 
   btn.addEventListener("click", function () { state.open ? closeChat() : openChat(); });
@@ -888,8 +890,16 @@
     }).then(function (r) {
       if (!r.ok) throw new Error("Yükleme başarısız");
       return r.json();
-    }).then(function () {
+    }).then(function (data) {
       fileInput.value = "";
+      appendMsg({
+        sender_type: "visitor",
+        content: "",
+        file_url: data.url,
+        file_name: data.filename,
+        created_at: new Date().toISOString(),
+      });
+      scrollBottom();
     }).catch(function (e) {
       appendSystemMsg("Dosya yüklenemedi: " + e.message);
     });
