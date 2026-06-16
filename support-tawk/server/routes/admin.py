@@ -6,7 +6,13 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+
+try:
+    import openpyxl
+    _HAS_OPENPYXL = True
+except ImportError:
+    _HAS_OPENPYXL = False
 from ..database import (
     Agent, Conversation, Message, CannedResponse,
     Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
@@ -79,6 +85,17 @@ class ConvTagRequest(BaseModel):
 class BlacklistCreate(BaseModel):
     ip: str
     reason: str = ""
+    kind: str = "ip"  # ip | visitor
+
+
+class PriorityUpdate(BaseModel):
+    priority: str  # low | normal | high
+
+
+class BulkActionRequest(BaseModel):
+    conversation_ids: List[int]
+    action: str  # close | assign | reopen
+    tag_id: Optional[int] = None
 
 
 class ScheduleUpdate(BaseModel):
@@ -201,6 +218,12 @@ def _conv_full(conv: Conversation) -> dict:
         "unread_count": sum(1 for m in msgs if not m.is_read and m.sender_type == "visitor"),
         "tags": _conv_tags(conv.id),
         "rating": _conv_rating(conv.id),
+        "ip_address": getattr(conv, "ip_address", ""),
+        "user_agent": getattr(conv, "user_agent", ""),
+        "country": getattr(conv, "country", ""),
+        "city": getattr(conv, "city", ""),
+        "language": getattr(conv, "language", ""),
+        "priority": getattr(conv, "priority", "normal"),
     }
 
 
@@ -244,18 +267,30 @@ def _conv_summary(conv: Conversation) -> dict:
         "unread_count": unread,
         "last_message": _msg_dict(last_msg) if last_msg else None,
         "tags": _conv_tags(conv.id),
+        "ip_address": getattr(conv, "ip_address", ""),
+        "country": getattr(conv, "country", ""),
+        "city": getattr(conv, "city", ""),
+        "language": getattr(conv, "language", ""),
+        "priority": getattr(conv, "priority", "normal"),
     }
 
 
 @router.get("/conversations")
 def list_conversations(
     status: str = "open",
+    unread_only: bool = False,
+    priority: str = "",
     agent: Agent = Depends(get_current_agent)
 ):
     query = Conversation.select().order_by(Conversation.updated_at.desc())
     if status != "all":
         query = query.where(Conversation.status == status)
-    return [_conv_summary(c) for c in query]
+    if priority in ("low", "normal", "high"):
+        query = query.where(Conversation.priority == priority)
+    summaries = [_conv_summary(c) for c in query]
+    if unread_only:
+        summaries = [s for s in summaries if s["unread_count"] > 0]
+    return summaries
 
 
 @router.get("/conversations/mine")
@@ -396,6 +431,115 @@ async def send_message(req: SendMessageRequest, agent: Agent = Depends(get_curre
     await manager.send_to_visitor(conv.visitor_id, payload)
     await manager.broadcast_to_watchers_except(conv.id, payload, agent.id)
     return _msg_dict(msg)
+
+
+@router.post("/conversations/reopen")
+async def reopen_conversation(req: CloseRequest, agent: Agent = Depends(get_current_agent)):
+    conv = Conversation.get_or_none(Conversation.id == req.conversation_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    Conversation.update(
+        status="open",
+        closed_at=None,
+        updated_at=datetime.utcnow()
+    ).where(Conversation.id == conv.id).execute()
+    _audit(agent.display_name or agent.username, "reopen", "conversation", conv.id)
+    await manager.broadcast_to_agents({
+        "type": "conversation_reopened",
+        "conversation_id": conv.id,
+    })
+    return {"ok": True}
+
+
+@router.patch("/conversations/{conv_id}/priority")
+def set_priority(conv_id: int, req: PriorityUpdate, agent: Agent = Depends(get_current_agent)):
+    if req.priority not in ("low", "normal", "high"):
+        raise HTTPException(400, "Geçersiz öncelik")
+    conv = Conversation.get_or_none(Conversation.id == conv_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    Conversation.update(priority=req.priority, updated_at=datetime.utcnow()).where(Conversation.id == conv_id).execute()
+    return {"ok": True}
+
+
+@router.post("/conversations/bulk")
+async def bulk_action(req: BulkActionRequest, agent: Agent = Depends(get_current_agent)):
+    if not req.conversation_ids:
+        raise HTTPException(400, "Konuşma seçilmedi")
+    if req.action not in ("close", "assign", "reopen", "tag"):
+        raise HTTPException(400, "Geçersiz işlem")
+
+    results = {"ok": 0, "failed": 0}
+    now = datetime.utcnow()
+
+    for conv_id in req.conversation_ids:
+        conv = Conversation.get_or_none(Conversation.id == conv_id)
+        if not conv:
+            results["failed"] += 1
+            continue
+        try:
+            if req.action == "close":
+                Conversation.update(status="closed", closed_at=now, updated_at=now).where(Conversation.id == conv_id).execute()
+                await manager.send_to_visitor(conv.visitor_id, {"type": "conversation_closed"})
+            elif req.action == "assign":
+                Conversation.update(status="assigned", assigned_to=agent, updated_at=now).where(Conversation.id == conv_id).execute()
+            elif req.action == "reopen":
+                Conversation.update(status="open", closed_at=None, updated_at=now).where(Conversation.id == conv_id).execute()
+            elif req.action == "tag" and req.tag_id:
+                from ..database import Tag, ConversationTag
+                tag = Tag.get_or_none(Tag.id == req.tag_id)
+                if tag:
+                    ConversationTag.get_or_create(conversation=conv, tag=tag)
+            results["ok"] += 1
+        except Exception:
+            results["failed"] += 1
+
+    _audit(agent.display_name or agent.username, f"bulk_{req.action}", "conversations", None,
+           f"{results['ok']} konuşma")
+    await manager.broadcast_to_agents({"type": "bulk_action_done", "action": req.action})
+    return results
+
+
+@router.get("/conversations/export-xlsx")
+def export_xlsx(days: int = 30, agent: Agent = Depends(get_current_agent)):
+    if not _HAS_OPENPYXL:
+        raise HTTPException(501, "openpyxl kurulu değil — CSV kullanın")
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    convs = Conversation.select().where(Conversation.created_at >= cutoff).order_by(Conversation.created_at.desc())
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Konuşmalar"
+    headers = ["ID", "Ziyaretçi", "E-posta", "Durum", "Öncelik", "IP", "Ülke", "Şehir", "Dil", "Sayfa", "Oluşturma", "Kapanma", "Gönderen", "Mesaj İçeriği", "Mesaj Zamanı"]
+    ws.append(headers)
+    for conv in convs:
+        msgs = list(Message.select().where(Message.conversation == conv).order_by(Message.created_at))
+        if not msgs:
+            ws.append([
+                conv.id, conv.visitor_name, conv.visitor_email, conv.status,
+                getattr(conv, "priority", "normal"),
+                getattr(conv, "ip_address", ""), getattr(conv, "country", ""),
+                getattr(conv, "city", ""), getattr(conv, "language", ""),
+                conv.page_url, conv.created_at.isoformat(),
+                conv.closed_at.isoformat() if conv.closed_at else "", "", "", ""
+            ])
+        for msg in msgs:
+            ws.append([
+                conv.id, conv.visitor_name, conv.visitor_email, conv.status,
+                getattr(conv, "priority", "normal"),
+                getattr(conv, "ip_address", ""), getattr(conv, "country", ""),
+                getattr(conv, "city", ""), getattr(conv, "language", ""),
+                conv.page_url, conv.created_at.isoformat(),
+                conv.closed_at.isoformat() if conv.closed_at else "",
+                msg.sender_name, msg.content, msg.created_at.isoformat()
+            ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=conversations_{days}days.xlsx"}
+    )
 
 
 @router.post("/conversations/transfer")
@@ -680,6 +824,7 @@ def list_blacklist(agent: Agent = Depends(get_current_agent)):
         {
             "id": b.id,
             "ip": b.ip,
+            "kind": getattr(b, "kind", "ip"),
             "reason": b.reason,
             "blocked_by": b.blocked_by_id,
             "created_at": b.created_at.isoformat(),
@@ -690,11 +835,12 @@ def list_blacklist(agent: Agent = Depends(get_current_agent)):
 
 @router.post("/blacklist")
 def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(get_current_agent)):
+    kind = req.kind if req.kind in ("ip", "visitor") else "ip"
     if BlacklistedIP.get_or_none(BlacklistedIP.ip == req.ip):
-        raise HTTPException(400, "Bu IP zaten yasaklı")
-    b = BlacklistedIP.create(ip=req.ip, reason=req.reason, blocked_by=agent)
-    _audit(agent.display_name or agent.username, "blacklist_add", "ip", b.id, req.ip)
-    return {"id": b.id, "ip": b.ip}
+        raise HTTPException(400, "Bu değer zaten yasaklı")
+    b = BlacklistedIP.create(ip=req.ip, reason=req.reason, blocked_by=agent, kind=kind)
+    _audit(agent.display_name or agent.username, "blacklist_add", kind, b.id, req.ip)
+    return {"id": b.id, "ip": b.ip, "kind": kind}
 
 
 @router.delete("/blacklist/{bl_id}")

@@ -10,6 +10,7 @@ from ..ws_manager import manager
 from ..config import config
 from ..ai_handler import handle_ai_reply
 from ..auth import verify_ws_token
+from ..geoip import lookup as geo_lookup
 
 router = APIRouter()
 
@@ -144,9 +145,17 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
     if forwarded_for:
         client_ip = forwarded_for.split(",")[0].strip()
 
-    if BlacklistedIP.get_or_none(BlacklistedIP.ip == client_ip):
+    # IP veya visitor ID kara liste kontrolü
+    if BlacklistedIP.get_or_none(
+        ((BlacklistedIP.ip == client_ip) & (BlacklistedIP.kind == "ip")) |
+        ((BlacklistedIP.ip == visitor_id) & (BlacklistedIP.kind == "visitor"))
+    ):
         await ws.close(code=4403)
         return
+
+    user_agent = ws.headers.get("user-agent", "")[:512]
+    accept_lang = ws.headers.get("accept-language", "")
+    language = accept_lang.split(",")[0].split(";")[0].strip()[:16] if accept_lang else ""
 
     await manager.connect_visitor(visitor_id, ws)
     conv = Conversation.get_or_none(
@@ -154,10 +163,16 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
         Conversation.status != "closed"
     )
     if not conv:
+        geo = await asyncio.get_event_loop().run_in_executor(None, geo_lookup, client_ip)
         conv = Conversation.create(
             visitor_id=visitor_id,
             status="open",
             site_name=config.site.name,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            country=geo.get("country", ""),
+            city=geo.get("city", ""),
+            language=language,
         )
         await manager.broadcast_to_agents({
             "type": "new_conversation",

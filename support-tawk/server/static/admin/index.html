@@ -47,9 +47,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #search-box{padding:10px 12px;border-bottom:1px solid #f1f5f9}
 #search-box input{width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none}
 #conv-list{flex:1;overflow-y:auto}
-.conv-item{padding:12px 14px;cursor:pointer;border-bottom:1px solid #f8fafc;transition:background .1s;position:relative}
+.conv-item{padding:12px 14px;border-bottom:1px solid #f8fafc;transition:background .1s;position:relative;display:flex;align-items:flex-start;gap:8px}
 .conv-item:hover{background:#f8fafc}
 .conv-item.active{background:#eff6ff}
+.conv-item .bulk-chk{margin-top:3px;flex-shrink:0;cursor:pointer}
 .conv-item .ci-name{font-size:13.5px;font-weight:600;color:#1e293b;margin-bottom:2px}
 .conv-item .ci-preview{font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
 .conv-item .ci-time{font-size:11px;color:#cbd5e1;margin-top:3px}
@@ -396,7 +397,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="stab" data-tab="mine" onclick="switchTab('mine')">Benimkiler</div>
           <div class="stab" data-tab="closed" onclick="switchTab('closed')">Kapalı</div>
         </div>
-        <div id="search-box"><input type="text" id="search-input" placeholder="Konuşma ara..." oninput="filterConvs()"></div>
+        <div id="search-box">
+          <input type="text" id="search-input" placeholder="Konuşma ara..." oninput="filterConvs()">
+        </div>
+        <div id="filter-bar" style="display:flex;align-items:center;gap:6px;padding:4px 10px 6px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#64748b;cursor:pointer">
+            <input type="checkbox" id="filter-unread" onchange="filterConvs()"> Okunmamış
+          </label>
+          <select id="filter-priority" onchange="filterConvs()" style="font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:5px;color:#64748b;outline:none">
+            <option value="">Tüm Öncelikler</option>
+            <option value="high">🔴 Yüksek</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="low">🟢 Düşük</option>
+          </select>
+        </div>
+        <div id="bulk-toolbar" style="display:none;padding:4px 10px;background:#eff6ff;border-bottom:1px solid #bfdbfe;align-items:center;gap:6px;flex-wrap:wrap">
+          <span id="bulk-count" style="font-size:11px;font-weight:600;color:#2563eb"></span>
+          <button class="btn-sm" onclick="bulkAction('close')">Kapat</button>
+          <button class="btn-sm primary" onclick="bulkAction('assign')">Üstüme Al</button>
+          <button class="btn-sm" onclick="bulkAction('reopen')">Yeniden Aç</button>
+          <button class="btn-sm danger" onclick="clearBulk()">İptal</button>
+        </div>
         <div id="conv-list"></div>
       </div>
       <div id="chat-panel">
@@ -416,11 +437,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <select id="tag-select" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none" onchange="addTagToConv()">
                 <option value="">+ Etiket</option>
               </select>
+              <select id="priority-select" onchange="setPriority()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none" title="Öncelik">
+                <option value="low">🟢 Düşük</option>
+                <option value="normal" selected>🟡 Normal</option>
+                <option value="high">🔴 Yüksek</option>
+              </select>
               <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Ziyaretçi Bilgisi">👤 Bilgi</button>
               <button class="ch-btn" onclick="openTransferModal()" title="Aktar">↪ Aktar</button>
               <button class="ch-btn" onclick="exportConv()" title="CSV İndir">⬇ CSV</button>
               <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
               <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
+              <button class="ch-btn" id="reopen-btn" onclick="reopenConv()" style="display:none">↺ Yeniden Aç</button>
             </div>
           </div>
           <div style="position:relative;flex:1;overflow:hidden;display:flex;flex-direction:column">
@@ -455,6 +482,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="vip-field"><span class="vf-key">Ad:</span><span id="vip-name">-</span></div>
           <div class="vip-field"><span class="vf-key">E-posta:</span><span id="vip-email">-</span></div>
           <div class="vip-field"><span class="vf-key">ID:</span><span id="vip-id" style="font-size:10px;word-break:break-all">-</span></div>
+        </div>
+        <div class="vip-section" id="vip-security-section">
+          <h4>🔐 Güvenlik Bilgileri</h4>
+          <div class="vip-field"><span class="vf-key">IP:</span><span id="vip-ip" style="font-family:monospace;font-size:11px">-</span></div>
+          <div class="vip-field"><span class="vf-key">Konum:</span><span id="vip-location">-</span></div>
+          <div class="vip-field"><span class="vf-key">Dil:</span><span id="vip-lang">-</span></div>
+          <div class="vip-field" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="vf-key">Tarayıcı:</span><span id="vip-ua" style="font-size:10px;color:#64748b;word-break:break-all">-</span></div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn-sm danger" onclick="banVisitorIp()">🚫 IP Engelle</button>
+            <button class="btn-sm danger" onclick="banVisitorId()">🚫 ID Engelle</button>
+          </div>
         </div>
         <div class="vip-section">
           <h4>Özel Alanlar</h4>
@@ -502,11 +540,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div class="chart-section">
           <h3>Dışa Aktar</h3>
-          <p style="font-size:13px;color:#64748b;margin-bottom:12px">Tüm konuşmaları CSV olarak indir:</p>
+          <p style="font-size:13px;color:#64748b;margin-bottom:8px">CSV:</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn-sm primary" onclick="exportAllConvs(7)">7 Gün CSV</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(30)">30 Gün CSV</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(90)">90 Gün CSV</button>
+          </div>
+          <p style="font-size:13px;color:#64748b;margin-bottom:8px">Excel (IP, konum, öncelik dahil):</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-sm primary" onclick="exportAllConvs(7)">Son 7 Gün</button>
-            <button class="btn-sm primary" onclick="exportAllConvs(30)">Son 30 Gün</button>
-            <button class="btn-sm primary" onclick="exportAllConvs(90)">Son 90 Gün</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(7)">7 Gün Excel</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(30)">30 Gün Excel</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(90)">90 Gün Excel</button>
           </div>
         </div>
       </div>
@@ -528,15 +572,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Blacklist page -->
     <div class="page" id="page-blacklist">
       <div class="page-header">
-        <h2>🚫 IP Kara Listesi</h2>
+        <h2>🚫 Engel Listesi</h2>
       </div>
       <div class="add-bl-row">
-        <input id="new-bl-ip" placeholder="IP Adresi" style="max-width:200px">
+        <select id="new-bl-kind" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
+          <option value="ip">IP Adresi</option>
+          <option value="visitor">Ziyaretçi ID</option>
+        </select>
+        <input id="new-bl-ip" placeholder="IP adresi veya ziyaretçi ID'si" style="max-width:240px">
         <input id="new-bl-reason" placeholder="Neden (isteğe bağlı)">
         <button class="form-submit" onclick="addBlacklist()">Ekle</button>
       </div>
       <table class="bl-table" id="bl-table">
-        <thead><tr><th>IP</th><th>Neden</th><th>Tarih</th><th></th></tr></thead>
+        <thead><tr><th>Tür</th><th>Değer</th><th>Neden</th><th>Tarih</th><th></th></tr></thead>
         <tbody id="bl-tbody"></tbody>
       </table>
     </div>
@@ -801,6 +849,8 @@ var scheduleData = {};
 var displayedMsgIds = new Set();
 var chatAtBottom = true;
 var chatNewMsgs = 0;
+var bulkSelected = new Set();
+var currentConvSecurity = {};  // {ip, visitor_id}
 
 if (!TOKEN || !AGENT) { window.location.href = "/admin/login.html"; }
 
@@ -973,10 +1023,14 @@ function switchTab(tab) {
   loadConvs();
 }
 
+var _PRIORITY_DOT = {high:"🔴",normal:"🟡",low:"🟢"};
+
 function loadConvs() {
   var path = currentTab === "mine" ? "/conversations/mine" : "/conversations?status=" + (currentTab === "closed" ? "closed" : "open");
   api("GET", path).then(function(data) {
     convs = Array.isArray(data) ? data : [];
+    bulkSelected.clear();
+    updateBulkToolbar();
     renderConvList();
   });
 }
@@ -984,12 +1038,20 @@ function loadConvs() {
 function filterConvs() { renderConvList(); }
 
 function renderConvList() {
-  var q = document.getElementById("search-input").value.toLowerCase();
+  var q = (document.getElementById("search-input").value || "").toLowerCase();
+  var unreadOnly = document.getElementById("filter-unread").checked;
+  var prioFilter = document.getElementById("filter-priority").value;
   var list = document.getElementById("conv-list");
   var filtered = convs.filter(function(c) {
-    if (!q) return true;
-    return (c.visitor_name||"").toLowerCase().includes(q) || (c.visitor_email||"").toLowerCase().includes(q);
+    if (q && !(c.visitor_name||"").toLowerCase().includes(q) && !(c.visitor_email||"").toLowerCase().includes(q)) return false;
+    if (unreadOnly && !c.unread_count) return false;
+    if (prioFilter && c.priority !== prioFilter) return false;
+    return true;
   });
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">Konuşma bulunamadı.</div>';
+    return;
+  }
   list.innerHTML = filtered.map(function(c) {
     var preview = c.last_message ? (c.last_message.content || "📎 Dosya") : "Yeni konuşma";
     var time = c.updated_at ? new Date(c.updated_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
@@ -998,14 +1060,55 @@ function renderConvList() {
     var tags = (c.tags || []).map(function(t) {
       return '<span class="conv-tag-pill" style="background:' + escHtml(t.color) + '">' + escHtml(t.name) + '</span>';
     }).join("");
-    return '<div class="conv-item' + (c.id===currentConvId?" active":"") + '" onclick="openConv(' + c.id + ')">' +
-      badge +
-      '<div class="ci-name">' + online + escHtml(c.visitor_name||"Ziyaretçi") + '</div>' +
-      '<div class="ci-preview">' + escHtml(preview.substring(0,60)) + '</div>' +
-      (tags ? '<div style="margin-top:3px">' + tags + '</div>' : '') +
-      '<div class="ci-time">' + time + (c.assigned_to ? ' · ' + escHtml(c.assigned_to.display_name||c.assigned_to.username) : '') + '</div>' +
+    var prio = c.priority || "normal";
+    var prioIcon = _PRIORITY_DOT[prio] || "";
+    var chkd = bulkSelected.has(c.id) ? "checked" : "";
+    return '<div class="conv-item' + (c.id===currentConvId?" active":"") + '">' +
+      '<input type="checkbox" class="bulk-chk" ' + chkd + ' onclick="toggleBulk(event,' + c.id + ')" style="flex-shrink:0">' +
+      '<div style="flex:1;min-width:0" onclick="openConv(' + c.id + ')">' +
+        badge +
+        '<div class="ci-name">' + online + prioIcon + ' ' + escHtml(c.visitor_name||"Ziyaretçi") + '</div>' +
+        '<div class="ci-preview">' + escHtml(preview.substring(0,60)) + '</div>' +
+        (tags ? '<div style="margin-top:3px">' + tags + '</div>' : '') +
+        '<div class="ci-time">' + time + (c.assigned_to ? ' · ' + escHtml(c.assigned_to.display_name||c.assigned_to.username) : '') + '</div>' +
+      '</div>' +
       '</div>';
   }).join("");
+}
+
+function toggleBulk(e, id) {
+  e.stopPropagation();
+  if (bulkSelected.has(id)) bulkSelected.delete(id);
+  else bulkSelected.add(id);
+  updateBulkToolbar();
+  renderConvList();
+}
+
+function updateBulkToolbar() {
+  var tb = document.getElementById("bulk-toolbar");
+  var cnt = document.getElementById("bulk-count");
+  if (bulkSelected.size > 0) {
+    tb.style.display = "flex";
+    cnt.textContent = bulkSelected.size + " seçildi";
+  } else {
+    tb.style.display = "none";
+  }
+}
+
+function clearBulk() {
+  bulkSelected.clear();
+  updateBulkToolbar();
+  renderConvList();
+}
+
+function bulkAction(action) {
+  if (!bulkSelected.size) return;
+  var ids = Array.from(bulkSelected);
+  api("POST", "/conversations/bulk", {conversation_ids: ids, action: action}).then(function(res) {
+    toast("İşlem tamamlandı: " + (res.ok||0) + " başarılı");
+    bulkSelected.clear();
+    loadConvs();
+  }).catch(function() { toast("Hata oluştu", "error"); });
 }
 
 function openConv(id) {
@@ -1038,8 +1141,16 @@ function openConv(id) {
     document.getElementById("ch-name").textContent = data.visitor_name || "Ziyaretçi";
     var meta = [];
     if (data.visitor_email) meta.push(data.visitor_email);
+    if (data.city || data.country) meta.push([data.city, data.country].filter(Boolean).join(", "));
     if (data.page_url) meta.push(data.page_url);
     document.getElementById("ch-meta").textContent = meta.join(" · ") || "Bilgi yok";
+
+    // Priority select
+    var ps = document.getElementById("priority-select");
+    ps.value = data.priority || "normal";
+
+    // Security context for ban buttons
+    currentConvSecurity = {ip: data.ip_address || "", visitor_id: data.visitor_id || ""};
 
     // Show tags
     renderConvTags(data.tags || []);
@@ -1050,6 +1161,7 @@ function openConv(id) {
       appendSystemMsg("Değerlendirme: " + stars + " (" + data.rating.score + "/5)" + (data.rating.comment ? " — " + data.rating.comment : ""));
     }
 
+    var isClosed = data.status === "closed";
     var assignBtn = document.getElementById("assign-btn");
     if (data.status === "assigned" && data.assigned_to && data.assigned_to.id === AGENT.id) {
       assignBtn.textContent = "Atanmış (Ben)";
@@ -1058,16 +1170,16 @@ function openConv(id) {
       assignBtn.textContent = "Üstüme Al";
       assignBtn.disabled = false;
     }
-    document.getElementById("close-btn").style.display = data.status === "closed" ? "none" : "";
-    if (data.status === "closed") {
-      document.getElementById("msg-input").disabled = true;
-      document.getElementById("send-btn").disabled = true;
-    }
+    document.getElementById("close-btn").style.display = isClosed ? "none" : "";
+    document.getElementById("reopen-btn").style.display = isClosed ? "" : "none";
+    document.getElementById("msg-input").disabled = isClosed;
+    document.getElementById("send-btn").disabled = isClosed;
+
     (data.messages || []).forEach(appendMsg);
     scrollBottom();
     loadNotes(id);
     if (data.visitor_id) {
-      loadVisitorInfo(data.visitor_id, data.visitor_name, data.visitor_email, data.visitor_id);
+      loadVisitorInfo(data.visitor_id, data.visitor_name, data.visitor_email, data.visitor_id, data);
     }
   });
 }
@@ -1268,6 +1380,7 @@ function closeConv() {
   if (!confirm("Konuşmayı kapatmak istediğinizden emin misiniz?")) return;
   api("POST", "/conversations/close", { conversation_id: currentConvId }).then(function() {
     document.getElementById("close-btn").style.display = "none";
+    document.getElementById("reopen-btn").style.display = "";
     document.getElementById("msg-input").disabled = true;
     document.getElementById("send-btn").disabled = true;
     toast("Konuşma kapatıldı");
@@ -1277,6 +1390,48 @@ function closeConv() {
     document.getElementById("active-chat").style.display = "none";
     document.getElementById("no-conv").style.display = "flex";
   });
+}
+
+function reopenConv() {
+  if (!currentConvId) return;
+  api("POST", "/conversations/reopen", { conversation_id: currentConvId }).then(function() {
+    document.getElementById("close-btn").style.display = "";
+    document.getElementById("reopen-btn").style.display = "none";
+    document.getElementById("msg-input").disabled = false;
+    document.getElementById("send-btn").disabled = false;
+    toast("Konuşma yeniden açıldı");
+  });
+}
+
+function setPriority() {
+  if (!currentConvId) return;
+  var prio = document.getElementById("priority-select").value;
+  api("PATCH", "/conversations/" + currentConvId + "/priority", { priority: prio }).then(function() {
+    var conv = convs.find(function(c){ return c.id === currentConvId; });
+    if (conv) conv.priority = prio;
+    toast("Öncelik güncellendi");
+    renderConvList();
+  });
+}
+
+function banVisitorIp() {
+  if (!currentConvSecurity.ip || currentConvSecurity.ip === "unknown") {
+    toast("IP bilgisi yok", "error"); return;
+  }
+  var reason = prompt("Engel nedeni (isteğe bağlı):", "");
+  if (reason === null) return;
+  api("POST", "/blacklist", {ip: currentConvSecurity.ip, kind: "ip", reason: reason}).then(function() {
+    toast("IP engellendi: " + currentConvSecurity.ip);
+  }).catch(function(e) { toast("Hata", "error"); });
+}
+
+function banVisitorId() {
+  if (!currentConvSecurity.visitor_id) { toast("Ziyaretçi ID yok", "error"); return; }
+  var reason = prompt("Engel nedeni (isteğe bağlı):", "");
+  if (reason === null) return;
+  api("POST", "/blacklist", {ip: currentConvSecurity.visitor_id, kind: "visitor", reason: reason}).then(function() {
+    toast("Ziyaretçi ID engellendi");
+  }).catch(function(e) { toast("Hata", "error"); });
 }
 
 function openTransferModal() {
@@ -1481,6 +1636,23 @@ function exportAllConvs(days) {
   });
 }
 
+function exportAllXlsx(days) {
+  fetch("/api/admin/conversations/export-xlsx?days=" + days, {
+    headers: { "Authorization": "Bearer " + TOKEN }
+  }).then(function(r) {
+    if (!r.ok) { toast("Excel dışa aktarma için sunucuda openpyxl kurulu değil. CSV kullanın.", "error"); return null; }
+    return r.blob();
+  }).then(function(blob) {
+    if (!blob) return;
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "conversations_" + days + "days.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
 // ── Tags ──────────────────────────────────────────────────────────────────────
 function loadTags() {
   api("GET", "/tags").then(function(data) {
@@ -1518,24 +1690,27 @@ function loadBlacklist() {
     var list = Array.isArray(data) ? data : [];
     tbody.innerHTML = list.map(function(b) {
       var d = b.created_at ? new Date(b.created_at).toLocaleDateString() : "";
+      var kindLabel = b.kind === "visitor" ? "🆔 Ziyaretçi ID" : "🌐 IP";
       return '<tr>' +
-        '<td style="font-weight:600;font-family:monospace">' + escHtml(b.ip) + '</td>' +
+        '<td>' + kindLabel + '</td>' +
+        '<td style="font-weight:600;font-family:monospace;font-size:11px;word-break:break-all">' + escHtml(b.ip) + '</td>' +
         '<td>' + escHtml(b.reason || "-") + '</td>' +
         '<td>' + d + '</td>' +
         '<td><button class="btn-sm danger" onclick="removeBlacklist(' + b.id + ')">Kaldır</button></td>' +
         '</tr>';
-    }).join("") || '<tr><td colspan="4" style="color:#94a3b8;text-align:center;padding:20px">Liste boş.</td></tr>';
+    }).join("") || '<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:20px">Liste boş.</td></tr>';
   });
 }
 
 function addBlacklist() {
   var ip = document.getElementById("new-bl-ip").value.trim();
   var reason = document.getElementById("new-bl-reason").value.trim();
-  if (!ip) { toast("IP adresi zorunlu", "error"); return; }
-  api("POST", "/blacklist", { ip, reason }).then(function() {
+  var kind = document.getElementById("new-bl-kind").value;
+  if (!ip) { toast("Değer zorunlu", "error"); return; }
+  api("POST", "/blacklist", { ip, reason, kind }).then(function() {
     document.getElementById("new-bl-ip").value = "";
     document.getElementById("new-bl-reason").value = "";
-    toast("IP yasaklandı");
+    toast(kind === "visitor" ? "Ziyaretçi ID engellendi" : "IP engellendi");
     loadBlacklist();
   });
 }
@@ -1871,11 +2046,19 @@ function toggleVisitorInfo() {
   panel.classList.toggle("open");
 }
 
-function loadVisitorInfo(visitorId, name, email, vid) {
+function loadVisitorInfo(visitorId, name, email, vid, convData) {
   currentVisitorId = visitorId;
   document.getElementById("vip-name").textContent = name || "-";
   document.getElementById("vip-email").textContent = email || "-";
   document.getElementById("vip-id").textContent = vid || "-";
+  // Security fields
+  if (convData) {
+    document.getElementById("vip-ip").textContent = convData.ip_address || "-";
+    var loc = [convData.city, convData.country].filter(Boolean).join(", ") || "-";
+    document.getElementById("vip-location").textContent = loc;
+    document.getElementById("vip-lang").textContent = convData.language || "-";
+    document.getElementById("vip-ua").textContent = convData.user_agent || "-";
+  }
 
   // Load custom fields
   api("GET", "/visitors/" + visitorId + "/fields").then(function(data) {

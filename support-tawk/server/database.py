@@ -64,6 +64,13 @@ class Conversation(BaseModel):
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
     closed_at = DateTimeField(null=True)
+    # Güvenlik / takip meta verileri
+    ip_address = CharField(max_length=64, default="")
+    user_agent = CharField(max_length=512, default="")
+    country = CharField(max_length=64, default="")
+    city = CharField(max_length=128, default="")
+    language = CharField(max_length=16, default="")
+    priority = CharField(max_length=16, default="normal")  # low | normal | high
 
     class Meta:
         table_name = "conversations"
@@ -117,7 +124,8 @@ class ConversationTag(BaseModel):
 
 class BlacklistedIP(BaseModel):
     id = AutoField()
-    ip = CharField(max_length=64, unique=True)
+    ip = CharField(max_length=64, unique=True)  # IP adresi veya ziyaretçi ID değeri
+    kind = CharField(max_length=16, default="ip")  # ip | visitor
     reason = CharField(max_length=256, default="")
     blocked_by = ForeignKeyField(Agent, null=True, on_delete="SET NULL")
     created_at = DateTimeField(default=datetime.utcnow)
@@ -237,7 +245,18 @@ def init_db():
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
         ], safe=True)
         # Migrations for new columns on existing tables
-        try:
-            database.execute_sql("ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'")
-        except Exception:
-            pass
+        _safe_migrations = [
+            "ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'",
+            "ALTER TABLE conversations ADD COLUMN ip_address VARCHAR(64) DEFAULT ''",
+            "ALTER TABLE conversations ADD COLUMN user_agent VARCHAR(512) DEFAULT ''",
+            "ALTER TABLE conversations ADD COLUMN country VARCHAR(64) DEFAULT ''",
+            "ALTER TABLE conversations ADD COLUMN city VARCHAR(128) DEFAULT ''",
+            "ALTER TABLE conversations ADD COLUMN language VARCHAR(16) DEFAULT ''",
+            "ALTER TABLE conversations ADD COLUMN priority VARCHAR(16) DEFAULT 'normal'",
+            "ALTER TABLE blacklisted_ips ADD COLUMN kind VARCHAR(16) DEFAULT 'ip'",
+        ]
+        for _sql in _safe_migrations:
+            try:
+                database.execute_sql(_sql)
+            except Exception:
+                pass
