@@ -30,6 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-item:hover{color:#fff;background:rgba(255,255,255,.05)}
 .nav-item.active{color:#fff;background:rgba(255,255,255,.08);border-left-color:#3b82f6}
 .nav-item .nav-icon{font-size:16px;width:20px;text-align:center}
+.nav-group{padding:14px 18px 6px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.6px}
 
 /* Content area */
 #content{flex:1;display:flex;overflow:hidden}
@@ -66,6 +67,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #chat-header .ch-name{font-weight:600;font-size:15px}
 #chat-header .ch-meta{font-size:12px;color:#94a3b8;margin-top:2px}
 #chat-header .ch-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#chat-subbar{display:flex;gap:8px;align-items:center;padding:8px 20px;background:#fff;border-bottom:1px solid #f1f5f9;flex-wrap:wrap}
+#chat-subbar select{padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;max-width:140px}
+.ch-more-wrap{position:relative}
+.ch-more-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.12);min-width:220px;z-index:120;overflow:hidden;padding:4px}
+.ch-more-menu.open{display:block}
+.ch-more-menu button{display:block;width:100%;text-align:left;padding:9px 12px;border:none;background:none;font-size:13px;color:#374151;cursor:pointer;border-radius:7px}
+.ch-more-menu button:hover{background:#f1f5f9}
+.ch-more-menu button.danger{color:#dc2626}
+.ch-more-menu button.danger:hover{background:#fee2e2}
 .ch-btn{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;transition:all .15s}
 .ch-btn:hover{background:#e2e8f0}
 .ch-btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
@@ -360,44 +370,45 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="nav-backdrop" onclick="toggleNav()"></div>
   <!-- Left nav -->
   <div id="left-nav">
+    <!-- Günlük operasyon -->
     <div class="nav-item active" data-page="convs" onclick="showPage('convs')">
       <span class="nav-icon">💬</span> Konuşmalar
-    </div>
-    <div class="nav-item" data-page="stats" onclick="showPage('stats')">
-      <span class="nav-icon">📊</span> İstatistikler
-    </div>
-    <div class="nav-item" data-page="tags" onclick="showPage('tags')">
-      <span class="nav-icon">🏷️</span> Etiketler
-    </div>
-    <div class="nav-item" data-page="blacklist" onclick="showPage('blacklist')">
-      <span class="nav-icon">🚫</span> Kara Liste
-    </div>
-    <div class="nav-item" data-page="botflow" onclick="showPage('botflow')">
-      <span class="nav-icon">🤖</span> Bot Akış
-    </div>
-    <div class="nav-item" data-page="schedule" onclick="showPage('schedule')">
-      <span class="nav-icon">🕐</span> Mesai Saatleri
-    </div>
-    <div class="nav-item" data-page="forms" id="nav-forms" style="display:none" onclick="showPage('forms')">
-      <span class="nav-icon">📋</span> Formlar
-    </div>
-    <div class="nav-item" data-page="departments" id="nav-departments" style="display:none" onclick="showPage('departments')">
-      <span class="nav-icon">🏢</span> Departmanlar
-    </div>
-    <div class="nav-item" data-page="settings" id="nav-settings" style="display:none" onclick="showPage('settings')">
-      <span class="nav-icon">⚙️</span> Site Ayarları
-    </div>
-    <div class="nav-item" data-page="profile" onclick="showPage('profile')">
-      <span class="nav-icon">👤</span> Profilim
     </div>
     <div class="nav-item" data-page="visitors" onclick="showPage('visitors')">
       <span class="nav-icon">👥</span> Canlı Ziyaretçiler
     </div>
+    <div class="nav-item" data-page="offline-msgs" onclick="showPage('offline-msgs')">
+      <span class="nav-icon">📬</span> Çevrimdışı Mesajlar
+    </div>
+    <div class="nav-item" data-page="stats" onclick="showPage('stats')">
+      <span class="nav-icon">📊</span> İstatistikler
+    </div>
+
+    <!-- Yönetim grubu -->
+    <div class="nav-group" id="nav-group-mgmt">Yönetim</div>
+    <div class="nav-item" data-page="departments" id="nav-departments" style="display:none" onclick="showPage('departments')">
+      <span class="nav-icon">🏢</span> Departmanlar
+    </div>
+    <div class="nav-item" data-page="botflow" id="nav-botflow" style="display:none" onclick="showPage('botflow')">
+      <span class="nav-icon">🤖</span> Bot Akışları
+    </div>
+    <div class="nav-item" data-page="forms" id="nav-forms" style="display:none" onclick="showPage('forms')">
+      <span class="nav-icon">📋</span> Formlar
+    </div>
+    <div class="nav-item" data-page="tags" id="nav-tags" style="display:none" onclick="showPage('tags')">
+      <span class="nav-icon">🏷️</span> Etiketler
+    </div>
+    <div class="nav-item" data-page="blacklist" id="nav-blacklist" style="display:none" onclick="showPage('blacklist')">
+      <span class="nav-icon">🚫</span> Engel Listesi
+    </div>
+    <div class="nav-item" data-page="schedule" id="nav-schedule" style="display:none" onclick="showPage('schedule')">
+      <span class="nav-icon">🕐</span> Mesai Saatleri
+    </div>
     <div class="nav-item" data-page="webhooks" id="nav-webhooks" style="display:none" onclick="showPage('webhooks')">
       <span class="nav-icon">🔗</span> Webhooks
     </div>
-    <div class="nav-item" data-page="offline-msgs" onclick="showPage('offline-msgs')">
-      <span class="nav-icon">📬</span> Çevrimdışı Mesajlar
+    <div class="nav-item" data-page="settings" id="nav-settings" style="display:none" onclick="showPage('settings')">
+      <span class="nav-icon">⚙️</span> Site Ayarları
     </div>
     <div class="nav-item" data-page="audit" id="nav-audit" style="display:none" onclick="showPage('audit')">
       <span class="nav-icon">📋</span> Denetim Logu
@@ -456,25 +467,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <div id="ch-tags" style="margin-top:4px"></div>
             </div>
             <div class="ch-actions">
-              <select id="tag-select" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none" onchange="addTagToConv()">
-                <option value="">+ Etiket</option>
-              </select>
-              <select id="priority-select" onchange="setPriority()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none" title="Öncelik">
-                <option value="low">🟢 Düşük</option>
-                <option value="normal" selected>🟡 Normal</option>
-                <option value="high">🔴 Yüksek</option>
-              </select>
-              <select id="dept-select" onchange="setConvDept()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;max-width:120px" title="Departman">
-                <option value="">🏢 Departman</option>
-              </select>
               <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Ziyaretçi Bilgisi">👤 Bilgi</button>
-              <button class="ch-btn" onclick="openTransferModal()" title="Aktar">↪ Aktar</button>
-              <button class="ch-btn" onclick="exportConv()" title="CSV İndir">⬇ CSV</button>
-              <button class="ch-btn danger btn-sm" id="delete-visitor-btn" onclick="deleteVisitorData()" style="display:none" title="Ziyaretçiye ait tüm verileri sil">🗑 Veriyi Sil</button>
               <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
               <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
               <button class="ch-btn" id="reopen-btn" onclick="reopenConv()" style="display:none">↺ Yeniden Aç</button>
+              <div class="ch-more-wrap">
+                <button class="ch-btn" id="ch-more-btn" onclick="toggleChMore(event)" title="Diğer işlemler">⋯</button>
+                <div class="ch-more-menu" id="ch-more-menu">
+                  <button onclick="openTransferModal(); closeChMore()">↪ Başka temsilciye aktar</button>
+                  <button onclick="exportConv(); closeChMore()">⬇ CSV olarak indir</button>
+                  <button id="ch-more-delete" class="danger" onclick="deleteVisitorData(); closeChMore()" style="display:none">🗑 Ziyaretçi verisini sil</button>
+                </div>
+              </div>
             </div>
+          </div>
+          <div id="chat-subbar">
+            <select id="tag-select" onchange="addTagToConv()">
+              <option value="">+ Etiket</option>
+            </select>
+            <select id="priority-select" onchange="setPriority()" title="Öncelik">
+              <option value="low">🟢 Düşük</option>
+              <option value="normal" selected>🟡 Normal</option>
+              <option value="high">🔴 Yüksek</option>
+            </select>
+            <select id="dept-select" onchange="setConvDept()" title="Departman">
+              <option value="">🏢 Departman</option>
+            </select>
           </div>
           <div style="position:relative;flex:1;overflow:hidden;display:flex;flex-direction:column">
             <button id="scroll-to-bottom">↓ Yeni mesaj <span id="scroll-unread-badge">0</span></button>
@@ -586,7 +604,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <h3>Departman Dağılımı</h3>
           <div class="top-agents-list" id="dept-breakdown-list"></div>
         </div>
-        <div class="chart-section" style="grid-column:1 / -1">
+        <div class="chart-section" id="stats-export-section" style="grid-column:1 / -1">
           <h3>Dışa Aktar</h3>
           <p style="font-size:13px;color:#64748b;margin-bottom:8px">CSV:</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -1001,21 +1019,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- Agents Modal -->
 <div class="modal-overlay" id="agents-modal">
-  <div class="modal">
+  <div class="modal" style="width:560px">
     <button class="modal-close" onclick="closeModal('agents-modal')">✕</button>
-    <h2>Temsilciler</h2>
+    <h2>Temsilciler & Roller</h2>
     <div id="agents-list"></div>
     <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0">
-    <h3 style="font-size:14px;margin-bottom:12px">Yeni Temsilci Ekle</h3>
+    <h3 id="agent-form-title" style="font-size:14px;margin-bottom:12px">Yeni Temsilci Ekle</h3>
+    <input type="hidden" id="edit-agent-id" value="">
     <div class="form-row">
       <input id="new-username" placeholder="Kullanıcı adı">
       <input id="new-password" type="password" placeholder="Şifre">
     </div>
     <div class="form-row">
       <input id="new-displayname" placeholder="Görünen ad">
-      <select id="new-role"><option value="agent">Temsilci</option><option value="admin">Yönetici</option></select>
+      <select id="new-role" onchange="onAgentRoleChange()">
+        <option value="agent">Temsilci (sınırlı yetki)</option>
+        <option value="admin">Yönetici (tam yetki)</option>
+      </select>
     </div>
-    <button class="form-submit" onclick="createAgent()">Ekle</button>
+    <div id="agent-perms-wrap" style="margin:6px 0 14px">
+      <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px">Yetkiler</div>
+      <div id="agent-perms-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+    </div>
+    <div id="agent-admin-note" style="display:none;font-size:12px;color:#0369a1;background:#e0f2fe;padding:9px 12px;border-radius:8px;margin-bottom:14px">
+      ⓘ Yöneticiler tüm yetkilere sahiptir.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="form-submit" id="agent-save-btn" onclick="saveAgent()">Ekle</button>
+      <button class="btn-sm" id="agent-cancel-btn" onclick="resetAgentForm()" style="display:none">İptal</button>
+    </div>
   </div>
 </div>
 
@@ -1086,14 +1118,55 @@ var currentConvSecurity = {};  // {ip, visitor_id}
 if (!TOKEN || !AGENT) { window.location.href = "/admin/login.html"; }
 
 document.getElementById("agent-name-display").textContent = AGENT.display_name || AGENT.username;
-if (AGENT.role === "admin") {
-  document.getElementById("agents-btn").style.display = "";
-  document.getElementById("nav-settings").style.display = "";
-  document.getElementById("nav-webhooks").style.display = "";
-  document.getElementById("nav-audit").style.display = "";
-  document.getElementById("nav-departments").style.display = "";
-  document.getElementById("nav-forms").style.display = "";
+
+// Yetki kontrolü: admin tüm yetkilere sahip
+function can(perm) {
+  if (!AGENT) return false;
+  if (AGENT.role === "admin") return true;
+  return (AGENT.permissions || []).indexOf(perm) >= 0;
 }
+
+// Nav görünürlüğünü yetkilere göre ayarla
+function applyNavVisibility() {
+  var map = {
+    "agents-btn": "manage_agents",
+    "nav-settings": "manage_settings",
+    "nav-webhooks": "manage_webhooks",
+    "nav-audit": "view_audit",
+    "nav-departments": "manage_departments",
+    "nav-forms": "manage_forms",
+    "nav-blacklist": "manage_blacklist",
+    "nav-botflow": "manage_botflow",
+    "nav-tags": "manage_tags",
+    "nav-schedule": "manage_schedule",
+  };
+  var anyMgmt = false;
+  Object.keys(map).forEach(function(id) {
+    var el = document.getElementById(id);
+    var allowed = can(map[id]);
+    if (el) el.style.display = allowed ? "" : "none";
+    if (id !== "agents-btn" && allowed) anyMgmt = true;
+  });
+  var grp = document.getElementById("nav-group-mgmt");
+  if (grp) grp.style.display = anyMgmt ? "" : "none";
+}
+function applyPermVisibility() {
+  applyNavVisibility();
+  var exp = document.getElementById("stats-export-section");
+  if (exp) exp.style.display = can("export_data") ? "" : "none";
+}
+applyPermVisibility();
+
+// Oturum açıkken yetkileri tazele (eski localStorage'da permissions olmayabilir)
+api("GET", "/me").then(function(me) {
+  if (me && me.role) {
+    AGENT.role = me.role;
+    AGENT.permissions = me.permissions || [];
+    localStorage.setItem("st_agent", JSON.stringify(AGENT));
+    applyPermVisibility();
+  }
+}).catch(function(){});
+
 var allDepartments = [];
 
 // Set topbar avatar
@@ -1427,9 +1500,9 @@ function openConv(id) {
     document.getElementById("reopen-btn").style.display = isClosed ? "" : "none";
     document.getElementById("msg-input").disabled = isClosed;
     document.getElementById("send-btn").disabled = isClosed;
-    // Show delete visitor button for admins only
-    var dvBtn = document.getElementById("delete-visitor-btn");
-    if (dvBtn) dvBtn.style.display = (AGENT && AGENT.role === "admin") ? "" : "none";
+    // Show delete visitor option only for those with delete_data permission
+    var dvBtn = document.getElementById("ch-more-delete");
+    if (dvBtn) dvBtn.style.display = can("delete_data") ? "" : "none";
 
     (data.messages || []).forEach(appendMsg);
     scrollBottom();
@@ -1809,46 +1882,138 @@ function deleteCanned(id) {
 }
 
 // ── Agents ────────────────────────────────────────────────────────────────────
+var PERMISSIONS = [];  // [{key,label,desc}]
+
+function loadPermissions() {
+  api("GET", "/permissions").then(function(data) {
+    PERMISSIONS = Array.isArray(data) ? data : [];
+  });
+}
+
 function loadAgents() {
   api("GET", "/agents").then(function(data) {
     allAgents = Array.isArray(data) ? data : [];
   });
 }
 
+function renderAgentPerms(selected) {
+  selected = selected || [];
+  var grid = document.getElementById("agent-perms-grid");
+  grid.innerHTML = PERMISSIONS.map(function(p) {
+    var checked = selected.indexOf(p.key) >= 0 ? "checked" : "";
+    return '<label style="display:flex;align-items:flex-start;gap:7px;font-size:12.5px;color:#374151;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px;cursor:pointer" title="' + escHtml(p.desc) + '">' +
+      '<input type="checkbox" class="perm-chk" value="' + p.key + '" ' + checked + ' style="margin-top:2px;flex-shrink:0">' +
+      '<span><span style="font-weight:600">' + escHtml(p.label) + '</span></span>' +
+      '</label>';
+  }).join("");
+}
+
+function onAgentRoleChange() {
+  var role = document.getElementById("new-role").value;
+  var isAdmin = role === "admin";
+  document.getElementById("agent-perms-wrap").style.display = isAdmin ? "none" : "";
+  document.getElementById("agent-admin-note").style.display = isAdmin ? "" : "none";
+}
+
 function openAgentsModal() {
+  resetAgentForm();
   api("GET", "/agents").then(function(data) {
     allAgents = Array.isArray(data) ? data : [];
     document.getElementById("agents-list").innerHTML = data.map(function(a) {
+      var permCount = (a.permissions || []).length;
+      var roleLabel = a.role === "admin" ? "Yönetici" : ("Temsilci" + (permCount ? " · " + permCount + " yetki" : ""));
       return '<div class="agent-row">' +
         '<div class="agent-avatar">' + (a.display_name||a.username).charAt(0).toUpperCase() + '</div>' +
         '<div class="agent-info"><div class="an">' + escHtml(a.display_name||a.username) + '</div>' +
-        '<div class="ar">@' + escHtml(a.username) + ' · ' + a.role + (a.is_active ? '' : ' · Pasif') + '</div></div>' +
+        '<div class="ar">@' + escHtml(a.username) + ' · ' + roleLabel + (a.is_active ? '' : ' · Pasif') + '</div></div>' +
         (a.is_online ? '<div class="online-dot" title="Çevrimiçi"></div>' : '<div class="offline-dot" title="Çevrimdışı"></div>') +
+        '<button class="btn-sm" onclick="editAgent(' + a.id + ')" style="margin-left:8px">Düzenle</button>' +
         '</div>';
     }).join("");
   });
   document.getElementById("agents-modal").classList.add("open");
 }
 
-function createAgent() {
+function resetAgentForm() {
+  document.getElementById("edit-agent-id").value = "";
+  document.getElementById("new-username").value = "";
+  document.getElementById("new-username").disabled = false;
+  document.getElementById("new-password").value = "";
+  document.getElementById("new-password").placeholder = "Şifre";
+  document.getElementById("new-displayname").value = "";
+  document.getElementById("new-role").value = "agent";
+  document.getElementById("agent-form-title").textContent = "Yeni Temsilci Ekle";
+  document.getElementById("agent-save-btn").textContent = "Ekle";
+  document.getElementById("agent-cancel-btn").style.display = "none";
+  renderAgentPerms([]);
+  onAgentRoleChange();
+}
+
+function editAgent(id) {
+  var a = allAgents.find(function(x){ return x.id === id; });
+  if (!a) return;
+  document.getElementById("edit-agent-id").value = id;
+  document.getElementById("new-username").value = a.username;
+  document.getElementById("new-username").disabled = true;
+  document.getElementById("new-password").value = "";
+  document.getElementById("new-password").placeholder = "Yeni şifre (boş = değişmez)";
+  document.getElementById("new-displayname").value = a.display_name || "";
+  document.getElementById("new-role").value = a.role;
+  document.getElementById("agent-form-title").textContent = "Temsilciyi Düzenle: @" + a.username;
+  document.getElementById("agent-save-btn").textContent = "Kaydet";
+  document.getElementById("agent-cancel-btn").style.display = "";
+  renderAgentPerms(a.permissions || []);
+  onAgentRoleChange();
+  document.getElementById("agent-form-title").scrollIntoView({behavior:"smooth", block:"center"});
+}
+
+function _collectPerms() {
+  var perms = [];
+  document.querySelectorAll("#agent-perms-grid .perm-chk:checked").forEach(function(c){ perms.push(c.value); });
+  return perms;
+}
+
+function saveAgent() {
+  var editId = document.getElementById("edit-agent-id").value;
   var username = document.getElementById("new-username").value.trim();
   var password = document.getElementById("new-password").value.trim();
   var display_name = document.getElementById("new-displayname").value.trim();
   var role = document.getElementById("new-role").value;
-  if (!username || !password) { toast("Kullanıcı adı ve şifre zorunlu", "error"); return; }
-  api("POST", "/agents", { username, password, display_name, role }).then(function() {
-    toast("Temsilci eklendi");
-    document.getElementById("new-username").value="";
-    document.getElementById("new-password").value="";
-    document.getElementById("new-displayname").value="";
-    openAgentsModal();
-    loadAgents();
-  });
+  var perms = role === "admin" ? [] : _collectPerms();
+  if (editId) {
+    var payload = { display_name: display_name, role: role, permissions: perms };
+    if (password) payload.password = password;
+    api("PATCH", "/agents/" + editId, payload).then(function() {
+      toast("Temsilci güncellendi");
+      openAgentsModal();
+      loadAgents();
+    });
+  } else {
+    if (!username || !password) { toast("Kullanıcı adı ve şifre zorunlu", "error"); return; }
+    api("POST", "/agents", { username: username, password: password, display_name: display_name, role: role, permissions: perms }).then(function() {
+      toast("Temsilci eklendi");
+      openAgentsModal();
+      loadAgents();
+    });
+  }
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.remove("open");
 }
+
+function toggleChMore(e) {
+  if (e) e.stopPropagation();
+  document.getElementById("ch-more-menu").classList.toggle("open");
+}
+function closeChMore() {
+  var m = document.getElementById("ch-more-menu");
+  if (m) m.classList.remove("open");
+}
+document.addEventListener("click", function(e) {
+  var wrap = document.querySelector(".ch-more-wrap");
+  if (wrap && !wrap.contains(e.target)) closeChMore();
+});
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 function loadStats() {
@@ -3103,6 +3268,7 @@ loadStats();
 loadAgents();
 loadTags();
 loadDepartments();
+loadPermissions();
 setInterval(loadStats, 15000);
 setInterval(function() { if (currentTab !== "mine") loadConvs(); }, 10000);
 setInterval(function() {

@@ -54,7 +54,8 @@ class Agent(BaseModel):
     username = CharField(unique=True, max_length=64)
     password_hash = CharField(max_length=256)
     display_name = CharField(max_length=128, default="")
-    role = CharField(max_length=16, default="agent")  # admin | agent | supervisor
+    role = CharField(max_length=16, default="agent")  # admin | agent
+    permissions = TextField(default="[]")  # JSON list of permission keys (admin = hepsi)
     is_active = BooleanField(default=True)
     is_online = BooleanField(default=False)
     avatar_color = CharField(max_length=20, default="#6366f1")
@@ -309,6 +310,7 @@ def init_db():
             "ALTER TABLE conversations ADD COLUMN priority VARCHAR(16) DEFAULT 'normal'",
             "ALTER TABLE conversations ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL",
             "ALTER TABLE blacklisted_ips ADD COLUMN kind VARCHAR(16) DEFAULT 'ip'",
+            "ALTER TABLE agents ADD COLUMN permissions TEXT DEFAULT '[]'",
         ]
         for _sql in _safe_migrations:
             try:

@@ -22,7 +22,8 @@ from ..database import (
 from ..webhook_sender import fire_event
 from ..auth import (
     hash_password, verify_password, create_token,
-    get_current_agent, require_admin, verify_ws_token
+    get_current_agent, require_admin, require_permission, verify_ws_token,
+    agent_permissions, PERMISSIONS,
 )
 from ..ws_manager import manager
 from ..config import config
@@ -46,6 +47,7 @@ class AgentCreate(BaseModel):
     password: str
     display_name: str = ""
     role: str = "agent"
+    permissions: Optional[List[str]] = None
 
 
 class AgentUpdate(BaseModel):
@@ -54,6 +56,7 @@ class AgentUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
     department_id: Optional[int] = None
+    permissions: Optional[List[str]] = None
 
 
 class DepartmentCreate(BaseModel):
@@ -237,8 +240,25 @@ def login(req: LoginRequest):
             "username": agent.username,
             "display_name": agent.display_name,
             "role": agent.role,
+            "permissions": sorted(agent_permissions(agent)),
         }
     }
+
+
+@router.get("/me")
+def get_me(agent: Agent = Depends(get_current_agent)):
+    return {
+        "id": agent.id,
+        "username": agent.username,
+        "display_name": agent.display_name,
+        "role": agent.role,
+        "permissions": sorted(agent_permissions(agent)),
+    }
+
+
+@router.get("/permissions")
+def list_permissions(agent: Agent = Depends(get_current_agent)):
+    return PERMISSIONS
 
 
 # ── Conversations ─────────────────────────────────────────────────────────────
@@ -393,7 +413,7 @@ def my_conversations(agent: Agent = Depends(get_current_agent)):
 @router.get("/conversations/export")
 def export_all_conversations(
     days: int = 30,
-    agent: Agent = Depends(get_current_agent)
+    agent: Agent = Depends(require_permission("export_data"))
 ):
     cutoff = datetime.utcnow() - timedelta(days=days)
     convs = Conversation.select().where(Conversation.created_at >= cutoff).order_by(Conversation.created_at.desc())
@@ -591,7 +611,7 @@ async def bulk_action(req: BulkActionRequest, agent: Agent = Depends(get_current
 
 
 @router.get("/conversations/export-xlsx")
-def export_xlsx(days: int = 30, agent: Agent = Depends(get_current_agent)):
+def export_xlsx(days: int = 30, agent: Agent = Depends(require_permission("export_data"))):
     if not _HAS_OPENPYXL:
         raise HTTPException(501, "openpyxl kurulu değil — CSV kullanın")
     cutoff = datetime.utcnow() - timedelta(days=days)
@@ -734,7 +754,7 @@ def list_departments(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/departments")
-def create_department(req: DepartmentCreate, admin: Agent = Depends(require_admin)):
+def create_department(req: DepartmentCreate, admin: Agent = Depends(require_permission("manage_departments"))):
     if Department.get_or_none(Department.name == req.name):
         raise HTTPException(400, "Bu isimde departman zaten var")
     d = Department.create(name=req.name, description=req.description,
@@ -744,7 +764,7 @@ def create_department(req: DepartmentCreate, admin: Agent = Depends(require_admi
 
 
 @router.patch("/departments/{dept_id}")
-def update_department(dept_id: int, req: DepartmentUpdate, admin: Agent = Depends(require_admin)):
+def update_department(dept_id: int, req: DepartmentUpdate, admin: Agent = Depends(require_permission("manage_departments"))):
     d = Department.get_or_none(Department.id == dept_id)
     if not d:
         raise HTTPException(404, "Departman bulunamadı")
@@ -763,7 +783,7 @@ def update_department(dept_id: int, req: DepartmentUpdate, admin: Agent = Depend
 
 
 @router.delete("/departments/{dept_id}")
-def delete_department(dept_id: int, admin: Agent = Depends(require_admin)):
+def delete_department(dept_id: int, admin: Agent = Depends(require_permission("manage_departments"))):
     # Unlink agents and conversations first
     Agent.update(department_id=None).where(Agent.department_id == dept_id).execute()
     Conversation.update(department_id=None).where(Conversation.department_id == dept_id).execute()
@@ -780,7 +800,7 @@ def list_dept_agents(dept_id: int, agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/departments/{dept_id}/agents/{agent_id}")
-def add_agent_to_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_admin)):
+def add_agent_to_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_permission("manage_departments"))):
     d = Department.get_or_none(Department.id == dept_id)
     if not d:
         raise HTTPException(404, "Departman bulunamadı")
@@ -792,7 +812,7 @@ def add_agent_to_dept(dept_id: int, agent_id: int, admin: Agent = Depends(requir
 
 
 @router.delete("/departments/{dept_id}/agents/{agent_id}")
-def remove_agent_from_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_admin)):
+def remove_agent_from_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_permission("manage_departments"))):
     Agent.update(department_id=None).where(Agent.id == agent_id, Agent.department_id == dept_id).execute()
     return {"ok": True}
 
@@ -854,6 +874,7 @@ def list_agents(agent: Agent = Depends(get_current_agent)):
             "username": a.username,
             "display_name": a.display_name,
             "role": a.role,
+            "permissions": sorted(agent_permissions(a)),
             "is_active": a.is_active,
             "is_online": a.id in manager.online_agents(),
             "created_at": a.created_at.isoformat(),
@@ -864,28 +885,31 @@ def list_agents(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/agents")
-def create_agent(req: AgentCreate, admin: Agent = Depends(require_admin)):
+def create_agent(req: AgentCreate, admin: Agent = Depends(require_permission("manage_agents"))):
     if Agent.get_or_none(Agent.username == req.username):
         raise HTTPException(400, "Bu kullanıcı adı zaten kullanılıyor")
+    role = req.role if req.role in ("admin", "agent") else "agent"
+    perms = req.permissions or []
     a = Agent.create(
         username=req.username,
         password_hash=hash_password(req.password),
         display_name=req.display_name or req.username,
-        role=req.role,
+        role=role,
+        permissions=json.dumps(perms),
     )
     _audit(admin.display_name or admin.username, "create_agent", "agent", a.id, req.username)
     return {"id": a.id, "username": a.username, "role": a.role}
 
 
 @router.patch("/agents/{agent_id}")
-def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require_admin)):
+def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require_permission("manage_agents"))):
     a = Agent.get_or_none(Agent.id == agent_id)
     if not a:
         raise HTTPException(404, "Kullanıcı bulunamadı")
     updates = {}
     if req.display_name is not None:
         updates["display_name"] = req.display_name
-    if req.role is not None:
+    if req.role is not None and req.role in ("admin", "agent"):
         updates["role"] = req.role
     if req.is_active is not None:
         updates["is_active"] = req.is_active
@@ -893,13 +917,16 @@ def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require
         updates["password_hash"] = hash_password(req.password)
     if req.department_id is not None:
         updates["department_id"] = req.department_id if req.department_id > 0 else None
+    if req.permissions is not None:
+        updates["permissions"] = json.dumps(req.permissions)
     if updates:
         Agent.update(**updates).where(Agent.id == agent_id).execute()
+    _audit(admin.display_name or admin.username, "update_agent", "agent", agent_id, a.username)
     return {"ok": True}
 
 
 @router.delete("/agents/{agent_id}")
-def delete_agent(agent_id: int, admin: Agent = Depends(require_admin)):
+def delete_agent(agent_id: int, admin: Agent = Depends(require_permission("manage_agents"))):
     _audit(admin.display_name or admin.username, "delete_agent", "agent", agent_id)
     Agent.delete().where(Agent.id == agent_id).execute()
     return {"ok": True}
@@ -935,12 +962,12 @@ def update_profile(req: ProfileUpdate, agent: Agent = Depends(get_current_agent)
 # ── Site Settings ─────────────────────────────────────────────────────────────
 
 @router.get("/settings")
-def get_site_settings(admin: Agent = Depends(require_admin)):
+def get_site_settings(admin: Agent = Depends(require_permission("manage_settings"))):
     return {s.key: s.value for s in Setting.select()}
 
 
 @router.put("/settings")
-def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_admin)):
+def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_permission("manage_settings"))):
     data: Dict[str, Any] = {}
     if req.site_name is not None:
         data["site_name"] = req.site_name
@@ -1022,7 +1049,7 @@ def list_tags(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/tags")
-def create_tag(req: TagCreate, agent: Agent = Depends(get_current_agent)):
+def create_tag(req: TagCreate, agent: Agent = Depends(require_permission("manage_tags"))):
     if Tag.get_or_none(Tag.name == req.name):
         raise HTTPException(400, "Bu isimde etiket zaten var")
     t = Tag.create(name=req.name, color=req.color)
@@ -1030,7 +1057,7 @@ def create_tag(req: TagCreate, agent: Agent = Depends(get_current_agent)):
 
 
 @router.delete("/tags/{tag_id}")
-def delete_tag(tag_id: int, agent: Agent = Depends(get_current_agent)):
+def delete_tag(tag_id: int, agent: Agent = Depends(require_permission("manage_tags"))):
     Tag.delete().where(Tag.id == tag_id).execute()
     return {"ok": True}
 
@@ -1053,7 +1080,7 @@ def list_blacklist(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/blacklist")
-def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(get_current_agent)):
+def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(require_permission("manage_blacklist"))):
     kind = req.kind if req.kind in ("ip", "visitor") else "ip"
     if BlacklistedIP.get_or_none(BlacklistedIP.ip == req.ip):
         raise HTTPException(400, "Bu değer zaten yasaklı")
@@ -1063,7 +1090,7 @@ def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(get_current_agent
 
 
 @router.delete("/blacklist/{bl_id}")
-def remove_blacklist(bl_id: int, agent: Agent = Depends(get_current_agent)):
+def remove_blacklist(bl_id: int, agent: Agent = Depends(require_permission("manage_blacklist"))):
     _audit(agent.display_name or agent.username, "blacklist_remove", "ip", bl_id)
     BlacklistedIP.delete().where(BlacklistedIP.id == bl_id).execute()
     return {"ok": True}
@@ -1085,7 +1112,7 @@ def get_schedule(agent_id: int, agent: Agent = Depends(get_current_agent)):
 
 
 @router.put("/schedule/{agent_id}")
-def update_schedule(agent_id: int, req: ScheduleUpdate, agent: Agent = Depends(get_current_agent)):
+def update_schedule(agent_id: int, req: ScheduleUpdate, agent: Agent = Depends(require_permission("manage_schedule"))):
     target = Agent.get_or_none(Agent.id == agent_id)
     if not target:
         raise HTTPException(404, "Temsilci bulunamadı")
@@ -1240,13 +1267,13 @@ def list_botflows(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/botflow")
-def create_botflow(req: BotFlowCreate, agent: Agent = Depends(get_current_agent)):
+def create_botflow(req: BotFlowCreate, agent: Agent = Depends(require_permission("manage_botflow"))):
     b = BotFlow.create(name=req.name, greeting=req.greeting, options_json=req.options_json)
     return {"id": b.id, "name": b.name}
 
 
 @router.put("/botflow/{flow_id}")
-def update_botflow(flow_id: int, req: BotFlowUpdate, agent: Agent = Depends(get_current_agent)):
+def update_botflow(flow_id: int, req: BotFlowUpdate, agent: Agent = Depends(require_permission("manage_botflow"))):
     b = BotFlow.get_or_none(BotFlow.id == flow_id)
     if not b:
         raise HTTPException(404, "Bot akışı bulunamadı")
@@ -1263,13 +1290,13 @@ def update_botflow(flow_id: int, req: BotFlowUpdate, agent: Agent = Depends(get_
 
 
 @router.delete("/botflow/{flow_id}")
-def delete_botflow(flow_id: int, agent: Agent = Depends(get_current_agent)):
+def delete_botflow(flow_id: int, agent: Agent = Depends(require_permission("manage_botflow"))):
     BotFlow.delete().where(BotFlow.id == flow_id).execute()
     return {"ok": True}
 
 
 @router.post("/botflow/{flow_id}/activate")
-def activate_botflow(flow_id: int, agent: Agent = Depends(get_current_agent)):
+def activate_botflow(flow_id: int, agent: Agent = Depends(require_permission("manage_botflow"))):
     b = BotFlow.get_or_none(BotFlow.id == flow_id)
     if not b:
         raise HTTPException(404, "Bot akışı bulunamadı")
@@ -1312,7 +1339,7 @@ def delete_note(conv_id: int, note_id: int, agent: Agent = Depends(get_current_a
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
 @router.get("/webhooks")
-def list_webhooks(admin: Agent = Depends(require_admin)):
+def list_webhooks(admin: Agent = Depends(require_permission("manage_webhooks"))):
     return [
         {"id": w.id, "name": w.name, "type": w.type, "url": w.url,
          "telegram_chat_id": w.telegram_chat_id, "events_json": w.events_json,
@@ -1321,7 +1348,7 @@ def list_webhooks(admin: Agent = Depends(require_admin)):
     ]
 
 @router.post("/webhooks")
-def create_webhook(req: WebhookCreate, admin: Agent = Depends(require_admin)):
+def create_webhook(req: WebhookCreate, admin: Agent = Depends(require_permission("manage_webhooks"))):
     w = WebhookConfig.create(
         name=req.name, type=req.type, url=req.url,
         telegram_chat_id=req.telegram_chat_id, events_json=req.events_json,
@@ -1331,7 +1358,7 @@ def create_webhook(req: WebhookCreate, admin: Agent = Depends(require_admin)):
     return {"id": w.id, "name": w.name}
 
 @router.patch("/webhooks/{webhook_id}")
-def update_webhook(webhook_id: int, req: WebhookUpdate, admin: Agent = Depends(require_admin)):
+def update_webhook(webhook_id: int, req: WebhookUpdate, admin: Agent = Depends(require_permission("manage_webhooks"))):
     w = WebhookConfig.get_or_none(WebhookConfig.id == webhook_id)
     if not w:
         raise HTTPException(404, "Webhook bulunamadı")
@@ -1346,12 +1373,12 @@ def update_webhook(webhook_id: int, req: WebhookUpdate, admin: Agent = Depends(r
     return {"ok": True}
 
 @router.delete("/webhooks/{webhook_id}")
-def delete_webhook(webhook_id: int, admin: Agent = Depends(require_admin)):
+def delete_webhook(webhook_id: int, admin: Agent = Depends(require_permission("manage_webhooks"))):
     WebhookConfig.delete().where(WebhookConfig.id == webhook_id).execute()
     return {"ok": True}
 
 @router.post("/webhooks/{webhook_id}/test")
-async def test_webhook(webhook_id: int, admin: Agent = Depends(require_admin)):
+async def test_webhook(webhook_id: int, admin: Agent = Depends(require_permission("manage_webhooks"))):
     w = WebhookConfig.get_or_none(WebhookConfig.id == webhook_id)
     if not w:
         raise HTTPException(404, "Webhook bulunamadı")
@@ -1396,7 +1423,7 @@ def delete_visitor_field(visitor_id: str, key: str, agent: Agent = Depends(get_c
 
 
 @router.delete("/visitors/{visitor_id}/data")
-def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_admin)):
+def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permission("delete_data"))):
     conv_ids = [c.id for c in Conversation.select(Conversation.id).where(Conversation.visitor_id == visitor_id)]
     if conv_ids:
         Message.delete().where(Message.conversation_id.in_(conv_ids)).execute()
@@ -1447,7 +1474,7 @@ def live_visitors(agent: Agent = Depends(get_current_agent)):
 def get_audit_log(
     limit: int = 100,
     offset: int = 0,
-    agent: Agent = Depends(require_admin)
+    agent: Agent = Depends(require_permission("view_audit"))
 ):
     logs = (AuditLog.select()
             .order_by(AuditLog.created_at.desc())
@@ -1497,12 +1524,12 @@ def _form_summary(f: Form) -> dict:
 
 
 @router.get("/forms")
-def list_forms(admin: Agent = Depends(require_admin)):
+def list_forms(admin: Agent = Depends(require_permission("manage_forms"))):
     return [_form_summary(f) for f in Form.select().order_by(Form.created_at.desc())]
 
 
 @router.post("/forms")
-def create_form(req: FormCreate, admin: Agent = Depends(require_admin)):
+def create_form(req: FormCreate, admin: Agent = Depends(require_permission("manage_forms"))):
     f = Form.create(
         name=req.name,
         description=req.description,
@@ -1515,7 +1542,7 @@ def create_form(req: FormCreate, admin: Agent = Depends(require_admin)):
 
 
 @router.patch("/forms/{form_id}")
-def update_form(form_id: int, req: FormUpdate, admin: Agent = Depends(require_admin)):
+def update_form(form_id: int, req: FormUpdate, admin: Agent = Depends(require_permission("manage_forms"))):
     f = Form.get_or_none(Form.id == form_id)
     if not f:
         raise HTTPException(404, "Form bulunamadı")
@@ -1535,14 +1562,14 @@ def update_form(form_id: int, req: FormUpdate, admin: Agent = Depends(require_ad
 
 
 @router.delete("/forms/{form_id}")
-def delete_form(form_id: int, admin: Agent = Depends(require_admin)):
+def delete_form(form_id: int, admin: Agent = Depends(require_permission("manage_forms"))):
     Form.delete().where(Form.id == form_id).execute()
     _audit(admin.display_name or admin.username, "form_delete", "form", form_id)
     return {"ok": True}
 
 
 @router.get("/forms/{form_id}/fields")
-def list_form_fields(form_id: int, admin: Agent = Depends(require_admin)):
+def list_form_fields(form_id: int, admin: Agent = Depends(require_permission("manage_forms"))):
     fields = (FormField.select()
               .where(FormField.form_id == form_id)
               .order_by(FormField.order, FormField.id))
@@ -1557,7 +1584,7 @@ def list_form_fields(form_id: int, admin: Agent = Depends(require_admin)):
 
 
 @router.post("/forms/{form_id}/fields")
-def add_form_field(form_id: int, req: FormFieldCreate, admin: Agent = Depends(require_admin)):
+def add_form_field(form_id: int, req: FormFieldCreate, admin: Agent = Depends(require_permission("manage_forms"))):
     if not Form.get_or_none(Form.id == form_id):
         raise HTTPException(404, "Form bulunamadı")
     max_order = FormField.select().where(FormField.form_id == form_id).count()
@@ -1574,7 +1601,7 @@ def add_form_field(form_id: int, req: FormFieldCreate, admin: Agent = Depends(re
 
 
 @router.patch("/forms/{form_id}/fields/{field_id}")
-def update_form_field(form_id: int, field_id: int, req: FormFieldUpdate, admin: Agent = Depends(require_admin)):
+def update_form_field(form_id: int, field_id: int, req: FormFieldUpdate, admin: Agent = Depends(require_permission("manage_forms"))):
     ff = FormField.get_or_none(FormField.id == field_id, FormField.form_id == form_id)
     if not ff:
         raise HTTPException(404, "Alan bulunamadı")
@@ -1591,20 +1618,20 @@ def update_form_field(form_id: int, field_id: int, req: FormFieldUpdate, admin: 
 
 
 @router.delete("/forms/{form_id}/fields/{field_id}")
-def delete_form_field(form_id: int, field_id: int, admin: Agent = Depends(require_admin)):
+def delete_form_field(form_id: int, field_id: int, admin: Agent = Depends(require_permission("manage_forms"))):
     FormField.delete().where(FormField.id == field_id, FormField.form_id == form_id).execute()
     return {"ok": True}
 
 
 @router.put("/forms/{form_id}/fields/order")
-def reorder_form_fields(form_id: int, req: FieldOrderRequest, admin: Agent = Depends(require_admin)):
+def reorder_form_fields(form_id: int, req: FieldOrderRequest, admin: Agent = Depends(require_permission("manage_forms"))):
     for i, fid in enumerate(req.field_ids):
         FormField.update(order=i).where(FormField.id == fid, FormField.form_id == form_id).execute()
     return {"ok": True}
 
 
 @router.get("/forms/{form_id}/submissions")
-def list_form_submissions(form_id: int, admin: Agent = Depends(require_admin)):
+def list_form_submissions(form_id: int, admin: Agent = Depends(require_permission("manage_forms"))):
     subs = (FormSubmission.select()
             .where(FormSubmission.form_id == form_id)
             .order_by(FormSubmission.submitted_at.desc())
