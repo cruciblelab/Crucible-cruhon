@@ -89,6 +89,13 @@ def serve_widget():
 @app.get("/admin", include_in_schema=False)
 @app.get("/admin/{path:path}", include_in_schema=False)
 def serve_admin(path: str = ""):
+    # Serve real static assets under /admin/ (login.html, etc.) when they exist,
+    # otherwise fall back to the SPA entry point.
+    if path:
+        admin_dir = (_static / "admin").resolve()
+        candidate = (admin_dir / path).resolve()
+        if str(candidate).startswith(str(admin_dir) + os.sep) and candidate.is_file():
+            return FileResponse(str(candidate))
     return FileResponse(str(_static / "admin" / "index.html"))
 
 
