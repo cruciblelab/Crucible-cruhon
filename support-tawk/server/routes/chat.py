@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
-from ..database import Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
+from ..database import Department, Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
 from ..webhook_sender import fire_event
 from ..ws_manager import manager
 from ..config import config
@@ -274,6 +274,20 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                             "url": url,
                             "title": title,
                         })
+
+            elif msg_type == "set_department":
+                dept_id = int(data.get("department_id", 0) or 0)
+                if dept_id and Department.get_or_none(Department.id == dept_id):
+                    Conversation.update(
+                        department_id=dept_id,
+                        updated_at=datetime.utcnow()
+                    ).where(Conversation.id == conv.id).execute()
+                    dept = Department.get_by_id(dept_id)
+                    await manager.broadcast_to_agents({
+                        "type": "conv_department_changed",
+                        "conversation_id": conv.id,
+                        "department": {"id": dept.id, "name": dept.name, "color": dept.color, "icon": dept.icon},
+                    })
 
             elif msg_type == "visitor_field":
                 key = str(data.get("key", ""))[:64]

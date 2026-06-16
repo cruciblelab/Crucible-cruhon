@@ -37,15 +37,28 @@ class BaseModel(Model):
         database = database
 
 
+class Department(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=64, unique=True)
+    description = CharField(max_length=256, default="")
+    color = CharField(max_length=20, default="#6366f1")
+    icon = CharField(max_length=8, default="💼")
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "departments"
+
+
 class Agent(BaseModel):
     id = AutoField()
     username = CharField(unique=True, max_length=64)
     password_hash = CharField(max_length=256)
     display_name = CharField(max_length=128, default="")
-    role = CharField(max_length=16, default="agent")  # admin | agent
+    role = CharField(max_length=16, default="agent")  # admin | agent | supervisor
     is_active = BooleanField(default=True)
     is_online = BooleanField(default=False)
     avatar_color = CharField(max_length=20, default="#6366f1")
+    department = ForeignKeyField(Department, null=True, backref="agents", on_delete="SET NULL")
     created_at = DateTimeField(default=datetime.utcnow)
 
     class Meta:
@@ -71,6 +84,8 @@ class Conversation(BaseModel):
     city = CharField(max_length=128, default="")
     language = CharField(max_length=16, default="")
     priority = CharField(max_length=16, default="normal")  # low | normal | high
+    # Departman yönlendirmesi
+    department = ForeignKeyField(Department, null=True, backref="conversations", on_delete="SET NULL")
 
     class Meta:
         table_name = "conversations"
@@ -240,19 +255,20 @@ class OfflineMessage(BaseModel):
 def init_db():
     with database:
         database.create_tables([
-            Agent, Conversation, Message, CannedResponse,
+            Department, Agent, Conversation, Message, CannedResponse,
             Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
         ], safe=True)
-        # Migrations for new columns on existing tables
         _safe_migrations = [
             "ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'",
+            "ALTER TABLE agents ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL",
             "ALTER TABLE conversations ADD COLUMN ip_address VARCHAR(64) DEFAULT ''",
             "ALTER TABLE conversations ADD COLUMN user_agent VARCHAR(512) DEFAULT ''",
             "ALTER TABLE conversations ADD COLUMN country VARCHAR(64) DEFAULT ''",
             "ALTER TABLE conversations ADD COLUMN city VARCHAR(128) DEFAULT ''",
             "ALTER TABLE conversations ADD COLUMN language VARCHAR(16) DEFAULT ''",
             "ALTER TABLE conversations ADD COLUMN priority VARCHAR(16) DEFAULT 'normal'",
+            "ALTER TABLE conversations ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL",
             "ALTER TABLE blacklisted_ips ADD COLUMN kind VARCHAR(16) DEFAULT 'ip'",
         ]
         for _sql in _safe_migrations:

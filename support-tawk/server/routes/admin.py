@@ -14,7 +14,7 @@ try:
 except ImportError:
     _HAS_OPENPYXL = False
 from ..database import (
-    Agent, Conversation, Message, CannedResponse,
+    Department, Agent, Conversation, Message, CannedResponse,
     Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
     Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
 )
@@ -52,6 +52,25 @@ class AgentUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    department_id: Optional[int] = None
+
+
+class DepartmentCreate(BaseModel):
+    name: str
+    description: str = ""
+    color: str = "#6366f1"
+    icon: str = "💼"
+
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+
+class ConvDeptRequest(BaseModel):
+    department_id: Optional[int] = None
 
 
 class CannedCreate(BaseModel):
@@ -195,6 +214,16 @@ def _conv_rating(conv_id: int):
     return None
 
 
+def _dept_dict(conv: Conversation):
+    dept_id = getattr(conv, "department_id", None)
+    if not dept_id:
+        return None
+    d = Department.get_or_none(Department.id == dept_id)
+    if not d:
+        return None
+    return {"id": d.id, "name": d.name, "color": d.color, "icon": d.icon}
+
+
 def _conv_full(conv: Conversation) -> dict:
     msgs = list(Message.select().where(Message.conversation == conv).order_by(Message.created_at))
     assigned = None
@@ -224,6 +253,7 @@ def _conv_full(conv: Conversation) -> dict:
         "city": getattr(conv, "city", ""),
         "language": getattr(conv, "language", ""),
         "priority": getattr(conv, "priority", "normal"),
+        "department": _dept_dict(conv),
     }
 
 
@@ -272,6 +302,7 @@ def _conv_summary(conv: Conversation) -> dict:
         "city": getattr(conv, "city", ""),
         "language": getattr(conv, "language", ""),
         "priority": getattr(conv, "priority", "normal"),
+        "department": _dept_dict(conv),
     }
 
 
@@ -280,6 +311,7 @@ def list_conversations(
     status: str = "open",
     unread_only: bool = False,
     priority: str = "",
+    department_id: int = 0,
     agent: Agent = Depends(get_current_agent)
 ):
     query = Conversation.select().order_by(Conversation.updated_at.desc())
@@ -287,10 +319,24 @@ def list_conversations(
         query = query.where(Conversation.status == status)
     if priority in ("low", "normal", "high"):
         query = query.where(Conversation.priority == priority)
+    if department_id:
+        query = query.where(Conversation.department_id == department_id)
     summaries = [_conv_summary(c) for c in query]
     if unread_only:
         summaries = [s for s in summaries if s["unread_count"] > 0]
     return summaries
+
+
+@router.get("/conversations/dept")
+def dept_conversations(agent: Agent = Depends(get_current_agent)):
+    """Temsilcinin kendi departmanına atanmış açık konuşmalar."""
+    dept_id = getattr(agent, "department_id", None)
+    if not dept_id:
+        return []
+    query = (Conversation.select()
+             .where(Conversation.department_id == dept_id, Conversation.status != "closed")
+             .order_by(Conversation.updated_at.desc()))
+    return [_conv_summary(c) for c in query]
 
 
 @router.get("/conversations/mine")
@@ -593,6 +639,120 @@ def remove_conv_tag(conv_id: int, tag_id: int, agent: Agent = Depends(get_curren
     return {"ok": True}
 
 
+@router.patch("/conversations/{conv_id}/department")
+async def set_conv_department(conv_id: int, req: ConvDeptRequest, agent: Agent = Depends(get_current_agent)):
+    conv = Conversation.get_or_none(Conversation.id == conv_id)
+    if not conv:
+        raise HTTPException(404, "Konuşma bulunamadı")
+    dept = None
+    if req.department_id:
+        dept = Department.get_or_none(Department.id == req.department_id)
+        if not dept:
+            raise HTTPException(404, "Departman bulunamadı")
+    Conversation.update(
+        department_id=req.department_id,
+        updated_at=datetime.utcnow()
+    ).where(Conversation.id == conv_id).execute()
+    _audit(agent.display_name or agent.username, "set_department", "conversation", conv_id,
+           dept.name if dept else "Yok")
+    dept_info = {"id": dept.id, "name": dept.name, "color": dept.color, "icon": dept.icon} if dept else None
+    await manager.broadcast_to_agents({
+        "type": "conv_department_changed",
+        "conversation_id": conv_id,
+        "department": dept_info,
+    })
+    return {"ok": True, "department": dept_info}
+
+
+# ── Departments ───────────────────────────────────────────────────────────────
+
+def _dept_full(d: Department) -> dict:
+    member_count = Agent.select().where(Agent.department_id == d.id).count()
+    conv_count = Conversation.select().where(
+        Conversation.department_id == d.id,
+        Conversation.status != "closed"
+    ).count()
+    return {
+        "id": d.id,
+        "name": d.name,
+        "description": d.description,
+        "color": d.color,
+        "icon": d.icon,
+        "member_count": member_count,
+        "open_conversations": conv_count,
+        "created_at": d.created_at.isoformat(),
+    }
+
+
+@router.get("/departments")
+def list_departments(agent: Agent = Depends(get_current_agent)):
+    return [_dept_full(d) for d in Department.select().order_by(Department.name)]
+
+
+@router.post("/departments")
+def create_department(req: DepartmentCreate, admin: Agent = Depends(require_admin)):
+    if Department.get_or_none(Department.name == req.name):
+        raise HTTPException(400, "Bu isimde departman zaten var")
+    d = Department.create(name=req.name, description=req.description,
+                          color=req.color, icon=req.icon)
+    _audit(admin.display_name or admin.username, "create_department", "department", d.id, req.name)
+    return _dept_full(d)
+
+
+@router.patch("/departments/{dept_id}")
+def update_department(dept_id: int, req: DepartmentUpdate, admin: Agent = Depends(require_admin)):
+    d = Department.get_or_none(Department.id == dept_id)
+    if not d:
+        raise HTTPException(404, "Departman bulunamadı")
+    updates = {}
+    if req.name is not None:
+        updates["name"] = req.name
+    if req.description is not None:
+        updates["description"] = req.description
+    if req.color is not None:
+        updates["color"] = req.color
+    if req.icon is not None:
+        updates["icon"] = req.icon
+    if updates:
+        Department.update(**updates).where(Department.id == dept_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/departments/{dept_id}")
+def delete_department(dept_id: int, admin: Agent = Depends(require_admin)):
+    # Unlink agents and conversations first
+    Agent.update(department_id=None).where(Agent.department_id == dept_id).execute()
+    Conversation.update(department_id=None).where(Conversation.department_id == dept_id).execute()
+    Department.delete().where(Department.id == dept_id).execute()
+    _audit(admin.display_name or admin.username, "delete_department", "department", dept_id)
+    return {"ok": True}
+
+
+@router.get("/departments/{dept_id}/agents")
+def list_dept_agents(dept_id: int, agent: Agent = Depends(get_current_agent)):
+    members = Agent.select().where(Agent.department_id == dept_id, Agent.is_active == True)
+    return [{"id": a.id, "username": a.username, "display_name": a.display_name,
+             "role": a.role, "is_online": a.id in manager.online_agents()} for a in members]
+
+
+@router.post("/departments/{dept_id}/agents/{agent_id}")
+def add_agent_to_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_admin)):
+    d = Department.get_or_none(Department.id == dept_id)
+    if not d:
+        raise HTTPException(404, "Departman bulunamadı")
+    a = Agent.get_or_none(Agent.id == agent_id)
+    if not a:
+        raise HTTPException(404, "Temsilci bulunamadı")
+    Agent.update(department_id=dept_id).where(Agent.id == agent_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/departments/{dept_id}/agents/{agent_id}")
+def remove_agent_from_dept(dept_id: int, agent_id: int, admin: Agent = Depends(require_admin)):
+    Agent.update(department_id=None).where(Agent.id == agent_id, Agent.department_id == dept_id).execute()
+    return {"ok": True}
+
+
 # ── Agent WebSocket (real-time panel) ─────────────────────────────────────────
 
 @router.websocket("/ws/{token}")
@@ -653,6 +813,7 @@ def list_agents(agent: Agent = Depends(get_current_agent)):
             "is_active": a.is_active,
             "is_online": a.id in manager.online_agents(),
             "created_at": a.created_at.isoformat(),
+            "department_id": getattr(a, "department_id", None),
         }
         for a in agents
     ]
@@ -686,6 +847,8 @@ def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require
         updates["is_active"] = req.is_active
     if req.password is not None:
         updates["password_hash"] = hash_password(req.password)
+    if req.department_id is not None:
+        updates["department_id"] = req.department_id if req.department_id > 0 else None
     if updates:
         Agent.update(**updates).where(Agent.id == agent_id).execute()
     return {"ok": True}

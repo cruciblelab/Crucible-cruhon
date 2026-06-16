@@ -633,16 +633,13 @@
         b.textContent = opt.label;
         b.addEventListener("click", function() {
           optDiv.remove();
-          // Show user selection
           appendMsg({ sender_type: "visitor", content: opt.label });
-          // Show bot reply
           if (opt.reply) {
             setTimeout(function() {
               appendMsg({ sender_type: "bot", sender_name: "Bot", content: opt.reply });
               scrollBottom();
             }, 600);
           }
-          // Send to server
           if (state.ws && state.ws.readyState === 1) {
             state.ws.send(JSON.stringify({
               type: "message",
@@ -651,6 +648,13 @@
               visitor_email: state.email,
               page_url: window.location.href,
             }));
+            // Eğer bu seçenek bir departmana yönlendiriyorsa bildir
+            if (opt.department_id) {
+              state.ws.send(JSON.stringify({
+                type: "set_department",
+                department_id: opt.department_id,
+              }));
+            }
           }
         });
         optDiv.appendChild(b);

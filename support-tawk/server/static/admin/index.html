@@ -366,6 +366,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="nav-item" data-page="schedule" onclick="showPage('schedule')">
       <span class="nav-icon">🕐</span> Mesai Saatleri
     </div>
+    <div class="nav-item" data-page="departments" id="nav-departments" style="display:none" onclick="showPage('departments')">
+      <span class="nav-icon">🏢</span> Departmanlar
+    </div>
     <div class="nav-item" data-page="settings" id="nav-settings" style="display:none" onclick="showPage('settings')">
       <span class="nav-icon">⚙️</span> Site Ayarları
     </div>
@@ -395,6 +398,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="sidebar-tabs">
           <div class="stab active" data-tab="open" onclick="switchTab('open')">Açık</div>
           <div class="stab" data-tab="mine" onclick="switchTab('mine')">Benimkiler</div>
+          <div class="stab" data-tab="dept" onclick="switchTab('dept')" id="tab-dept" style="display:none">Departman</div>
           <div class="stab" data-tab="closed" onclick="switchTab('closed')">Kapalı</div>
         </div>
         <div id="search-box">
@@ -409,6 +413,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <option value="high">🔴 Yüksek</option>
             <option value="normal">🟡 Normal</option>
             <option value="low">🟢 Düşük</option>
+          </select>
+          <select id="filter-dept" onchange="filterConvs()" style="font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:5px;color:#64748b;outline:none;max-width:90px">
+            <option value="">Tüm Dept.</option>
           </select>
         </div>
         <div id="bulk-toolbar" style="display:none;padding:4px 10px;background:#eff6ff;border-bottom:1px solid #bfdbfe;align-items:center;gap:6px;flex-wrap:wrap">
@@ -441,6 +448,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
                 <option value="low">🟢 Düşük</option>
                 <option value="normal" selected>🟡 Normal</option>
                 <option value="high">🔴 Yüksek</option>
+              </select>
+              <select id="dept-select" onchange="setConvDept()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;max-width:120px" title="Departman">
+                <option value="">🏢 Departman</option>
               </select>
               <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Ziyaretçi Bilgisi">👤 Bilgi</button>
               <button class="ch-btn" onclick="openTransferModal()" title="Aktar">↪ Aktar</button>
@@ -781,6 +791,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </table>
     </div>
 
+    <!-- Departments page -->
+    <div class="page" id="page-departments" style="flex-direction:column;overflow-y:auto;padding:24px">
+      <div class="page-header">
+        <h2>🏢 Departmanlar</h2>
+        <button class="form-submit" onclick="showAddDeptForm()">+ Yeni Departman</button>
+      </div>
+      <div id="add-dept-form" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;max-width:600px">
+        <h3 style="margin:0 0 12px;font-size:14px">Yeni Departman</h3>
+        <div class="form-row">
+          <input id="dept-name" placeholder="Departman adı (örn: Teknik Destek)">
+          <input id="dept-icon" placeholder="İkon" value="💼" style="max-width:60px;text-align:center">
+          <input id="dept-color" type="color" value="#6366f1" style="width:42px;height:38px;border:1px solid #e2e8f0;border-radius:7px;padding:2px;cursor:pointer">
+        </div>
+        <input id="dept-desc" placeholder="Açıklama (isteğe bağlı)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
+        <div style="display:flex;gap:8px">
+          <button class="form-submit" onclick="createDepartment()">Kaydet</button>
+          <button class="btn-sm" onclick="document.getElementById('add-dept-form').style.display='none'">İptal</button>
+        </div>
+      </div>
+      <div id="dept-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -860,7 +892,9 @@ if (AGENT.role === "admin") {
   document.getElementById("nav-settings").style.display = "";
   document.getElementById("nav-webhooks").style.display = "";
   document.getElementById("nav-audit").style.display = "";
+  document.getElementById("nav-departments").style.display = "";
 }
+var allDepartments = [];
 
 // Set topbar avatar
 (function() {
@@ -945,6 +979,7 @@ function showPage(name) {
   if (name === "webhooks") loadWebhooks();
   if (name === "offline-msgs") loadOfflineMsgs();
   if (name === "audit") loadAuditLog();
+  if (name === "departments") loadDepartments();
 }
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
@@ -1011,6 +1046,13 @@ function handleWS(data) {
         chMeta.textContent = parts.join(" · ");
       }
     }
+  } else if (data.type === "conv_department_changed") {
+    var conv = convs.find(function(c){ return c.id === data.conversation_id; });
+    if (conv) { conv.department = data.department; renderConvList(); }
+  } else if (data.type === "bulk_action_done") {
+    loadConvs();
+  } else if (data.type === "conversation_reopened") {
+    loadConvs();
   }
 }
 
@@ -1026,7 +1068,10 @@ function switchTab(tab) {
 var _PRIORITY_DOT = {high:"🔴",normal:"🟡",low:"🟢"};
 
 function loadConvs() {
-  var path = currentTab === "mine" ? "/conversations/mine" : "/conversations?status=" + (currentTab === "closed" ? "closed" : "open");
+  var path;
+  if (currentTab === "mine") path = "/conversations/mine";
+  else if (currentTab === "dept") path = "/conversations/dept";
+  else path = "/conversations?status=" + (currentTab === "closed" ? "closed" : "open");
   api("GET", path).then(function(data) {
     convs = Array.isArray(data) ? data : [];
     bulkSelected.clear();
@@ -1041,11 +1086,16 @@ function renderConvList() {
   var q = (document.getElementById("search-input").value || "").toLowerCase();
   var unreadOnly = document.getElementById("filter-unread").checked;
   var prioFilter = document.getElementById("filter-priority").value;
+  var deptFilter = document.getElementById("filter-dept").value;
   var list = document.getElementById("conv-list");
   var filtered = convs.filter(function(c) {
     if (q && !(c.visitor_name||"").toLowerCase().includes(q) && !(c.visitor_email||"").toLowerCase().includes(q)) return false;
     if (unreadOnly && !c.unread_count) return false;
     if (prioFilter && c.priority !== prioFilter) return false;
+    if (deptFilter) {
+      var deptId = parseInt(deptFilter);
+      if (!c.department || c.department.id !== deptId) return false;
+    }
     return true;
   });
   if (!filtered.length) {
@@ -1062,12 +1112,14 @@ function renderConvList() {
     }).join("");
     var prio = c.priority || "normal";
     var prioIcon = _PRIORITY_DOT[prio] || "";
+    var deptBadge = c.department ? '<span style="font-size:10px;background:' + escHtml(c.department.color) + ';color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px">' + escHtml(c.department.icon + ' ' + c.department.name) + '</span>' : '';
+    var langBadge = c.language ? '<span style="font-size:10px;color:#64748b;margin-left:4px">' + escHtml(c.language.toUpperCase()) + '</span>' : '';
     var chkd = bulkSelected.has(c.id) ? "checked" : "";
     return '<div class="conv-item' + (c.id===currentConvId?" active":"") + '">' +
       '<input type="checkbox" class="bulk-chk" ' + chkd + ' onclick="toggleBulk(event,' + c.id + ')" style="flex-shrink:0">' +
       '<div style="flex:1;min-width:0" onclick="openConv(' + c.id + ')">' +
         badge +
-        '<div class="ci-name">' + online + prioIcon + ' ' + escHtml(c.visitor_name||"Ziyaretçi") + '</div>' +
+        '<div class="ci-name">' + online + prioIcon + ' ' + escHtml(c.visitor_name||"Ziyaretçi") + deptBadge + langBadge + '</div>' +
         '<div class="ci-preview">' + escHtml(preview.substring(0,60)) + '</div>' +
         (tags ? '<div style="margin-top:3px">' + tags + '</div>' : '') +
         '<div class="ci-time">' + time + (c.assigned_to ? ' · ' + escHtml(c.assigned_to.display_name||c.assigned_to.username) : '') + '</div>' +
@@ -2225,6 +2277,147 @@ function loadAuditLog() {
   });
 }
 
+// ── Departments ───────────────────────────────────────────────────────────────
+function loadDepartments() {
+  api("GET", "/departments").then(function(data) {
+    allDepartments = Array.isArray(data) ? data : [];
+    renderDeptList();
+    populateDeptSelects();
+    // Show dept tab if agent has a department
+    if (AGENT.department_id) {
+      document.getElementById("tab-dept").style.display = "";
+    }
+  });
+}
+
+function renderDeptList() {
+  var el = document.getElementById("dept-list");
+  if (!el) return;
+  if (!allDepartments.length) {
+    el.innerHTML = '<div style="color:#94a3b8;font-size:13px">Henüz departman yok. "+ Yeni Departman" ile ekleyin.</div>';
+    return;
+  }
+  el.innerHTML = allDepartments.map(function(d) {
+    return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+        '<div style="width:36px;height:36px;border-radius:10px;background:' + escHtml(d.color) + ';display:flex;align-items:center;justify-content:center;font-size:18px">' + escHtml(d.icon) + '</div>' +
+        '<div>' +
+          '<div style="font-weight:600;font-size:14px">' + escHtml(d.name) + '</div>' +
+          '<div style="font-size:12px;color:#64748b">' + escHtml(d.description || "") + '</div>' +
+        '</div>' +
+        '<div style="margin-left:auto;display:flex;gap:6px">' +
+          '<button class="btn-sm danger" onclick="deleteDept(' + d.id + ')">Sil</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:16px;font-size:12px;color:#64748b;margin-bottom:10px">' +
+        '<span>👤 ' + d.member_count + ' üye</span>' +
+        '<span>💬 ' + d.open_conversations + ' açık konuşma</span>' +
+      '</div>' +
+      '<div id="dept-members-' + d.id + '" style="margin-bottom:8px"></div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<select id="dept-add-agent-' + d.id + '" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;outline:none;flex:1">' +
+          '<option value="">Temsilci ekle...</option>' +
+          allAgents.filter(function(a){ return a.department_id !== d.id; }).map(function(a) {
+            return '<option value="' + a.id + '">' + escHtml(a.display_name || a.username) + '</option>';
+          }).join("") +
+        '</select>' +
+        '<button class="btn-sm primary" onclick="addAgentToDept(' + d.id + ')">Ekle</button>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+  // Load members for each dept
+  allDepartments.forEach(function(d) { loadDeptMembers(d.id); });
+}
+
+function loadDeptMembers(deptId) {
+  api("GET", "/departments/" + deptId + "/agents").then(function(data) {
+    var el = document.getElementById("dept-members-" + deptId);
+    if (!el) return;
+    var members = Array.isArray(data) ? data : [];
+    el.innerHTML = members.map(function(a) {
+      var dot = a.is_online ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:4px"></span>' : '';
+      return '<span style="display:inline-flex;align-items:center;background:#f1f5f9;border-radius:20px;padding:2px 10px 2px 6px;font-size:11px;margin:2px">' +
+        dot + escHtml(a.display_name || a.username) +
+        ' <button onclick="removeAgentFromDept(' + deptId + ',' + a.id + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:0 0 0 6px;font-size:11px;line-height:1">✕</button>' +
+      '</span>';
+    }).join("") || '<span style="font-size:11px;color:#94a3b8">Henüz üye yok</span>';
+  });
+}
+
+function showAddDeptForm() {
+  document.getElementById("add-dept-form").style.display = "";
+  document.getElementById("dept-name").focus();
+}
+
+function createDepartment() {
+  var name = document.getElementById("dept-name").value.trim();
+  var icon = document.getElementById("dept-icon").value.trim() || "💼";
+  var color = document.getElementById("dept-color").value;
+  var desc = document.getElementById("dept-desc").value.trim();
+  if (!name) { toast("Departman adı zorunlu", "error"); return; }
+  api("POST", "/departments", {name: name, icon: icon, color: color, description: desc}).then(function() {
+    document.getElementById("dept-name").value = "";
+    document.getElementById("dept-desc").value = "";
+    document.getElementById("add-dept-form").style.display = "none";
+    toast("Departman oluşturuldu");
+    loadDepartments();
+  }).catch(function() { toast("Hata oluştu", "error"); });
+}
+
+function deleteDept(id) {
+  if (!confirm("Departman silinsin mi? Üyeler ve konuşmalar departmansız kalır.")) return;
+  api("DELETE", "/departments/" + id).then(function() {
+    toast("Departman silindi");
+    loadDepartments();
+  });
+}
+
+function addAgentToDept(deptId) {
+  var sel = document.getElementById("dept-add-agent-" + deptId);
+  var agentId = parseInt(sel.value);
+  if (!agentId) return;
+  api("POST", "/departments/" + deptId + "/agents/" + agentId).then(function() {
+    toast("Temsilci eklendi");
+    loadDepartments();
+  });
+}
+
+function removeAgentFromDept(deptId, agentId) {
+  api("DELETE", "/departments/" + deptId + "/agents/" + agentId).then(function() {
+    toast("Temsilci çıkarıldı");
+    loadDepartments();
+  });
+}
+
+function populateDeptSelects() {
+  // Filter dropdown
+  var filterDept = document.getElementById("filter-dept");
+  var cur = filterDept.value;
+  filterDept.innerHTML = '<option value="">Tüm Dept.</option>' +
+    allDepartments.map(function(d) {
+      return '<option value="' + d.id + '">' + escHtml(d.icon + ' ' + d.name) + '</option>';
+    }).join("");
+  filterDept.value = cur;
+
+  // Chat header dept select
+  var deptSel = document.getElementById("dept-select");
+  deptSel.innerHTML = '<option value="">🏢 Departman</option>' +
+    allDepartments.map(function(d) {
+      return '<option value="' + d.id + '">' + escHtml(d.icon + ' ' + d.name) + '</option>';
+    }).join("");
+}
+
+function setConvDept() {
+  if (!currentConvId) return;
+  var deptId = parseInt(document.getElementById("dept-select").value) || null;
+  api("PATCH", "/conversations/" + currentConvId + "/department", {department_id: deptId}).then(function(res) {
+    var conv = convs.find(function(c){ return c.id === currentConvId; });
+    if (conv) conv.department = res.department;
+    toast(deptId ? "Departman atandı" : "Departman kaldırıldı");
+    renderConvList();
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 connectWS();
 loadConvs();
@@ -2232,6 +2425,7 @@ loadCanned();
 loadStats();
 loadAgents();
 loadTags();
+loadDepartments();
 setInterval(loadStats, 15000);
 setInterval(function() { if (currentTab !== "mine") loadConvs(); }, 10000);
 setInterval(function() {
