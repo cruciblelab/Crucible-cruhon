@@ -8,14 +8,33 @@ from peewee import (
 )
 from datetime import datetime
 from .config import config
+from .crypto import encrypt as _encrypt, decrypt as _decrypt
 
 db_cfg = config.database
+
+# Performance-oriented SQLite pragmas:
+#   wal           — concurrent readers don't block the single writer
+#   synchronous   — NORMAL is safe under WAL and far faster than FULL
+#   cache_size    — negative value = KiB; ~64MB page cache
+#   busy_timeout  — wait instead of erroring when the DB is briefly locked
+#   mmap_size     — memory-map up to 256MB for faster reads
+#   temp_store    — keep temp tables/indexes in memory
+_SQLITE_PRAGMAS = {
+    "journal_mode": "wal",
+    "foreign_keys": 1,
+    "synchronous": 1,          # NORMAL
+    "cache_size": -64000,      # ~64MB
+    "busy_timeout": 5000,      # 5s
+    "mmap_size": 268435456,    # 256MB
+    "temp_store": 2,           # MEMORY
+}
+
 
 def _make_db():
     t = db_cfg.type.lower()
     if t == "sqlite":
         Path(db_cfg.path).parent.mkdir(parents=True, exist_ok=True)
-        return SqliteDatabase(db_cfg.path, pragmas={"journal_mode": "wal", "foreign_keys": 1})
+        return SqliteDatabase(db_cfg.path, pragmas=_SQLITE_PRAGMAS)
     if t == "postgres":
         return PostgresqlDatabase(
             db_cfg.name, user=db_cfg.username, password=db_cfg.password,
@@ -35,6 +54,25 @@ database = _make_db()
 class BaseModel(Model):
     class Meta:
         database = database
+
+
+class EncryptedTextField(TextField):
+    """TextField that transparently encrypts on write and decrypts on read."""
+    def db_value(self, value):
+        return _encrypt(value) if value is not None else None
+
+    def python_value(self, value):
+        return _decrypt(value) if value is not None else None
+
+
+class EncryptedCharField(CharField):
+    """CharField equivalent. Stored as TEXT-sized VARCHAR; SQLite ignores the
+    length limit and the ciphertext is longer than the plaintext."""
+    def db_value(self, value):
+        return _encrypt(value) if value is not None else None
+
+    def python_value(self, value):
+        return _decrypt(value) if value is not None else None
 
 
 class Department(BaseModel):
@@ -69,8 +107,8 @@ class Agent(BaseModel):
 class Conversation(BaseModel):
     id = AutoField()
     visitor_id = CharField(max_length=64)
-    visitor_name = CharField(max_length=128, default="Ziyaretçi")
-    visitor_email = CharField(max_length=256, default="")
+    visitor_name = EncryptedCharField(max_length=512, default="Visitor")
+    visitor_email = EncryptedCharField(max_length=512, default="")
     status = CharField(max_length=16, default="open")  # open | assigned | closed
     assigned_to = ForeignKeyField(Agent, null=True, backref="conversations", on_delete="SET NULL")
     site_name = CharField(max_length=128, default="")
@@ -98,7 +136,7 @@ class Message(BaseModel):
     sender_type = CharField(max_length=16)  # visitor | agent | bot | system
     sender_id = CharField(max_length=64, default="")
     sender_name = CharField(max_length=128, default="")
-    content = TextField(default="")
+    content = EncryptedTextField(default="")
     file_url = CharField(max_length=1024, default="")
     file_name = CharField(max_length=256, default="")
     file_size = IntegerField(default=0)
@@ -153,7 +191,7 @@ class Rating(BaseModel):
     id = AutoField()
     conversation = ForeignKeyField(Conversation, unique=True, backref="rating", on_delete="CASCADE")
     score = IntegerField()  # 1-5
-    comment = TextField(default="")
+    comment = EncryptedTextField(default="")
     created_at = DateTimeField(default=datetime.utcnow)
     class Meta:
         table_name = "ratings"
@@ -194,7 +232,7 @@ class Note(BaseModel):
     conversation = ForeignKeyField(Conversation, backref="notes", on_delete="CASCADE")
     agent = ForeignKeyField(Agent, null=True, on_delete="SET NULL")
     agent_name = CharField(max_length=128, default="")
-    content = TextField()
+    content = EncryptedTextField()
     created_at = DateTimeField(default=datetime.utcnow)
     class Meta:
         table_name = "notes"
@@ -243,9 +281,9 @@ class AuditLog(BaseModel):
 class OfflineMessage(BaseModel):
     id = AutoField()
     visitor_id = CharField(max_length=64, default="")
-    visitor_name = CharField(max_length=128, default="")
-    visitor_email = CharField(max_length=256, default="")
-    message = TextField()
+    visitor_name = EncryptedCharField(max_length=512, default="")
+    visitor_email = EncryptedCharField(max_length=512, default="")
+    message = EncryptedTextField()
     page_url = CharField(max_length=1024, default="")
     is_read = BooleanField(default=False)
     created_at = DateTimeField(default=datetime.utcnow)

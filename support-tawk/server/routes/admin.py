@@ -3,7 +3,7 @@ import csv
 import io
 import json
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -23,10 +23,11 @@ from ..webhook_sender import fire_event
 from ..auth import (
     hash_password, verify_password, create_token,
     get_current_agent, require_admin, require_permission, verify_ws_token,
-    agent_permissions, PERMISSIONS,
+    agent_permissions, validate_password_strength, PERMISSIONS,
 )
 from ..ws_manager import manager
 from ..config import config
+from .. import seclog
 
 router = APIRouter(prefix="/api/admin")
 
@@ -228,10 +229,13 @@ class FieldOrderRequest(BaseModel):
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
+    ip = seclog.client_ip(request)
     agent = Agent.get_or_none(Agent.username == req.username, Agent.is_active == True)
     if not agent or not verify_password(req.password, agent.password_hash):
-        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre hatalı")
+        seclog.login_failed(ip, req.username)
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    seclog.login_ok(ip, req.username)
     token = create_token(agent.id, agent.role)
     return {
         "token": token,
@@ -887,7 +891,10 @@ def list_agents(agent: Agent = Depends(get_current_agent)):
 @router.post("/agents")
 def create_agent(req: AgentCreate, admin: Agent = Depends(require_permission("manage_agents"))):
     if Agent.get_or_none(Agent.username == req.username):
-        raise HTTPException(400, "Bu kullanıcı adı zaten kullanılıyor")
+        raise HTTPException(400, "This username is already taken")
+    pw_err = validate_password_strength(req.password)
+    if pw_err:
+        raise HTTPException(400, pw_err)
     role = req.role if req.role in ("admin", "agent") else "agent"
     perms = req.permissions or []
     a = Agent.create(
@@ -905,7 +912,7 @@ def create_agent(req: AgentCreate, admin: Agent = Depends(require_permission("ma
 def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require_permission("manage_agents"))):
     a = Agent.get_or_none(Agent.id == agent_id)
     if not a:
-        raise HTTPException(404, "Kullanıcı bulunamadı")
+        raise HTTPException(404, "User not found")
     updates = {}
     if req.display_name is not None:
         updates["display_name"] = req.display_name
@@ -914,6 +921,9 @@ def update_agent(agent_id: int, req: AgentUpdate, admin: Agent = Depends(require
     if req.is_active is not None:
         updates["is_active"] = req.is_active
     if req.password is not None:
+        pw_err = validate_password_strength(req.password)
+        if pw_err:
+            raise HTTPException(400, pw_err)
         updates["password_hash"] = hash_password(req.password)
     if req.department_id is not None:
         updates["department_id"] = req.department_id if req.department_id > 0 else None
@@ -951,6 +961,9 @@ def update_profile(req: ProfileUpdate, agent: Agent = Depends(get_current_agent)
     if req.display_name is not None:
         updates["display_name"] = req.display_name
     if req.password is not None:
+        pw_err = validate_password_strength(req.password)
+        if pw_err:
+            raise HTTPException(400, pw_err)
         updates["password_hash"] = hash_password(req.password)
     if req.avatar_color is not None:
         updates["avatar_color"] = req.avatar_color
@@ -1003,6 +1016,8 @@ def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_
          .on_conflict(conflict_target=[Setting.key],
                       update={Setting.value: str(value), Setting.updated_at: datetime.utcnow()})
          .execute())
+    from ..settings_cache import invalidate as _invalidate_settings
+    _invalidate_settings()
     return {"ok": True}
 
 

@@ -91,27 +91,65 @@ def _apply(dataclass_obj, data: dict):
             setattr(dataclass_obj, key, val)
 
 
+def _load_dotenv(path: str = ".env") -> None:
+    """Minimal .env loader: KEY=VALUE lines into os.environ (no overwrite).
+    Keeps secrets out of config.yml / version control."""
+    env_file = Path(os.environ.get("SUPPORT_TAWK_ENV", path))
+    if not env_file.exists():
+        return
+    try:
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        pass
+
+
+def _apply_env_overrides(cfg: AppConfig) -> None:
+    """Secrets and a few operational values may come from the environment.
+    Environment always wins over config.yml so secrets never live in YAML."""
+    env = os.environ
+    if env.get("SECRET_KEY"):
+        cfg.server.secret_key = env["SECRET_KEY"]
+    if env.get("ADMIN_PASSWORD"):
+        cfg.admin.default_password = env["ADMIN_PASSWORD"]
+    if env.get("AI_API_KEY"):
+        cfg.ai.api_key = env["AI_API_KEY"]
+    if env.get("SUPPORT_TAWK_PORT"):
+        try:
+            cfg.server.port = int(env["SUPPORT_TAWK_PORT"])
+        except ValueError:
+            pass
+
+
 def load_config(path: str = _CONFIG_PATH) -> AppConfig:
+    _load_dotenv()
     cfg = AppConfig()
     config_file = Path(path)
-    if not config_file.exists():
-        return cfg
-    with open(config_file, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
-    if "site" in raw:
-        _apply(cfg.site, raw["site"])
-    if "server" in raw:
-        _apply(cfg.server, raw["server"])
-    if "admin" in raw:
-        _apply(cfg.admin, raw["admin"])
-    if "database" in raw:
-        _apply(cfg.database, raw["database"])
-    if "chat" in raw:
-        _apply(cfg.chat, raw["chat"])
-    if "limits" in raw:
-        _apply(cfg.limits, raw["limits"])
-    if "ai" in raw:
-        _apply(cfg.ai, raw["ai"])
+    if config_file.exists():
+        with open(config_file, "r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+        if "site" in raw:
+            _apply(cfg.site, raw["site"])
+        if "server" in raw:
+            _apply(cfg.server, raw["server"])
+        if "admin" in raw:
+            _apply(cfg.admin, raw["admin"])
+        if "database" in raw:
+            _apply(cfg.database, raw["database"])
+        if "chat" in raw:
+            _apply(cfg.chat, raw["chat"])
+        if "limits" in raw:
+            _apply(cfg.limits, raw["limits"])
+        if "ai" in raw:
+            _apply(cfg.ai, raw["ai"])
+    _apply_env_overrides(cfg)
     return cfg
 
 

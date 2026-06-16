@@ -45,6 +45,30 @@ def has_permission(agent: Agent, perm: str) -> bool:
     return perm in agent_permissions(agent)
 
 
+_COMMON_PASSWORDS = {
+    "admin123", "password", "12345678", "qwerty123", "admin1234",
+    "password1", "11111111", "123456789", "letmein1", "welcome1",
+}
+
+
+def validate_password_strength(plain: str) -> str | None:
+    """Return an error message if the password is too weak, else None.
+    Requires 8+ chars and at least two character classes."""
+    if not plain or len(plain) < 8:
+        return "Password must be at least 8 characters long"
+    if plain.lower() in _COMMON_PASSWORDS:
+        return "This password is too common, please choose a stronger one"
+    classes = sum([
+        any(c.islower() for c in plain),
+        any(c.isupper() for c in plain),
+        any(c.isdigit() for c in plain),
+        any(not c.isalnum() for c in plain),
+    ])
+    if classes < 2:
+        return "Password must include at least two of: lowercase, uppercase, digits, symbols"
+    return None
+
+
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 

@@ -90,6 +90,7 @@ if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
   read -rp "Email for SSL certificate (Let's Encrypt) — leave blank to skip: " EMAIL
 fi
 SECRET_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
+DATA_ENCRYPTION_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
 ok "Information collected"
 
 # ── 2. System packages ────────────────────────────────────────────────────────
@@ -123,12 +124,35 @@ pip install --upgrade pip -q
 pip install -r requirements.txt -q
 ok "Dependencies installed"
 
-# ── 5. Configure config.yml ───────────────────────────────────────────────────
+# ── 5. Configuration: secrets → .env, non-secrets → config.yml ────────────────
 step "Writing configuration"
 PUBLIC_URL="${DOMAIN:+https://$DOMAIN}"; PUBLIC_URL="${PUBLIC_URL:-http://localhost:$APP_PORT}"
-python3 - "$SITE_NAME" "$PUBLIC_URL" "$SECRET_KEY" "$ADMIN_PASS" "$LANG_CHOICE" <<'PY'
+
+# Secrets live in .env (chmod 600), never in config.yml / version control.
+# DATA_ENCRYPTION_KEY is kept separate from SECRET_KEY so the JWT key can be
+# rotated without losing the ability to decrypt stored data.
+if [ -f "$APP_DIR/.env" ]; then
+  info ".env already exists — keeping existing secrets"
+  # Reuse existing keys so we never re-encrypt data with a different key.
+  # shellcheck disable=SC1091
+  set -a; . "$APP_DIR/.env"; set +a
+else
+  cat > "$APP_DIR/.env" <<EOF
+# Support Tawk secrets — keep this file private (chmod 600).
+# These override config.yml. Do NOT commit this file.
+SECRET_KEY=$SECRET_KEY
+DATA_ENCRYPTION_KEY=$DATA_ENCRYPTION_KEY
+ADMIN_PASSWORD=$ADMIN_PASS
+# AI_API_KEY=sk-...
+EOF
+  ok ".env created with generated secrets"
+fi
+chmod 600 "$APP_DIR/.env"
+
+# config.yml holds only non-secret settings.
+python3 - "$SITE_NAME" "$PUBLIC_URL" "$LANG_CHOICE" <<'PY'
 import re, sys
-name, domain, secret, passwd, lang = sys.argv[1:6]
+name, domain, lang = sys.argv[1:4]
 with open("config.yml", encoding="utf-8") as f:
     c = f.read()
 def repl(pattern, value):
@@ -136,17 +160,31 @@ def repl(pattern, value):
     c = re.sub(pattern, value, c, count=1, flags=re.M)
 repl(r'^(\s*name:\s*).*$',             r'\g<1>"%s"' % name)
 repl(r'^(\s*domain:\s*).*$',           r'\g<1>"%s"' % domain)
-repl(r'^(\s*secret_key:\s*).*$',       r'\g<1>"%s"' % secret)
-repl(r'^(\s*default_password:\s*).*$', r'\g<1>"%s"' % passwd)
 repl(r'^(\s*language:\s*).*$',         r'\g<1>"%s"' % lang)
+# Scrub secrets from config.yml — they now come from .env.
+repl(r'^(\s*secret_key:\s*).*$',       r'\g<1>""  # set via .env (SECRET_KEY)')
+repl(r'^(\s*default_password:\s*).*$', r'\g<1>""  # set via .env (ADMIN_PASSWORD)')
 with open("config.yml", "w", encoding="utf-8") as f:
     f.write(c)
 print("config.yml updated")
 PY
-ok "config.yml written (secret key, admin password, language)"
+ok "config.yml written (site name, language); secrets stored in .env"
+
+# Encrypt any pre-existing plaintext data (idempotent; no-op on fresh installs).
+step "Encrypting existing data at rest"
+if [ -f "$APP_DIR/data/support.db" ]; then
+  ( set -a; . "$APP_DIR/.env"; set +a; "$APP_DIR/venv/bin/python" migrate_encrypt.py ) || warn "Encryption migration skipped"
+else
+  ok "Fresh install — data is encrypted automatically as it is written"
+fi
 
 # ── 6. Systemd service ────────────────────────────────────────────────────────
 step "Setting up auto-start service"
+# Lock down data directory and DB file (defense-in-depth alongside encryption).
+mkdir -p "$APP_DIR/data"
+chmod 700 "$APP_DIR/data"
+[ -f "$APP_DIR/data/support.db" ] && chmod 600 "$APP_DIR/data/support.db"
+
 cat > "/etc/systemd/system/${SERVICE}.service" <<EOF
 [Unit]
 Description=Support Tawk Live Chat
@@ -155,9 +193,14 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=$APP_DIR
-ExecStart=$APP_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $APP_PORT
+EnvironmentFile=$APP_DIR/.env
+ExecStart=$APP_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $APP_PORT --loop uvloop --http httptools
 Restart=always
 RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target
@@ -287,6 +330,23 @@ server {
     listen 80;
     server_name ${domain};
     client_max_body_size 25M;
+
+    # Hide nginx version
+    server_tokens off;
+
+    # Security headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Cache static assets served by the app
+    location /static/ {
+        proxy_pass http://127.0.0.1:${port};
+        proxy_set_header Host \$host;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+    }
 
     # Rate-limit the login endpoint (zone defined in /etc/nginx/conf.d/support-tawk.conf)
     location /api/admin/login {
@@ -544,6 +604,41 @@ ufw allow 443 >/dev/null 2>&1 || true
 yes | ufw enable >/dev/null 2>&1 || true
 ok "Ports opened (22, 80, 443)"
 
+# ── 9. Fail2ban — ban IPs that brute-force the admin login ─────────────────────
+step "Configuring Fail2ban for login protection"
+if apt-get install -y -qq fail2ban >/dev/null 2>&1; then
+  # Filter: match the AUTH_FAIL lines written by the app's security log.
+  cat > /etc/fail2ban/filter.d/support-tawk.conf <<'F2BFILTER'
+[Definition]
+failregex = ^.*AUTH_FAIL ip=<HOST> user=.*$
+ignoreregex =
+F2BFILTER
+
+  # Jail: 5 failures within 10 min → ban for 1 hour.
+  cat > /etc/fail2ban/jail.d/support-tawk.conf <<F2BJAIL
+[support-tawk]
+enabled  = true
+filter   = support-tawk
+logpath  = $APP_DIR/data/security.log
+maxretry = 5
+findtime = 600
+bantime  = 3600
+F2BJAIL
+
+  # Ensure the log file exists so fail2ban can start watching it.
+  mkdir -p "$APP_DIR/data"
+  touch "$APP_DIR/data/security.log"
+  systemctl enable fail2ban >/dev/null 2>&1 || true
+  systemctl restart fail2ban >/dev/null 2>&1 || true
+  if systemctl is-active --quiet fail2ban; then
+    ok "Fail2ban active (5 failed logins in 10 min → 1 hour ban)"
+  else
+    warn "Fail2ban installed but not running. Check:  systemctl status fail2ban"
+  fi
+else
+  warn "Fail2ban could not be installed — login brute-force protection skipped."
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 PANEL_URL="${DOMAIN:+https://$DOMAIN/admin}"; PANEL_URL="${PANEL_URL:-http://$SERVER_IP:$APP_PORT/admin}"
@@ -564,11 +659,21 @@ if [ -n "$ADMIN_IP" ]; then
   echo "  ${W}Admin IP restriction:${X} $ADMIN_IP"
 fi
 echo
+echo "  ${C}Security:${X}"
+echo "    • Messages, names, emails & notes encrypted at rest (AES)"
+echo "    • Secrets stored in $APP_DIR/.env (chmod 600)"
+echo "    • Security headers + login rate limiting via reverse proxy"
+echo "    • Fail2ban bans brute-force login attempts"
+if [ -n "$ADMIN_IP" ]; then
+  echo "    • Admin panel restricted to: $ADMIN_IP"
+fi
+echo
 echo "  ${C}Useful commands:${X}"
 echo "    Status:     systemctl status $SERVICE"
 echo "    Logs:       journalctl -u $SERVICE -f"
 echo "    Restart:    systemctl restart $SERVICE"
 echo "    Update:     cd $APP_DIR && git pull && systemctl restart $SERVICE"
+echo "    Banned IPs: fail2ban-client status support-tawk"
 echo
 if [ -z "$DOMAIN" ]; then
   warn "No domain provided. Access the panel via IP for now:"

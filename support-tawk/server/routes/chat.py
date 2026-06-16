@@ -57,7 +57,7 @@ class OfflineMessageRequest(BaseModel):
 @router.post("/api/offline-message")
 async def submit_offline_message(req: OfflineMessageRequest):
     if not req.message.strip():
-        raise HTTPException(400, "Mesaj boş olamaz")
+        raise HTTPException(400, "Message cannot be empty")
     om = OfflineMessage.create(
         visitor_id=req.visitor_id,
         visitor_name=req.visitor_name,
@@ -89,9 +89,9 @@ async def submit_offline_message(req: OfflineMessageRequest):
 async def submit_rating(conv_id: int, req: RatingRequest):
     conv = Conversation.get_or_none(Conversation.id == conv_id)
     if not conv:
-        raise HTTPException(404, "Konuşma bulunamadı")
+        raise HTTPException(404, "Conversation not found")
     if req.score < 1 or req.score > 5:
-        raise HTTPException(400, "Puan 1-5 arasında olmalı")
+        raise HTTPException(400, "Rating must be between 1 and 5")
     Rating.insert(
         conversation=conv,
         score=req.score,
@@ -209,7 +209,7 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                 if len(content) > config.limits.max_message_length:
                     content = content[:config.limits.max_message_length]
 
-                visitor_name = data.get("visitor_name", conv.visitor_name) or "Ziyaretçi"
+                visitor_name = data.get("visitor_name", conv.visitor_name) or "Visitor"
                 visitor_email = data.get("visitor_email", conv.visitor_email) or ""
                 page_url = data.get("page_url", conv.page_url) or ""
 
@@ -365,7 +365,7 @@ async def _ai_reply(conv: Conversation, trigger_msg: Message):
     msg = Message.create(
         conversation=conv,
         sender_type="bot",
-        sender_name="Destek Botu",
+        sender_name="Support Bot",
         content=reply_text,
     )
     payload = {
@@ -374,7 +374,7 @@ async def _ai_reply(conv: Conversation, trigger_msg: Message):
         "message": {
             "id": msg.id,
             "sender_type": "bot",
-            "sender_name": "Destek Botu",
+            "sender_name": "Support Bot",
             "content": reply_text,
             "file_url": "",
             "file_name": "",

@@ -88,12 +88,47 @@ limits:
   allowed_file_types: [jpg, png, pdf, docx, zip]
 ```
 
+## Security
+
+Defense in depth, configured automatically by the installer:
+
+- **Encryption at rest** — chat messages, visitor names/emails, internal notes
+  and ratings are AES-encrypted in the database (Fernet). Copying the SQLite
+  file does not reveal conversation contents.
+- **Secrets in `.env`** — `SECRET_KEY`, `DATA_ENCRYPTION_KEY` and the admin
+  password live in `.env` (chmod 600), never in `config.yml` or git.
+- **TLS everywhere** — HTTPS/WSS via Let's Encrypt; transit is encrypted end
+  to end between the visitor's browser and the server.
+- **Login hardening** — server-side password strength rules, login rate
+  limiting at the proxy, and Fail2ban bans after repeated failures.
+- **Security headers** — `nosniff`, `X-Frame-Options`, HSTS, Referrer-Policy
+  from both the app and the reverse proxy.
+- **Admin IP allowlist** — optionally restrict `/admin` to specific IPs
+  (`ADMIN_IP=1.2.3.4,5.6.7.8`).
+
+Existing installs: run `venv/bin/python migrate_encrypt.py` once to encrypt
+data already in the database (safe to re-run).
+
+## Performance
+
+Tuned to run comfortably on a 1 GB VPS:
+
+- SQLite in WAL mode with tuned pragmas (NORMAL sync, 64 MB cache, mmap)
+- In-process settings cache for the high-traffic `/api/config` endpoint
+- GZip compression on JSON/HTML/JS responses
+- uvloop + httptools event loop
+- Static assets cached at the proxy
+
+Rough capacity on 1 GB RAM: a few thousand concurrent WebSocket chats and
+thousands of HTTP requests per second.
+
 ## Stack
 
-- **Backend:** Python 3.11+, FastAPI, Uvicorn, Peewee ORM, SQLite
+- **Backend:** Python 3.11+, FastAPI, Uvicorn (uvloop), Peewee ORM, SQLite
 - **Frontend:** Vanilla JS (no framework)
 - **Auth:** PyJWT + bcrypt
-- **Deploy:** systemd + Nginx + Let's Encrypt
+- **Encryption:** cryptography (Fernet / AES)
+- **Deploy:** systemd + Nginx/Apache/Caddy + Let's Encrypt + Fail2ban
 
 ---
 

@@ -12,13 +12,15 @@ site:
 server:
   host: "0.0.0.0"
   port: 8000
-  secret_key: "CHANGE_THIS_TO_A_STRONG_RANDOM_KEY"   # JWT signing key — change this!
+  # Secrets are read from .env (SECRET_KEY) — the installer generates them.
+  # Anything set here is overridden by the matching environment variable.
+  secret_key: ""                     # set via .env (SECRET_KEY)
   cors_origins:                      # Origins allowed for the widget (* = all)
     - "*"
 
 admin:
   default_username: "admin"
-  default_password: "admin123"       # Change this after first login!
+  default_password: ""               # set via .env (ADMIN_PASSWORD)
   session_hours: 24
 
 database:

@@ -9,8 +9,9 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -76,6 +77,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compress JSON/HTML/JS responses — cuts bandwidth on conversation lists,
+# locale files and the admin bundle by roughly 60-70%.
+app.add_middleware(GZipMiddleware, minimum_size=600)
+
+
+# Security headers added to every response. The admin panel relies on inline
+# scripts/styles, so we apply transport/sniffing protections rather than a
+# strict CSP that would break it.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-XSS-Protection": "1; mode=block",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for k, v in _SECURITY_HEADERS.items():
+        response.headers.setdefault(k, v)
+    return response
+
 app.include_router(chat_router)
 app.include_router(admin_router)
 app.include_router(files_router)
@@ -126,7 +151,8 @@ def root():
 
 @app.get("/api/config")
 def public_config():
-    overrides = {s.key: s.value for s in Setting.select()}
+    from server.settings_cache import get_settings
+    overrides = get_settings()
     try:
         bubbles = json.loads(overrides.get("proactive_bubbles", "[]"))
         if not isinstance(bubbles, list):
