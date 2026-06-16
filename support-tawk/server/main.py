@@ -113,7 +113,18 @@ def root():
 
 @app.get("/api/config")
 def public_config():
+    import json
     overrides = {s.key: s.value for s in Setting.select()}
+    try:
+        bubbles = json.loads(overrides.get("proactive_bubbles", "[]"))
+        if not isinstance(bubbles, list):
+            bubbles = []
+    except Exception:
+        bubbles = []
+    try:
+        widget_width = int(overrides.get("widget_width", "360") or 360)
+    except Exception:
+        widget_width = 360
     return {
         "site_name": overrides.get("site_name", config.site.name),
         "widget_color": overrides.get("widget_color", config.chat.widget_color),
@@ -123,6 +134,8 @@ def public_config():
         "notification_sound": overrides.get("notification_sound", "true") != "false",
         "logo_url": config.site.logo_url,
         "proactive_delay_seconds": int(overrides.get("proactive_delay_seconds", "0")),
+        "widget_width": widget_width,
+        "proactive_bubbles": bubbles,
     }
 
 

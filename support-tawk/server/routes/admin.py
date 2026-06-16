@@ -116,6 +116,8 @@ class AppSettingsUpdate(BaseModel):
     offline_message: Optional[str] = None
     proactive_delay_seconds: Optional[int] = None
     notification_sound: Optional[bool] = None
+    widget_width: Optional[int] = None
+    proactive_bubbles: Optional[str] = None  # JSON dizisi: ["mesaj1", "mesaj2"]
 
 
 class NoteCreate(BaseModel):
@@ -601,6 +603,11 @@ def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_
         data["proactive_delay_seconds"] = str(req.proactive_delay_seconds)
     if req.notification_sound is not None:
         data["notification_sound"] = "true" if req.notification_sound else "false"
+    if req.widget_width is not None:
+        # 280–560 px arası sınırla
+        data["widget_width"] = str(max(280, min(560, req.widget_width)))
+    if req.proactive_bubbles is not None:
+        data["proactive_bubbles"] = req.proactive_bubbles
     for key, value in data.items():
         (Setting.insert(key=key, value=str(value), updated_at=datetime.utcnow())
          .on_conflict(conflict_target=[Setting.key],

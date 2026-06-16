@@ -29,7 +29,15 @@
     site_name: "Destek",
     notification_sound: true,
     proactive_delay_seconds: 0,
+    default_width: 360,
+    proactive_bubbles: [],
   };
+
+  var MIN_W = 300, MAX_W = 560;
+  function getStoredWidth() {
+    var w = parseInt(localStorage.getItem("st_widget_width"), 10);
+    return (w >= MIN_W && w <= MAX_W) ? w : 0;
+  }
 
   var state = {
     open: false,
@@ -133,7 +141,15 @@
     "#st-emoji-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }",
     ".st-emoji-btn { background:none; border:none; cursor:pointer; font-size:18px; padding:4px; border-radius:6px; text-align:center; }",
     ".st-emoji-btn:hover { background:#f1f5f9; }",
-    "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-window { width:100vw; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } }",
+    "#st-resize { position:absolute; left:0; top:0; bottom:0; width:8px; cursor:ew-resize; z-index:6; }",
+    "#st-resize:hover { background:rgba(0,0,0,.06); }",
+    "#st-resize::after { content:''; position:absolute; left:2px; top:50%; transform:translateY(-50%); width:2px; height:28px; background:#cbd5e1; border-radius:2px; opacity:0; transition:opacity .15s; }",
+    "#st-window:hover #st-resize::after { opacity:1; }",
+    "#st-bubbles { position:fixed; bottom:90px; right:24px; z-index:999997; display:flex; flex-direction:column; gap:8px; align-items:flex-end; max-width:280px; }",
+    ".st-bubble-pop { background:#fff; color:#1e293b; padding:10px 14px; border-radius:14px 14px 4px 14px; box-shadow:0 4px 20px rgba(0,0,0,.15); font-size:13.5px; line-height:1.4; cursor:pointer; position:relative; animation:st-pop .3s ease; }",
+    ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
+    "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
+    "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
   ].join("\n");
   document.head.appendChild(style);
 
@@ -330,6 +346,79 @@
   }
   applyColor(cfg.color);
 
+  // ── Width (admin default + visitor adjustable) ────────────────────────────
+  function applyWidth(px) {
+    px = Math.max(MIN_W, Math.min(MAX_W, px || cfg.default_width));
+    cfg._width = px;
+    // Mobilde tam ekran — media query yönetsin, inline genişlik koyma
+    if (window.matchMedia("(max-width: 480px)").matches) {
+      win.style.width = "";
+    } else {
+      win.style.width = px + "px";
+    }
+  }
+
+  // Sürükleyerek genişlik ayarı (sol kenardan)
+  var resizeEl = document.createElement("div");
+  resizeEl.id = "st-resize";
+  resizeEl.title = "Genişliği ayarla";
+  win.appendChild(resizeEl);
+  (function () {
+    var dragging = false;
+    function startDrag(e) { dragging = true; e.preventDefault(); document.body.style.userSelect = "none"; }
+    function onMove(e) {
+      if (!dragging) return;
+      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      var rect = win.getBoundingClientRect();
+      applyWidth(rect.right - clientX);
+    }
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false; document.body.style.userSelect = "";
+      if (cfg._width) localStorage.setItem("st_widget_width", String(Math.round(cfg._width)));
+    }
+    resizeEl.addEventListener("mousedown", startDrag);
+    resizeEl.addEventListener("touchstart", startDrag, { passive: false });
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("mouseup", endDrag);
+    document.addEventListener("touchend", endDrag);
+  })();
+
+  window.addEventListener("resize", function () { applyWidth(cfg._width || getStoredWidth() || cfg.default_width); });
+  applyWidth(getStoredWidth() || cfg.default_width);
+
+  // ── Proactive notification bubbles (admin tanımlı) ────────────────────────
+  var bubbleWrap = document.createElement("div");
+  bubbleWrap.id = "st-bubbles";
+  document.body.appendChild(bubbleWrap);
+
+  function hideProactiveBubbles() { bubbleWrap.innerHTML = ""; }
+
+  function showProactiveBubbles() {
+    if (state.open) return;
+    if (sessionStorage.getItem("st_bubbles_dismissed") === "1") return;
+    hideProactiveBubbles();
+    cfg.proactive_bubbles.slice(0, 3).forEach(function (text) {
+      if (!text) return;
+      var b = document.createElement("div");
+      b.className = "st-bubble-pop";
+      b.textContent = text;
+      b.addEventListener("click", function () { hideProactiveBubbles(); openChat(); });
+      var x = document.createElement("button");
+      x.className = "st-bubble-x";
+      x.textContent = "✕";
+      x.setAttribute("aria-label", "Kapat");
+      x.addEventListener("click", function (e) {
+        e.stopPropagation();
+        hideProactiveBubbles();
+        sessionStorage.setItem("st_bubbles_dismissed", "1");
+      });
+      b.appendChild(x);
+      bubbleWrap.appendChild(b);
+    });
+  }
+
   // ── Fetch public config + bot flow ────────────────────────────────────────
   fetch(SERVER + "/api/config").then(function (r) { return r.json(); }).then(function (data) {
     cfg.welcome_message = data.welcome_message || cfg.welcome_message;
@@ -339,11 +428,21 @@
     title.textContent = data.site_name || "Destek";
     if (data.widget_color) applyColor(data.widget_color);
 
+    // Varsayılan genişlik (admin ayarı) — ziyaretçi tercihi varsa o öncelikli
+    cfg.default_width = data.widget_width || cfg.default_width;
+    applyWidth(getStoredWidth() || cfg.default_width);
+
     // Proactive chat
     if (cfg.proactive_delay_seconds > 0 && !state.open) {
       state.proactive_timer = setTimeout(function() {
         if (!state.open) openChat();
       }, cfg.proactive_delay_seconds * 1000);
+    }
+
+    // Admin tanımlı bildirim baloncukları (widget üstünde)
+    cfg.proactive_bubbles = Array.isArray(data.proactive_bubbles) ? data.proactive_bubbles : [];
+    if (cfg.proactive_bubbles.length) {
+      setTimeout(showProactiveBubbles, 1500);
     }
   }).catch(function () {});
 
@@ -358,6 +457,7 @@
   function openChat() {
     state.open = true;
     win.classList.add("open");
+    hideProactiveBubbles();
     clearUnread();
     // Herkes anında sohbet edebilir — form/bekleme zorunlu değil.
     showChat();
