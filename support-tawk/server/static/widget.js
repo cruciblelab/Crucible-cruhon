@@ -64,6 +64,7 @@
     form_step: 0,
     form_answers: {},
     form_shown: false,
+    form_active: false,
   };
 
   // ── Markdown renderer ─────────────────────────────────────────────────────
@@ -223,15 +224,6 @@
     '      <input id="st-name-input" type="text" placeholder="Adınız" maxlength="64" />',
     '      <input id="st-email-input" type="email" placeholder="E-posta (isteğe bağlı)" maxlength="128" />',
     '      <button id="st-start-btn">Sohbeti Başlat</button>',
-    '    </div>',
-    '    <div id="st-form-wizard">',
-    '      <div id="st-fw-header">',
-    '        <div id="st-fw-desc"></div>',
-    '        <div id="st-fw-track"><div id="st-fw-bar"></div></div>',
-    '        <div id="st-fw-prog"></div>',
-    '      </div>',
-    '      <div id="st-fw-body"></div>',
-    '      <div id="st-fw-foot"></div>',
     '    </div>',
     '    <div id="st-chat-area" style="display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden; position:relative;">',
     '      <button id="st-scroll-btn"><span>↓ Yeni mesaj</span><span id="st-scroll-badge" class="hidden">0</span></button>',
@@ -710,170 +702,117 @@
     }
   }
 
-  // ── Form wizard ───────────────────────────────────────────────────────────
-  function showFormWizard() {
+  // ── Form flow (in-chat) ────────────────────────────────────────────────────
+  function startFormInChat() {
     if (!state.form_data || state.form_shown) return;
     state.form_shown = true;
+    state.form_active = true;
     state.form_step = 0;
     state.form_answers = {};
-    infoForm.style.display = "none";
-    chatArea.style.display = "none";
-    offlineForm.style.display = "none";
-    waitMode.style.display = "none";
-    var fwEl = document.getElementById("st-form-wizard");
-    fwEl.style.display = "flex";
-    var desc = document.getElementById("st-fw-desc");
-    desc.textContent = state.form_data.welcome_text || state.form_data.name;
-    renderFormStep();
+    // Greet with welcome text
+    appendMsg({
+      sender_type: "bot",
+      sender_name: state.form_data.name,
+      content: state.form_data.welcome_text || state.form_data.name,
+    });
+    scrollBottom();
+    setTimeout(function() { askNextFormField(); }, 500);
   }
 
-  function renderFormStep() {
+  function askNextFormField() {
     var fields = state.form_data.fields;
     var step = state.form_step;
-    var total = fields.length;
-    if (step >= total) { doSubmitForm(); return; }
+    if (step >= fields.length) { finishFormInChat(); return; }
     var field = fields[step];
+    var total = fields.length;
+    var qText = "(" + (step + 1) + "/" + total + ") " + field.label + (field.required ? " *" : "");
 
-    var pct = total > 0 ? Math.round((step / total) * 100) : 0;
-    var bar = document.getElementById("st-fw-bar");
-    bar.style.width = pct + "%";
-    bar.style.background = cfg.color;
-    document.getElementById("st-fw-prog").textContent = (step + 1) + " / " + total;
-
-    var body = document.getElementById("st-fw-body");
-    body.innerHTML = "";
-    var foot = document.getElementById("st-fw-foot");
-    foot.innerHTML = "";
-
-    var labelEl = document.createElement("div");
-    labelEl.className = "fw-label";
-    labelEl.innerHTML = escHtml(field.label) + (field.required ? '<span class="fw-req">*</span>' : "");
-    body.appendChild(labelEl);
-
-    function escHtml(s) {
-      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    }
-
-    var isLast = (step === total - 1);
-    var nextLabel = isLast ? (state.form_data.submit_text || "Gönder") : "İleri →";
+    appendMsg({ sender_type: "bot", sender_name: state.form_data.name, content: qText });
+    scrollBottom();
 
     if (field.field_type === "select" || field.field_type === "radio") {
       var opts = field.options || [];
+      var optDiv = document.createElement("div");
+      optDiv.className = "st-bot-options";
       opts.forEach(function(opt) {
         var btn = document.createElement("button");
-        btn.className = "fw-opt-btn";
+        btn.className = "st-bot-btn";
         btn.textContent = opt.label;
         btn.addEventListener("click", function() {
+          optDiv.remove();
           state.form_answers[String(field.id)] = opt.label;
-          body.querySelectorAll(".fw-opt-btn").forEach(function(b) {
-            b.disabled = true;
-            b.classList.remove("fw-selected");
-          });
-          btn.classList.add("fw-selected");
+          appendMsg({ sender_type: "visitor", content: opt.label, created_at: new Date().toISOString() });
+          scrollBottom();
           if (opt.reply) {
-            var hint = document.createElement("div");
-            hint.className = "fw-reply-hint";
-            hint.textContent = "💬 " + opt.reply;
-            body.appendChild(hint);
-            setTimeout(function() { advanceFormStep(); }, 1400);
+            setTimeout(function() {
+              appendMsg({ sender_type: "bot", sender_name: state.form_data.name, content: opt.reply });
+              scrollBottom();
+              setTimeout(function() { state.form_step++; askNextFormField(); }, 700);
+            }, 450);
           } else {
-            setTimeout(function() { advanceFormStep(); }, 350);
+            state.form_step++;
+            setTimeout(function() { askNextFormField(); }, 350);
           }
         });
-        body.appendChild(btn);
+        optDiv.appendChild(btn);
       });
+      messagesEl.appendChild(optDiv);
+      scrollBottom();
 
     } else if (field.field_type === "rating") {
-      var starWrap = document.createElement("div");
-      starWrap.className = "fw-stars";
-      var selRating = 0;
+      var ratingDiv = document.createElement("div");
+      ratingDiv.className = "st-bot-options";
+      var starsRow = document.createElement("div");
+      starsRow.style.cssText = "display:flex;gap:8px;padding:4px 14px 10px";
       for (var i = 1; i <= 5; i++) {
         (function(score) {
           var star = document.createElement("span");
-          star.className = "fw-star";
           star.textContent = "⭐";
-          star.setAttribute("data-score", score);
-          star.addEventListener("click", function() {
-            selRating = score;
-            starWrap.querySelectorAll(".fw-star").forEach(function(s, idx) {
-              s.classList.toggle("fw-lit", idx < score);
+          star.style.cssText = "font-size:26px;cursor:pointer;opacity:.25;transition:opacity .15s;user-select:none";
+          star.addEventListener("mouseover", function() {
+            starsRow.querySelectorAll("span").forEach(function(s, idx) {
+              s.style.opacity = idx < score ? "1" : "0.25";
             });
           });
-          starWrap.appendChild(star);
+          star.addEventListener("mouseout", function() {
+            starsRow.querySelectorAll("span").forEach(function(s) { s.style.opacity = "0.25"; });
+          });
+          star.addEventListener("click", function() {
+            ratingDiv.remove();
+            state.form_answers[String(field.id)] = score + "/5 ⭐";
+            appendMsg({ sender_type: "visitor", content: score + "/5 ⭐", created_at: new Date().toISOString() });
+            state.form_step++;
+            setTimeout(function() { askNextFormField(); }, 350);
+            scrollBottom();
+          });
+          starsRow.appendChild(star);
         })(i);
       }
-      body.appendChild(starWrap);
-      var nb = document.createElement("button");
-      nb.className = "fw-next-btn";
-      nb.style.background = cfg.color;
-      nb.textContent = nextLabel;
-      nb.addEventListener("click", function() {
-        if (!selRating && field.required) return;
-        state.form_answers[String(field.id)] = selRating + "/5 ⭐";
-        advanceFormStep();
-      });
-      foot.appendChild(nb);
-
-    } else if (field.field_type === "textarea") {
-      var ta = document.createElement("textarea");
-      ta.className = "fw-input fw-textarea";
-      ta.placeholder = field.placeholder || "";
-      ta.rows = 4;
-      body.appendChild(ta);
-      var nb2 = document.createElement("button");
-      nb2.className = "fw-next-btn";
-      nb2.style.background = cfg.color;
-      nb2.textContent = nextLabel;
-      nb2.addEventListener("click", function() {
-        var val = ta.value.trim();
-        if (!val && field.required) { ta.style.borderColor = "#ef4444"; return; }
-        state.form_answers[String(field.id)] = val;
-        advanceFormStep();
-      });
-      foot.appendChild(nb2);
+      ratingDiv.appendChild(starsRow);
+      messagesEl.appendChild(ratingDiv);
+      scrollBottom();
 
     } else {
-      var typeMap = { email: "email", phone: "tel", number: "number" };
-      var inp = document.createElement("input");
-      inp.className = "fw-input";
-      inp.type = typeMap[field.field_type] || "text";
-      inp.placeholder = field.placeholder || "";
-      body.appendChild(inp);
-      setTimeout(function() { inp.focus(); }, 50);
-      var nb3 = document.createElement("button");
-      nb3.className = "fw-next-btn";
-      nb3.style.background = cfg.color;
-      nb3.textContent = nextLabel;
-      nb3.addEventListener("click", function() {
-        var val = inp.value.trim();
-        if (!val && field.required) { inp.style.borderColor = "#ef4444"; return; }
-        state.form_answers[String(field.id)] = val;
-        advanceFormStep();
-      });
-      foot.appendChild(nb3);
-      inp.addEventListener("keydown", function(e) {
-        if (e.key === "Enter") { e.preventDefault(); nb3.click(); }
-      });
+      // text / email / phone / number / textarea
+      // Intercept the next user send via state.form_active
+      inputEl.placeholder = field.placeholder ||
+        (field.field_type === "email" ? "E-posta adresinizi yazın…" :
+         field.field_type === "phone" ? "Telefon numaranızı yazın…" :
+         field.field_type === "number" ? "Sayı girin…" : "Yanıtınızı yazın…");
+      inputEl.focus();
     }
   }
 
-  function advanceFormStep() {
-    state.form_step++;
-    if (state.form_step >= state.form_data.fields.length) {
-      doSubmitForm();
-    } else {
-      renderFormStep();
-    }
-  }
+  function finishFormInChat() {
+    state.form_active = false;
+    inputEl.placeholder = "Mesajınızı yazın...";
 
-  function doSubmitForm() {
-    var body = document.getElementById("st-fw-body");
-    var foot = document.getElementById("st-fw-foot");
-    var bar = document.getElementById("st-fw-bar");
-    bar.style.width = "100%";
-    document.getElementById("st-fw-prog").textContent = "";
-    body.innerHTML = '<div class="fw-success"><div class="fw-tick">✅</div><strong>Formunuz alındı!</strong><p>Destek ekibimiz en kısa sürede yardımcı olacak.</p></div>';
-    foot.innerHTML = "";
+    appendMsg({
+      sender_type: "bot",
+      sender_name: state.form_data.name,
+      content: "✅ Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede yardımcı olacak.",
+    });
+    scrollBottom();
 
     fetch(SERVER + "/api/form/submit", {
       method: "POST",
@@ -885,17 +824,6 @@
         answers: state.form_answers,
       }),
     }).catch(function() {});
-
-    setTimeout(function() {
-      document.getElementById("st-form-wizard").style.display = "none";
-      showChat();
-      if (state.bot_flow && !state.bot_shown) {
-        showBotFlow();
-      } else if (!messagesEl.children.length) {
-        appendWelcome();
-      }
-      scrollBottom();
-    }, 2200);
   }
 
   // ── Handle incoming messages ───────────────────────────────────────────────
@@ -910,8 +838,7 @@
       messagesEl.innerHTML = "";
       if (!data.messages || !data.messages.length) {
         if (state.form_data && !state.form_shown) {
-          showFormWizard();
-          return;
+          startFormInChat();
         } else if (state.bot_flow) {
           showBotFlow();
         } else {
@@ -1065,6 +992,23 @@
   function sendMessage() {
     var content = inputEl.value.trim();
     if (!content) return;
+
+    // Form cevabı olarak yakala
+    if (state.form_active && state.form_data) {
+      var fields = state.form_data.fields;
+      var field = fields[state.form_step];
+      if (field) {
+        state.form_answers[String(field.id)] = content;
+        appendMsg({ sender_type: "visitor", content: content, created_at: new Date().toISOString() });
+        scrollBottom();
+        inputEl.value = "";
+        inputEl.style.height = "";
+        inputEl.placeholder = "Mesajınızı yazın...";
+        state.form_step++;
+        setTimeout(function() { askNextFormField(); }, 350);
+        return;
+      }
+    }
 
     // Kendi mesajını anında göster (optimistic)
     appendMsg({
