@@ -11,8 +11,9 @@
 #   cd /opt/support-tawk && sudo bash install.sh
 #
 # Optional env vars (to skip prompts):
-#   DOMAIN=chat.yoursite.com  ADMIN_PASS=StrongPass  SITE_NAME="My Company"
-#   EMAIL=you@yoursite.com    LANG_CHOICE=en
+#   DOMAIN=chat.yoursite.com   ADMIN_PASS=StrongPass   SITE_NAME="My Company"
+#   EMAIL=you@yoursite.com     LANG_CHOICE=en
+#   ADMIN_IP=1.2.3.4,5.6.7.8  SKIP_PROXY=yes          APP_PORT=8000
 #
 set -euo pipefail
 
@@ -34,13 +35,17 @@ trap 'err "Installation failed at line $LINENO. Check the output above."' ERR
 REPO_URL="https://github.com/cruciblelab/support-tawk.git"
 APP_DIR="/opt/support-tawk"
 SERVICE="support-tawk"
-PORT="8000"
 
 DOMAIN="${DOMAIN:-}"
 ADMIN_PASS="${ADMIN_PASS:-}"
 SITE_NAME="${SITE_NAME:-}"
 EMAIL="${EMAIL:-}"
 LANG_CHOICE="${LANG_CHOICE:-}"
+ADMIN_IP="${ADMIN_IP:-}"        # optional: comma-separated IPs to restrict /admin
+SKIP_PROXY="${SKIP_PROXY:-}"    # set to "yes" to skip web server setup entirely
+APP_PORT="${APP_PORT:-8000}"    # port the app listens on
+
+GENERATED_PASS=0
 
 # ── 0. Pre-checks ─────────────────────────────────────────────────────────────
 step "Pre-checks"
@@ -88,12 +93,12 @@ SECRET_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
 ok "Information collected"
 
 # ── 2. System packages ────────────────────────────────────────────────────────
-step "Installing system packages (1-3 min)"
+# NOTE: web server packages are installed later after detection (Step 7)
+step "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip git nginx \
-  libmagic1 certbot python3-certbot-nginx ufw >/dev/null
-ok "python3, git, nginx, certbot and dependencies installed"
+apt-get install -y -qq python3 python3-venv python3-pip git libmagic1 ufw >/dev/null
+ok "python3, git, and dependencies installed"
 
 # ── 3. Download / update repo ─────────────────────────────────────────────────
 step "Downloading application"
@@ -120,7 +125,7 @@ ok "Dependencies installed"
 
 # ── 5. Configure config.yml ───────────────────────────────────────────────────
 step "Writing configuration"
-PUBLIC_URL="${DOMAIN:+https://$DOMAIN}"; PUBLIC_URL="${PUBLIC_URL:-http://localhost:$PORT}"
+PUBLIC_URL="${DOMAIN:+https://$DOMAIN}"; PUBLIC_URL="${PUBLIC_URL:-http://localhost:$APP_PORT}"
 python3 - "$SITE_NAME" "$PUBLIC_URL" "$SECRET_KEY" "$ADMIN_PASS" "$LANG_CHOICE" <<'PY'
 import re, sys
 name, domain, secret, passwd, lang = sys.argv[1:6]
@@ -150,7 +155,7 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=$APP_DIR
-ExecStart=$APP_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $PORT
+ExecStart=$APP_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $APP_PORT
 Restart=always
 RestartSec=5
 
@@ -168,17 +173,64 @@ else
   exit 1
 fi
 
-# ── 7. Nginx ──────────────────────────────────────────────────────────────────
-if [ -n "$DOMAIN" ]; then
-  step "Configuring Nginx reverse proxy"
-  cat > "/etc/nginx/sites-available/${SERVICE}" <<EOF
+# ── 7. Web Server Detection + Configuration ───────────────────────────────────
+
+# Detect which web server is active or installed
+detect_webserver() {
+  if systemctl is-active --quiet nginx 2>/dev/null; then echo "nginx"
+  elif systemctl is-active --quiet apache2 2>/dev/null; then echo "apache2"
+  elif systemctl is-active --quiet caddy 2>/dev/null; then echo "caddy"
+  elif command -v nginx &>/dev/null; then echo "nginx"
+  elif command -v apache2 &>/dev/null; then echo "apache2"
+  elif command -v caddy &>/dev/null; then echo "caddy"
+  else echo "none"
+  fi
+}
+
+# Build nginx allow/deny lines for a given set of IPs
+# Usage: build_nginx_ip_block "1.2.3.4,5.6.7.8" "        "
+build_nginx_ip_block() {
+  local ips="$1"
+  local indent="${2:-        }"
+  local block=""
+  IFS=',' read -ra _ip_arr <<< "$ips"
+  for _ip in "${_ip_arr[@]}"; do
+    _ip="${_ip// /}"  # strip spaces
+    [ -z "$_ip" ] && continue
+    block+="${indent}allow ${_ip};"$'\n'
+  done
+  block+="${indent}deny all;"
+  echo "$block"
+}
+
+# Build Apache Allow/Deny directives
+build_apache_ip_block() {
+  local ips="$1"
+  local indent="${2:-        }"
+  local block="${indent}Require ip"
+  IFS=',' read -ra _ip_arr <<< "$ips"
+  for _ip in "${_ip_arr[@]}"; do
+    _ip="${_ip// /}"
+    [ -z "$_ip" ] && continue
+    block+=" ${_ip}"
+  done
+  echo "$block"
+}
+
+# Print a manual nginx snippet and exit the proxy-setup section
+print_manual_snippet() {
+  echo
+  echo "${Y}Manual proxy configuration — copy and paste this into your web server:${X}"
+  echo
+  echo "─── nginx ────────────────────────────────────────────────────────────────────"
+  cat <<SNIPPET
 server {
     listen 80;
-    server_name $DOMAIN;
-    client_max_body_size 20M;
+    server_name YOUR_DOMAIN;
+    client_max_body_size 25M;
 
     location / {
-        proxy_pass http://127.0.0.1:$PORT;
+        proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -189,32 +241,302 @@ server {
         proxy_read_timeout 3600;
     }
 }
-EOF
-  ln -sf "/etc/nginx/sites-available/${SERVICE}" "/etc/nginx/sites-enabled/${SERVICE}"
-  rm -f /etc/nginx/sites-enabled/default
+SNIPPET
+  echo "──────────────────────────────────────────────────────────────────────────────"
+  echo
+}
+
+# Configure nginx as reverse proxy
+configure_nginx() {
+  local domain="$1"
+  local port="$2"
+  local admin_ip="$3"
+  local cfg_site="/etc/nginx/sites-available/support-tawk"
+  local cfg_http="/etc/nginx/conf.d/support-tawk.conf"
+
+  if [ -f "$cfg_site" ]; then
+    warn "Existing nginx config found at $cfg_site — updating it."
+  fi
+
+  # rate-limit zone must live in the http{} context
+  # /etc/nginx/conf.d/ files are included inside http{} by Ubuntu's nginx.conf
+  cat > "$cfg_http" <<'NGXHTTP'
+# Support Tawk — rate-limit zone (http context)
+limit_req_zone $binary_remote_addr zone=st_login:10m rate=10r/m;
+NGXHTTP
+
+  # Build the admin IP block for nginx (or empty string if no restriction)
+  local admin_block=""
+  if [ -n "$admin_ip" ]; then
+    admin_block="$(build_nginx_ip_block "$admin_ip" "        ")"$'\n'
+  fi
+
+  # Proxy header snippet (reused in multiple locations)
+  local proxy_headers
+  proxy_headers='        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;'
+
+  cat > "$cfg_site" <<NGXEOF
+# Support Tawk — reverse proxy
+# Generated by install.sh on $(date -u +"%Y-%m-%d %T UTC")
+
+server {
+    listen 80;
+    server_name ${domain};
+    client_max_body_size 25M;
+
+    # Rate-limit the login endpoint (zone defined in /etc/nginx/conf.d/support-tawk.conf)
+    location /api/admin/login {
+        limit_req zone=st_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:${port};
+${proxy_headers}
+    }
+
+    # Admin panel — optional IP restriction
+    location /admin {
+${admin_block}        proxy_pass http://127.0.0.1:${port};
+${proxy_headers}
+    }
+
+    # Admin API — optional IP restriction
+    location /api/admin {
+${admin_block}        proxy_pass http://127.0.0.1:${port};
+${proxy_headers}
+    }
+
+    # Everything else (WebSocket-capable)
+    location / {
+        proxy_pass http://127.0.0.1:${port};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 3600;
+    }
+}
+NGXEOF
+
+  ln -sf "$cfg_site" "/etc/nginx/sites-enabled/support-tawk"
+
   if nginx -t >/dev/null 2>&1; then
     systemctl reload nginx
-    ok "Nginx configured ($DOMAIN → 127.0.0.1:$PORT)"
+    ok "nginx configured ($domain → 127.0.0.1:$port)"
   else
-    err "Nginx configuration error. Check:  nginx -t"
+    err "nginx configuration test failed. Review:  nginx -t"
     exit 1
   fi
+}
 
-  # ── 8. SSL ─────────────────────────────────────────────────────────────────
-  if [ -n "$EMAIL" ]; then
-    step "Obtaining SSL certificate"
-    if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect >/dev/null 2>&1; then
-      ok "HTTPS enabled (certificate auto-renews)"
-    else
-      warn "SSL failed. Is your domain's DNS pointing to this server? Run manually:"
-      warn "  certbot --nginx -d $DOMAIN"
-    fi
-  else
-    warn "No email provided, SSL skipped. Run later:  certbot --nginx -d $DOMAIN"
+# Configure apache2 as reverse proxy
+configure_apache() {
+  local domain="$1"
+  local port="$2"
+  local admin_ip="$3"
+  local cfg="/etc/apache2/sites-available/support-tawk.conf"
+
+  if [ -f "$cfg" ]; then
+    warn "Existing apache2 config found at $cfg — updating it."
   fi
+
+  # Enable required modules
+  a2enmod proxy proxy_http rewrite headers >/dev/null 2>&1
+  ok "Apache modules enabled: proxy proxy_http rewrite headers"
+
+  local admin_block_text
+  if [ -n "$admin_ip" ]; then
+    admin_block_text="$(build_apache_ip_block "$admin_ip" "            ")"
+  else
+    admin_block_text="            Require all granted"
+  fi
+
+  cat > "$cfg" <<APACHEEOF
+# Support Tawk — reverse proxy
+# Generated by install.sh on $(date -u +"%Y-%m-%d %T UTC")
+
+<VirtualHost *:80>
+    ServerName ${domain}
+
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:${port}/
+    ProxyPassReverse / http://127.0.0.1:${port}/
+
+    RequestHeader set X-Forwarded-Proto "http"
+
+    # Admin panel — optional IP restriction
+    <Location /admin>
+${admin_block_text}
+    </Location>
+
+    # Admin API — optional IP restriction
+    <Location /api/admin>
+${admin_block_text}
+    </Location>
+</VirtualHost>
+APACHEEOF
+
+  a2ensite support-tawk >/dev/null 2>&1
+  systemctl reload apache2
+  ok "apache2 configured ($domain → 127.0.0.1:$port)"
+}
+
+# Configure Caddy as reverse proxy
+configure_caddy() {
+  local domain="$1"
+  local port="$2"
+  local admin_ip="$3"
+
+  # Caddy handles SSL automatically — no certbot needed
+  local caddy_conf_dir="/etc/caddy/conf.d"
+  local caddy_target
+  if [ -d "$caddy_conf_dir" ]; then
+    caddy_target="$caddy_conf_dir/support-tawk.conf"
+  else
+    caddy_target="/etc/caddy/Caddyfile"
+    warn "No /etc/caddy/conf.d/ found — appending to $caddy_target"
+  fi
+
+  # Build admin IP restriction block for Caddy
+  local ip_restriction=""
+  if [ -n "$admin_ip" ]; then
+    local allow_list=""
+    IFS=',' read -ra _ip_arr <<< "$admin_ip"
+    for _ip in "${_ip_arr[@]}"; do
+      _ip="${_ip// /}"
+      [ -z "$_ip" ] && continue
+      allow_list+=" ${_ip}"
+    done
+    ip_restriction="
+    # Admin IP restriction
+    @admin_blocked {
+        path /admin* /api/admin*
+        not remote_ip${allow_list}
+    }
+    respond @admin_blocked 403"
+  fi
+
+  # Note: caddy-ratelimit is a third-party plugin; we include the config
+  # but note it requires the plugin to be compiled in.
+  local caddy_block
+  caddy_block="
+# Support Tawk — generated by install.sh on $(date -u +"%Y-%m-%d %T UTC")
+${domain} {
+    reverse_proxy 127.0.0.1:${port}
+${ip_restriction}
+
+    # Rate limiting on login requires the caddy-ratelimit plugin.
+    # If not installed, remove this block.
+    # rate_limit {
+    #     zone st_login {
+    #         match path /api/admin/login
+    #         key {remote_host}
+    #         events 10
+    #         window 1m
+    #     }
+    # }
+}
+"
+
+  if [ "$caddy_target" = "/etc/caddy/Caddyfile" ]; then
+    echo "$caddy_block" >> "$caddy_target"
+  else
+    echo "$caddy_block" > "$caddy_target"
+  fi
+
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy 2>/dev/null || true
+  ok "Caddy configured ($domain → 127.0.0.1:$port) — SSL handled automatically by Caddy"
+}
+
+# Obtain SSL via certbot (nginx or apache only; caddy handles it natively)
+get_ssl() {
+  local webserver="$1"   # "nginx" or "apache2" / "apache"
+  local domain="$2"
+  local email="$3"
+
+  if [ -z "$email" ]; then
+    warn "No email provided — SSL skipped. Run later:"
+    warn "  certbot --${webserver} -d ${domain}"
+    return
+  fi
+
+  step "Obtaining SSL certificate (Let's Encrypt)"
+
+  # certbot uses --apache flag for apache2
+  local certbot_plugin="--${webserver}"
+  [ "$webserver" = "apache2" ] && certbot_plugin="--apache"
+
+  if certbot "$certbot_plugin" -d "$domain" \
+      --non-interactive --agree-tos -m "$email" --redirect >/dev/null 2>&1; then
+    ok "HTTPS enabled (certificate auto-renews)"
+  else
+    warn "SSL certificate failed. Is your domain's DNS pointing to this server?"
+    warn "Run manually once DNS propagates:  certbot ${certbot_plugin} -d ${domain}"
+  fi
+}
+
+# ── Main proxy-setup logic ────────────────────────────────────────────────────
+step "Web server detection + configuration"
+
+if [ "${SKIP_PROXY:-}" = "yes" ] || [ -z "$DOMAIN" ]; then
+  if [ "${SKIP_PROXY:-}" = "yes" ]; then
+    info "SKIP_PROXY=yes — skipping web server setup."
+  else
+    info "No domain provided — skipping web server setup."
+  fi
+  print_manual_snippet
+else
+  WEB_SERVER="$(detect_webserver)"
+  info "Detected web server: ${WEB_SERVER:-none}"
+
+  if [ "$WEB_SERVER" = "none" ]; then
+    echo
+    read -rp "  No web server found. Install nginx for automatic HTTPS setup? [Y/n]: " _install_nginx
+    _install_nginx="${_install_nginx:-Y}"
+    if [[ "$_install_nginx" =~ ^[Yy]$ ]]; then
+      apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null
+      ok "nginx and certbot installed"
+      WEB_SERVER="nginx"
+      systemctl enable nginx >/dev/null 2>&1
+      systemctl start nginx
+    else
+      warn "Skipping web server installation."
+      print_manual_snippet
+      WEB_SERVER=""
+    fi
+  fi
+
+  case "$WEB_SERVER" in
+    nginx)
+      # Install certbot for nginx if not already present
+      if ! command -v certbot &>/dev/null; then
+        apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+      fi
+      configure_nginx "$DOMAIN" "$APP_PORT" "$ADMIN_IP"
+      get_ssl "nginx" "$DOMAIN" "$EMAIL"
+      ;;
+    apache2|apache)
+      if ! command -v certbot &>/dev/null; then
+        apt-get install -y -qq certbot python3-certbot-apache >/dev/null
+      fi
+      configure_apache "$DOMAIN" "$APP_PORT" "$ADMIN_IP"
+      get_ssl "apache2" "$DOMAIN" "$EMAIL"
+      ;;
+    caddy)
+      # Caddy manages its own SSL — no certbot
+      configure_caddy "$DOMAIN" "$APP_PORT" "$ADMIN_IP"
+      ;;
+    *)
+      # User declined nginx install — snippet already printed above
+      ;;
+  esac
 fi
 
-# ── 9. Firewall ───────────────────────────────────────────────────────────────
+# ── 8. Firewall ───────────────────────────────────────────────────────────────
 step "Configuring firewall"
 ufw allow 22 >/dev/null 2>&1 || true
 ufw allow 80 >/dev/null 2>&1 || true
@@ -224,10 +546,10 @@ ok "Ports opened (22, 80, 443)"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-PANEL_URL="${DOMAIN:+https://$DOMAIN/admin}"; PANEL_URL="${PANEL_URL:-http://$SERVER_IP:$PORT/admin}"
+PANEL_URL="${DOMAIN:+https://$DOMAIN/admin}"; PANEL_URL="${PANEL_URL:-http://$SERVER_IP:$APP_PORT/admin}"
 echo
 echo "${G}${W}════════════════════════════════════════════════${X}"
-echo "${G}${W}  🎉  Support Tawk installed and running!${X}"
+echo "${G}${W}   Support Tawk installed and running!${X}"
 echo "${G}${W}════════════════════════════════════════════════${X}"
 echo
 echo "  ${W}Admin panel:${X}   $PANEL_URL"
@@ -238,6 +560,9 @@ else
   echo "  ${W}Password:${X}      (the password you set)"
 fi
 echo "  ${W}Language:${X}      $LANG_CHOICE"
+if [ -n "$ADMIN_IP" ]; then
+  echo "  ${W}Admin IP restriction:${X} $ADMIN_IP"
+fi
 echo
 echo "  ${C}Useful commands:${X}"
 echo "    Status:     systemctl status $SERVICE"
@@ -247,6 +572,6 @@ echo "    Update:     cd $APP_DIR && git pull && systemctl restart $SERVICE"
 echo
 if [ -z "$DOMAIN" ]; then
   warn "No domain provided. Access the panel via IP for now:"
-  warn "  http://$SERVER_IP:$PORT/admin   (re-run with a domain for HTTPS)"
+  warn "  http://$SERVER_IP:$APP_PORT/admin   (re-run with a domain for HTTPS)"
 fi
 echo
