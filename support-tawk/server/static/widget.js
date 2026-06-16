@@ -86,6 +86,9 @@
       appeal_sent: "İtirazınız alındı. Bir yönetici inceleyecektir.",
       appeal_already: "Beklemede olan bir itirazınız zaten var.",
       ban_lifted: "Engeliniz kaldırıldı! Sayfayı yenileyerek sohbet edebilirsiniz.",
+      forget_me: "Verilerimi sil",
+      forget_confirm: "İsim, e-posta ve geçmiş oturum bilgileriniz bu cihazdan silinecek. Sunucudaki konuşmalar 2 hafta daha saklanır. Devam edilsin mi?",
+      forget_done: "Verileriniz silindi.",
     },
     en: {
       aria_chat: "Support Chat",
@@ -132,6 +135,9 @@
       appeal_sent: "Your appeal has been submitted. An admin will review it.",
       appeal_already: "You already have a pending appeal.",
       ban_lifted: "Your block has been lifted! Refresh the page to start chatting.",
+      forget_me: "Clear my data",
+      forget_confirm: "Your name, email and session info will be removed from this device. Server-side conversations are kept for 2 weeks. Continue?",
+      forget_done: "Your data has been cleared.",
     },
   };
 
@@ -335,6 +341,7 @@
     '      <input id="st-name-input" type="text" placeholder="Adınız" maxlength="64" />',
     '      <input id="st-email-input" type="email" placeholder="E-posta (isteğe bağlı)" maxlength="128" />',
     '      <button id="st-start-btn">Sohbeti Başlat</button>',
+    '      <button id="st-forget-btn" type="button" style="background:none;border:none;color:#94a3b8;font-size:11px;cursor:pointer;margin-top:6px;padding:2px 0;text-decoration:underline">🗑 Verilerimi sil</button>',
     '    </div>',
     '    <div id="st-chat-area" style="display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden; position:relative;">',
     '      <button id="st-scroll-btn"><span>↓ Yeni mesaj</span><span id="st-scroll-badge" class="hidden">0</span></button>',
@@ -481,7 +488,7 @@
     document.documentElement.style.setProperty("--st-color", color);
     btn.style.background = color;
     header.style.background = color;
-    var startBtnEl = infoForm.querySelector("button");
+    var startBtnEl = document.getElementById("st-start-btn");
     if (startBtnEl) startBtnEl.style.background = color;
     sendBtn.style.background = color;
     ratingSubmit.style.background = color;
@@ -832,6 +839,21 @@
   nameInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") startBtn.click();
   });
+
+  var forgetBtn = document.getElementById("st-forget-btn");
+  if (forgetBtn) {
+    forgetBtn.textContent = t("forget_me");
+    forgetBtn.addEventListener("click", function () {
+      if (!confirm(t("forget_confirm"))) return;
+      ["st_visitor_id", "st_visitor_name", "st_visitor_email",
+       "st_widget_width", "st_bubble_dismiss_until"].forEach(function(k) {
+        localStorage.removeItem(k);
+      });
+      sessionStorage.removeItem("st_bubbles_dismissed");
+      alert(t("forget_done"));
+      location.reload();
+    });
+  }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   function wsUrl() {
