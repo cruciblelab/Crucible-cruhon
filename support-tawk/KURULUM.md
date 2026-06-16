@@ -4,6 +4,31 @@
 
 ---
 
+## ⚡ Hızlı Kurulum (Tek Komut — Önerilen)
+
+Hiç uğraşmak istemiyorsan, sunucuya bağlandıktan sonra **tek satır** her şeyi otomatik yapar:
+
+```bash
+sudo apt update && sudo apt install -y git && \
+git clone https://github.com/cruciblelab/crucible-cruhon.git /opt/crucible-cruhon && \
+sudo bash /opt/crucible-cruhon/support-tawk/install.sh
+```
+
+Betik sana **alan adı**, **site adı** ve **admin şifresi** soracak (boş bırakırsan otomatik üretir). Gerisini —
+Python kurulumu, servis, Nginx, SSL, güvenlik duvarı — kendisi halleder. Bitince admin panel adresini ve
+şifreni ekrana yazar.
+
+**Sormadan, otomatik kurmak istersen** (örnek):
+
+```bash
+DOMAIN=chat.siteniz.com SITE_NAME="Şirketim" ADMIN_PASS="GucluSifre123" EMAIL=ben@siteniz.com \
+  sudo -E bash /opt/crucible-cruhon/support-tawk/install.sh
+```
+
+> Aşağıdaki adımlar, **elle** (manuel) kurmak isteyenler veya ne olduğunu anlamak isteyenler içindir.
+
+---
+
 ## Gereksinimler
 
 | Ne | Minimum |
@@ -73,26 +98,22 @@ pip install -r requirements.txt
 ## Adım 6 — Ayar Dosyasını Düzenle
 
 ```bash
-cp config.example.yml config.yml
 nano config.yml
 ```
 
-Açılan ekranda şunları değiştir:
+Açılan ekranda şu satırları bul ve değiştir:
 
 ```yaml
+site:
+  name: "Şirketim"                                     # ← kendi adın
+  domain: "https://chat.siteadin.com"                  # ← kendi alan adın
+
 server:
-  host: "0.0.0.0"
-  port: 8000
-  secret_key: "BURAYA_RASTGELE_UZUN_BİR_ŞİFRE_YAZ"   # ← değiştir
+  secret_key: "BURAYA_RASTGELE_UZUN_BİR_ANAHTAR_YAZ"   # ← değiştir
 
 admin:
-  username: "admin"
-  password: "GÜÇLܓBİR_ŞİFRE"                         # ← değiştir
-  session_hours: 8
-
-site:
-  name: "Destek Hattı"
-  domain: "chat.siteadın.com"                          # ← kendi alan adın
+  default_username: "admin"
+  default_password: "GÜÇLܓBİR_ŞİFRE"                  # ← değiştir
 ```
 
 Kaydetmek için: **Ctrl+X** → **Y** → **Enter**
