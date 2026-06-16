@@ -19,8 +19,7 @@ var bulkSelected = new Set();
 var currentConvSecurity = {};  // {ip, visitor_id}
 
 if (!TOKEN || !AGENT) { window.location.href = "/admin/login.html"; }
-
-document.getElementById("agent-name-display").textContent = AGENT.display_name || AGENT.username;
+else document.getElementById("agent-name-display").textContent = AGENT.display_name || AGENT.username;
 
 // Permission check: admin has all permissions
 function can(perm) {
@@ -82,7 +81,7 @@ setTimeout(function() {
 var allDepartments = [];
 
 // Set topbar avatar
-(function() {
+if (AGENT) (function() {
   var av = document.getElementById("topbar-avatar");
   av.textContent = (AGENT.display_name || AGENT.username).charAt(0).toUpperCase();
   av.style.background = AGENT.avatar_color || "#6366f1";
