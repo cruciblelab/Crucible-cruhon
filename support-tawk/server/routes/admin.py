@@ -155,6 +155,12 @@ class AppSettingsUpdate(BaseModel):
     notification_sound: Optional[bool] = None
     widget_width: Optional[int] = None
     proactive_bubbles: Optional[str] = None  # JSON dizisi: ["mesaj1", "mesaj2"]
+    # Görünüm & dil
+    widget_position: Optional[str] = None  # right | left
+    widget_lang: Optional[str] = None      # tr | en
+    widget_icon: Optional[str] = None      # buton ikonu (emoji)
+    widget_radius: Optional[int] = None    # köşe yuvarlaklığı (px)
+    widget_texts: Optional[str] = None     # JSON: {"key": "metin", ...} dil metni geçersiz kılma
 
 
 class NoteCreate(BaseModel):
@@ -950,6 +956,16 @@ def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_
         data["widget_width"] = str(max(280, min(560, req.widget_width)))
     if req.proactive_bubbles is not None:
         data["proactive_bubbles"] = req.proactive_bubbles
+    if req.widget_position is not None:
+        data["widget_position"] = "left" if req.widget_position == "left" else "right"
+    if req.widget_lang is not None:
+        data["widget_lang"] = req.widget_lang if req.widget_lang in ("tr", "en") else "tr"
+    if req.widget_icon is not None:
+        data["widget_icon"] = req.widget_icon[:8]
+    if req.widget_radius is not None:
+        data["widget_radius"] = str(max(0, min(28, req.widget_radius)))
+    if req.widget_texts is not None:
+        data["widget_texts"] = req.widget_texts
     for key, value in data.items():
         (Setting.insert(key=key, value=str(value), updated_at=datetime.utcnow())
          .on_conflict(conflict_target=[Setting.key],
@@ -1093,63 +1109,110 @@ def get_stats(agent: Agent = Depends(get_current_agent)):
 
 
 @router.get("/stats/detailed")
-def get_detailed_stats(agent: Agent = Depends(get_current_agent)):
-    cutoff30 = datetime.utcnow() - timedelta(days=30)
+def get_detailed_stats(days: int = 30, agent: Agent = Depends(get_current_agent)):
+    days = max(1, min(365, days))
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    period_convs = list(Conversation.select().where(Conversation.created_at >= cutoff))
 
-    # daily conversations last 30 days
+    # daily conversations
     daily: dict[str, int] = {}
-    for i in range(30):
+    for i in range(days):
         d = (datetime.utcnow() - timedelta(days=i)).date()
         daily[str(d)] = 0
-    for conv in Conversation.select().where(Conversation.created_at >= cutoff30):
+    for conv in period_convs:
         day_str = conv.created_at.date().isoformat()
         if day_str in daily:
             daily[day_str] = daily[day_str] + 1
     daily_list = [{"date": k, "count": v} for k, v in sorted(daily.items())]
+    busiest_day = max(daily_list, key=lambda x: x["count"]) if daily_list else {"date": "", "count": 0}
 
-    # avg response time (minutes)
+    # avg + median response time (minutes)
     response_times: list[float] = []
-    for conv in Conversation.select().where(Conversation.created_at >= cutoff30):
+    for conv in period_convs:
         first_visitor = (Message.select()
                          .where(Message.conversation == conv, Message.sender_type == "visitor")
                          .order_by(Message.created_at).first())
         first_agent = (Message.select()
-                       .where(Message.conversation == conv, Message.sender_type.in_(["agent", "bot"]))
+                       .where(Message.conversation == conv, Message.sender_type == "agent")
                        .order_by(Message.created_at).first())
         if first_visitor and first_agent and first_agent.created_at > first_visitor.created_at:
             diff = (first_agent.created_at - first_visitor.created_at).total_seconds() / 60.0
             response_times.append(diff)
     avg_response = round(sum(response_times) / len(response_times), 1) if response_times else 0.0
+    if response_times:
+        srt = sorted(response_times)
+        mid = len(srt) // 2
+        median_response = round((srt[mid] if len(srt) % 2 else (srt[mid - 1] + srt[mid]) / 2), 1)
+    else:
+        median_response = 0.0
 
-    # avg rating
-    ratings = list(Rating.select().where(Rating.created_at >= cutoff30))
+    # ratings: avg + distribution (1-5)
+    ratings = list(Rating.select().where(Rating.created_at >= cutoff))
     avg_rating = round(sum(r.score for r in ratings) / len(ratings), 1) if ratings else 0.0
+    rating_dist = {s: 0 for s in range(1, 6)}
+    for r in ratings:
+        if r.score in rating_dist:
+            rating_dist[r.score] += 1
+    rating_distribution = [{"score": s, "count": rating_dist[s]} for s in range(1, 6)]
 
-    # total conversations
+    # total + status breakdown + resolution rate
     total = Conversation.select().count()
+    period_total = len(period_convs)
+    closed_count = sum(1 for c in period_convs if c.status == "closed")
+    open_count = sum(1 for c in period_convs if c.status == "open")
+    assigned_count = sum(1 for c in period_convs if c.status == "assigned")
+    resolution_rate = round((closed_count / period_total) * 100, 1) if period_total else 0.0
 
-    # top agents
+    # total messages in period
+    conv_ids = [c.id for c in period_convs]
+    total_messages = (Message.select().where(Message.conversation.in_(conv_ids)).count()
+                      if conv_ids else 0)
+
+    # top agents (by closed convs assigned to them)
     agent_counts: dict[str, int] = {}
-    for conv in Conversation.select().where(Conversation.created_at >= cutoff30, Conversation.assigned_to.is_null(False)):
+    for conv in period_convs:
         if conv.assigned_to_id:
             a = Agent.get_or_none(Agent.id == conv.assigned_to_id)
             if a:
                 name = a.display_name or a.username
                 agent_counts[name] = agent_counts.get(name, 0) + 1
-    top_agents = sorted([{"agent_name": k, "count": v} for k, v in agent_counts.items()], key=lambda x: -x["count"])[:5]
+    top_agents = sorted([{"agent_name": k, "count": v} for k, v in agent_counts.items()], key=lambda x: -x["count"])[:8]
+
+    # department breakdown
+    dept_counts: dict[str, dict] = {}
+    for conv in period_convs:
+        dep_id = getattr(conv, "department_id", None)
+        if dep_id:
+            d = Department.get_or_none(Department.id == dep_id)
+            if d:
+                key = d.name
+                if key not in dept_counts:
+                    dept_counts[key] = {"name": d.name, "icon": d.icon, "color": d.color, "count": 0}
+                dept_counts[key]["count"] += 1
+    department_breakdown = sorted(dept_counts.values(), key=lambda x: -x["count"])
 
     # hourly distribution
     hourly: dict[int, int] = {h: 0 for h in range(24)}
-    for conv in Conversation.select().where(Conversation.created_at >= cutoff30):
+    for conv in period_convs:
         hourly[conv.created_at.hour] = hourly[conv.created_at.hour] + 1
     hourly_list = [{"hour": h, "count": hourly[h]} for h in range(24)]
 
     return {
+        "days": days,
         "daily_conversations": daily_list,
         "avg_response_minutes": avg_response,
+        "median_response_minutes": median_response,
         "avg_rating": avg_rating,
+        "rating_distribution": rating_distribution,
+        "rating_count": len(ratings),
         "total_conversations": total,
+        "period_conversations": period_total,
+        "status_breakdown": {"open": open_count, "assigned": assigned_count, "closed": closed_count},
+        "resolution_rate": resolution_rate,
+        "total_messages": total_messages,
+        "busiest_day": busiest_day,
         "top_agents": top_agents,
+        "department_breakdown": department_breakdown,
         "hourly_distribution": hourly_list,
     }
 

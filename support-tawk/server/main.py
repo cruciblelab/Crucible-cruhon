@@ -127,6 +127,16 @@ def public_config():
         widget_width = int(overrides.get("widget_width", "360") or 360)
     except Exception:
         widget_width = 360
+    try:
+        widget_radius = int(overrides.get("widget_radius", "16") or 16)
+    except Exception:
+        widget_radius = 16
+    try:
+        widget_texts = json.loads(overrides.get("widget_texts", "{}"))
+        if not isinstance(widget_texts, dict):
+            widget_texts = {}
+    except Exception:
+        widget_texts = {}
     return {
         "site_name": overrides.get("site_name", config.site.name),
         "widget_color": overrides.get("widget_color", config.chat.widget_color),
@@ -138,6 +148,11 @@ def public_config():
         "proactive_delay_seconds": int(overrides.get("proactive_delay_seconds", "0")),
         "widget_width": widget_width,
         "proactive_bubbles": bubbles,
+        "widget_position": overrides.get("widget_position", "right"),
+        "widget_lang": overrides.get("widget_lang", "tr"),
+        "widget_icon": overrides.get("widget_icon", ""),
+        "widget_radius": widget_radius,
+        "widget_texts": widget_texts,
     }
 
 

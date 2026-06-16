@@ -125,6 +125,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ta-row:last-child{border:none}
 .ta-bar-wrap{flex:1;background:#f1f5f9;border-radius:4px;height:8px;overflow:hidden}
 .ta-bar{background:#2563eb;height:100%;border-radius:4px}
+.range-btn{padding:6px 14px;border:none;background:none;border-radius:7px;font-size:12.5px;font-weight:600;color:#64748b;cursor:pointer;transition:all .15s}
+.range-btn.active{background:#fff;color:#2563eb;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.rating-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.rating-row .rr-label{font-size:13px;width:42px;flex-shrink:0;color:#374151}
+.rating-row .rr-bar-wrap{flex:1;background:#f1f5f9;border-radius:4px;height:14px;overflow:hidden}
+.rating-row .rr-bar{height:100%;border-radius:4px;background:#f59e0b}
+.rating-row .rr-count{font-size:12px;color:#64748b;width:36px;text-align:right;flex-shrink:0}
 
 /* ── Tags page ── */
 #page-tags{flex-direction:column;overflow-y:auto;padding:24px}
@@ -529,15 +536,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <!-- Stats page -->
     <div class="page" id="page-stats">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:18px;font-weight:700">📊 Raporlar &amp; Analitik</h2>
+        <div id="stats-range" style="display:flex;gap:4px;background:#f1f5f9;border-radius:9px;padding:3px">
+          <button class="range-btn active" data-days="7" onclick="setStatsRange(7)">7 Gün</button>
+          <button class="range-btn" data-days="30" onclick="setStatsRange(30)">30 Gün</button>
+          <button class="range-btn" data-days="90" onclick="setStatsRange(90)">90 Gün</button>
+        </div>
+      </div>
       <div class="stats-grid" id="stats-cards">
-        <div class="stat-card"><div class="sc-label">Toplam Konuşma</div><div class="sc-value" id="sc-total">-</div></div>
-        <div class="stat-card"><div class="sc-label">Ort. Yanıt Süresi</div><div class="sc-value" id="sc-resp">-</div><div class="sc-sub">dakika</div></div>
-        <div class="stat-card"><div class="sc-label">Ort. Puan</div><div class="sc-value" id="sc-rating">-</div><div class="sc-sub">/ 5</div></div>
-        <div class="stat-card"><div class="sc-label">Bugün Kapatılan</div><div class="sc-value" id="sc-closed">-</div></div>
+        <div class="stat-card"><div class="sc-label">Dönem Konuşmaları</div><div class="sc-value" id="sc-period">-</div><div class="sc-sub" id="sc-total-sub">toplam: -</div></div>
+        <div class="stat-card"><div class="sc-label">Ort. Yanıt Süresi</div><div class="sc-value" id="sc-resp">-</div><div class="sc-sub" id="sc-median-sub">medyan: - dk</div></div>
+        <div class="stat-card"><div class="sc-label">Çözüm Oranı</div><div class="sc-value" id="sc-resolution">-</div><div class="sc-sub">% kapatılan</div></div>
+        <div class="stat-card"><div class="sc-label">Ort. Puan</div><div class="sc-value" id="sc-rating">-</div><div class="sc-sub" id="sc-rating-sub">/ 5 · - oy</div></div>
+        <div class="stat-card"><div class="sc-label">Toplam Mesaj</div><div class="sc-value" id="sc-messages">-</div></div>
+        <div class="stat-card"><div class="sc-label">En Yoğun Gün</div><div class="sc-value" id="sc-busiest" style="font-size:18px">-</div><div class="sc-sub" id="sc-busiest-sub"></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="chart-section">
-          <h3>Son 30 Günlük Konuşmalar</h3>
+          <h3 id="daily-title">Günlük Konuşmalar</h3>
           <div class="bar-chart" id="daily-chart"></div>
         </div>
         <div class="chart-section">
@@ -548,10 +565,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
         </div>
         <div class="chart-section">
-          <h3>En Aktif Temsilciler (30 gün)</h3>
+          <h3>Puan Dağılımı</h3>
+          <div id="rating-dist-chart"></div>
+        </div>
+        <div class="chart-section">
+          <h3>Durum Dağılımı</h3>
+          <div id="status-chart"></div>
+        </div>
+        <div class="chart-section">
+          <h3>En Aktif Temsilciler</h3>
           <div class="top-agents-list" id="top-agents-list"></div>
         </div>
         <div class="chart-section">
+          <h3>Departman Dağılımı</h3>
+          <div class="top-agents-list" id="dept-breakdown-list"></div>
+        </div>
+        <div class="chart-section" style="grid-column:1 / -1">
           <h3>Dışa Aktar</h3>
           <p style="font-size:13px;color:#64748b;margin-bottom:8px">CSV:</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -716,6 +745,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div style="margin-top:16px">
           <button class="form-submit" onclick="saveSettings()">Ayarları Kaydet</button>
+        </div>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>🎨 Widget Görünüm &amp; Dil</h3>
+        <div class="settings-row">
+          <label>Konum</label>
+          <select id="set-widget-position" style="width:160px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+            <option value="right">Sağ alt</option>
+            <option value="left">Sol alt</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label>Dil</label>
+          <select id="set-widget-lang" onchange="onWidgetLangChange()" style="width:160px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+            <option value="tr">Türkçe</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label>Buton İkonu</label>
+          <input type="text" id="set-widget-icon" maxlength="4" placeholder="örn: 💬 (boş = varsayılan)" style="width:160px">
+          <small style="color:#94a3b8;margin-left:8px">Emoji veya tek karakter</small>
+        </div>
+        <div class="settings-row">
+          <label>Köşe Yuvarlaklığı (px)</label>
+          <input type="number" id="set-widget-radius" min="0" max="28" step="2" placeholder="16" style="width:120px">
+          <small style="color:#94a3b8;margin-left:8px">0–28 px</small>
+        </div>
+        <div style="margin-top:16px">
+          <button class="form-submit" onclick="saveSettings()">Ayarları Kaydet</button>
+        </div>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>📝 Widget Metinleri (Özelleştirme)</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Boş bırakılan alanlar seçili dilin varsayılan metnini kullanır. Buradan widget'taki yazıları kendinize göre değiştirebilirsiniz.</p>
+        <div id="widget-texts-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+        <div style="margin-top:16px">
+          <button class="form-submit" onclick="saveWidgetTexts()">Metinleri Kaydet</button>
         </div>
       </div>
 
@@ -1719,11 +1788,30 @@ function loadStats() {
   });
 }
 
+var statsRange = 7;
+
+function setStatsRange(days) {
+  statsRange = days;
+  document.querySelectorAll("#stats-range .range-btn").forEach(function(b) {
+    b.classList.toggle("active", parseInt(b.dataset.days) === days);
+  });
+  loadDetailedStats();
+}
+
 function loadDetailedStats() {
-  api("GET", "/stats/detailed").then(function(s) {
-    document.getElementById("sc-total").textContent = s.total_conversations || 0;
+  api("GET", "/stats/detailed?days=" + statsRange).then(function(s) {
+    document.getElementById("sc-period").textContent = s.period_conversations || 0;
+    document.getElementById("sc-total-sub").textContent = "toplam: " + (s.total_conversations || 0);
     document.getElementById("sc-resp").textContent = s.avg_response_minutes || 0;
+    document.getElementById("sc-median-sub").textContent = "medyan: " + (s.median_response_minutes || 0) + " dk";
+    document.getElementById("sc-resolution").textContent = (s.resolution_rate || 0) + "%";
     document.getElementById("sc-rating").textContent = s.avg_rating || 0;
+    document.getElementById("sc-rating-sub").textContent = "/ 5 · " + (s.rating_count || 0) + " oy";
+    document.getElementById("sc-messages").textContent = s.total_messages || 0;
+    var bd = s.busiest_day || {};
+    document.getElementById("sc-busiest").textContent = bd.date ? bd.date.slice(5) : "-";
+    document.getElementById("sc-busiest-sub").textContent = bd.count ? bd.count + " konuşma" : "";
+    document.getElementById("daily-title").textContent = "Günlük Konuşmalar (" + s.days + " gün)";
 
     // Daily chart
     var daily = s.daily_conversations || [];
@@ -1744,6 +1832,31 @@ function loadDetailedStats() {
       return '<div class="h-bar" style="height:' + ht + 'px" title="' + h.hour + ':00 — ' + h.count + ' konuşma"></div>';
     }).join("");
 
+    // Rating distribution
+    var rd = s.rating_distribution || [];
+    var maxRd = Math.max.apply(null, rd.map(function(r){ return r.count; }).concat([1]));
+    document.getElementById("rating-dist-chart").innerHTML = rd.slice().reverse().map(function(r) {
+      var pct = Math.round((r.count / maxRd) * 100);
+      return '<div class="rating-row"><span class="rr-label">' + r.score + ' ⭐</span>' +
+        '<div class="rr-bar-wrap"><div class="rr-bar" style="width:' + pct + '%"></div></div>' +
+        '<span class="rr-count">' + r.count + '</span></div>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz puan yok.</p>';
+
+    // Status breakdown
+    var sb = s.status_breakdown || {open:0, assigned:0, closed:0};
+    var sbTotal = (sb.open + sb.assigned + sb.closed) || 1;
+    var statusRows = [
+      {label: "🟢 Açık", count: sb.open, color: "#22c55e"},
+      {label: "🔵 Atanmış", count: sb.assigned, color: "#3b82f6"},
+      {label: "⚪ Kapatılmış", count: sb.closed, color: "#94a3b8"},
+    ];
+    document.getElementById("status-chart").innerHTML = statusRows.map(function(r) {
+      var pct = Math.round((r.count / sbTotal) * 100);
+      return '<div class="rating-row"><span class="rr-label" style="width:90px">' + r.label + '</span>' +
+        '<div class="rr-bar-wrap"><div class="rr-bar" style="width:' + pct + '%;background:' + r.color + '"></div></div>' +
+        '<span class="rr-count">' + r.count + '</span></div>';
+    }).join("");
+
     // Top agents
     var ta = s.top_agents || [];
     var maxA = ta.length ? ta[0].count : 1;
@@ -1753,6 +1866,16 @@ function loadDetailedStats() {
         '<div class="ta-bar-wrap"><div class="ta-bar" style="width:' + pct + '%"></div></div>' +
         '<span style="font-size:12px;color:#64748b;margin-left:8px">' + a.count + '</span></div>';
     }).join("") : '<p style="color:#94a3b8;font-size:13px">Henüz veri yok.</p>';
+
+    // Department breakdown
+    var db = s.department_breakdown || [];
+    var maxD = db.length ? db[0].count : 1;
+    document.getElementById("dept-breakdown-list").innerHTML = db.length ? db.map(function(d) {
+      var pct = Math.round((d.count / maxD) * 100);
+      return '<div class="ta-row"><span style="font-size:13px;font-weight:500;width:140px;flex-shrink:0">' + escHtml(d.icon + " " + d.name) + '</span>' +
+        '<div class="ta-bar-wrap"><div class="ta-bar" style="width:' + pct + '%;background:' + escHtml(d.color) + '"></div></div>' +
+        '<span style="font-size:12px;color:#64748b;margin-left:8px">' + d.count + '</span></div>';
+    }).join("") : '<p style="color:#94a3b8;font-size:13px">Departman ataması yok.</p>';
   });
 }
 
@@ -2066,6 +2189,8 @@ function changePassword() {
 // ── Site Settings ─────────────────────────────────────────────────────────────
 var siteBubbles = [];
 
+var widgetTexts = {};
+
 function loadSiteSettings() {
   api("GET", "/settings").then(function(data) {
     if (data.site_name) document.getElementById("set-site-name").value = data.site_name;
@@ -2075,10 +2200,67 @@ function loadSiteSettings() {
     if (data.proactive_delay_seconds) document.getElementById("set-proactive").value = data.proactive_delay_seconds;
     if (data.widget_width) document.getElementById("set-widget-width").value = data.widget_width;
     document.getElementById("set-notif-sound").checked = data.notification_sound !== "false";
+    // Görünüm & dil
+    document.getElementById("set-widget-position").value = data.widget_position || "right";
+    document.getElementById("set-widget-lang").value = data.widget_lang || "tr";
+    document.getElementById("set-widget-icon").value = data.widget_icon || "";
+    document.getElementById("set-widget-radius").value = data.widget_radius || 16;
+    try { widgetTexts = JSON.parse(data.widget_texts || "{}"); } catch(e) { widgetTexts = {}; }
+    if (typeof widgetTexts !== "object" || !widgetTexts) widgetTexts = {};
+    renderWidgetTexts();
     try { siteBubbles = JSON.parse(data.proactive_bubbles || "[]"); } catch(e) { siteBubbles = []; }
     if (!Array.isArray(siteBubbles)) siteBubbles = [];
     renderBubbles();
   }).catch(function() {});
+}
+
+// Düzenlenebilir widget metinleri (anahtar → {etiket, varsayılan TR/EN})
+var WIDGET_TEXT_DEFS = [
+  {key: "info_title", label: "Karşılama Başlığı", tr: "Merhaba! 👋", en: "Hello! 👋"},
+  {key: "info_subtitle", label: "Karşılama Alt Metni", tr: "Sohbet başlatmak için bilgilerinizi girin.", en: "Enter your details to start chatting."},
+  {key: "field_name", label: "Ad Alanı", tr: "Adınız", en: "Your name"},
+  {key: "field_email_optional", label: "E-posta Alanı (ops.)", tr: "E-posta (isteğe bağlı)", en: "Email (optional)"},
+  {key: "start_chat", label: "Sohbet Başlat Butonu", tr: "Sohbeti Başlat", en: "Start Chat"},
+  {key: "input_placeholder", label: "Mesaj Kutusu", tr: "Mesajınızı yazın...", en: "Type your message..."},
+  {key: "send", label: "Gönder Butonu", tr: "Gönder", en: "Send"},
+  {key: "offline_title", label: "Çevrimdışı Başlığı", tr: "📬 Mesaj Bırakın", en: "📬 Leave a Message"},
+  {key: "offline_subtitle", label: "Çevrimdışı Alt Metni", tr: "Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.", en: "Our agents are currently offline. Leave a message and we'll get back to you by email."},
+  {key: "waiting_title", label: "Bekleme Başlığı", tr: "Temsilci bekleniyor...", en: "Waiting for an agent..."},
+  {key: "rating_prompt", label: "Değerlendirme Metni", tr: "Bu konuşmayı değerlendirin", en: "Rate this conversation"},
+  {key: "status_online", label: "Durum: Çevrimiçi", tr: "Çevrimiçi", en: "Online"},
+  {key: "status_waiting_reply", label: "Durum: Cevap Bekleniyor", tr: "Cevap bekleniyor", en: "Awaiting reply"},
+  {key: "conv_closed_msg", label: "Konuşma Kapatıldı Mesajı", tr: "Konuşma kapatıldı. İyi günler!", en: "Conversation closed. Have a great day!"},
+];
+
+function renderWidgetTexts() {
+  var lang = document.getElementById("set-widget-lang").value || "tr";
+  var grid = document.getElementById("widget-texts-grid");
+  grid.innerHTML = WIDGET_TEXT_DEFS.map(function(d) {
+    var def = lang === "en" ? d.en : d.tr;
+    var val = widgetTexts[d.key] || "";
+    return '<div style="display:flex;flex-direction:column;gap:3px">' +
+      '<label style="font-size:11px;color:#64748b;font-weight:600">' + escHtml(d.label) + '</label>' +
+      '<input type="text" data-wtkey="' + d.key + '" value="' + escHtml(val) + '" placeholder="' + escHtml(def) + '" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12.5px;outline:none">' +
+      '</div>';
+  }).join("");
+}
+
+function onWidgetLangChange() {
+  // Dil değişince placeholder varsayılanlarını tazele
+  renderWidgetTexts();
+}
+
+function saveWidgetTexts() {
+  var inputs = document.querySelectorAll("#widget-texts-grid input[data-wtkey]");
+  var obj = {};
+  inputs.forEach(function(inp) {
+    var v = inp.value.trim();
+    if (v) obj[inp.dataset.wtkey] = v;
+  });
+  widgetTexts = obj;
+  api("PUT", "/settings", { widget_texts: JSON.stringify(obj) }).then(function() {
+    toast("Widget metinleri kaydedildi");
+  }).catch(function() { toast("Hata oluştu", "error"); });
 }
 
 function renderBubbles() {
@@ -2113,6 +2295,7 @@ function removeBubble(i) {
 
 function saveSettings(silent) {
   var width = parseInt(document.getElementById("set-widget-width").value);
+  var radius = parseInt(document.getElementById("set-widget-radius").value);
   var payload = {
     site_name: document.getElementById("set-site-name").value.trim() || undefined,
     widget_color: document.getElementById("set-widget-color").value || undefined,
@@ -2122,6 +2305,10 @@ function saveSettings(silent) {
     notification_sound: document.getElementById("set-notif-sound").checked,
     widget_width: (width >= 280 && width <= 560) ? width : undefined,
     proactive_bubbles: JSON.stringify(siteBubbles),
+    widget_position: document.getElementById("set-widget-position").value || undefined,
+    widget_lang: document.getElementById("set-widget-lang").value || undefined,
+    widget_icon: document.getElementById("set-widget-icon").value.trim(),
+    widget_radius: (!isNaN(radius) && radius >= 0 && radius <= 28) ? radius : undefined,
   };
   // Remove undefined keys
   Object.keys(payload).forEach(function(k) { if (payload[k] === undefined) delete payload[k]; });

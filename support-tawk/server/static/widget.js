@@ -31,7 +31,98 @@
     proactive_delay_seconds: 0,
     default_width: 360,
     proactive_bubbles: [],
+    position: "right",
+    lang: "tr",
+    icon: "",
+    radius: 16,
+    texts: {},
   };
+
+  // ── i18n ──────────────────────────────────────────────────────────────────
+  var I18N = {
+    tr: {
+      aria_chat: "Destek Sohbeti",
+      header_loading: "Yükleniyor...",
+      status_connecting: "Bağlanıyor...",
+      status_connected: "Bağlandı",
+      status_disconnected: "Bağlantı kesildi",
+      status_error: "Hata",
+      status_online: "Çevrimiçi",
+      status_waiting_reply: "Cevap bekleniyor",
+      status_closed: "Kapatıldı",
+      info_title: "Merhaba! 👋",
+      info_subtitle: "Sohbet başlatmak için bilgilerinizi girin.",
+      field_name: "Adınız",
+      field_email_optional: "E-posta (isteğe bağlı)",
+      start_chat: "Sohbeti Başlat",
+      input_placeholder: "Mesajınızı yazın...",
+      send: "Gönder",
+      new_message: "↓ Yeni mesaj",
+      offline_title: "📬 Mesaj Bırakın",
+      offline_subtitle: "Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.",
+      field_email: "E-posta adresiniz",
+      field_message: "Mesajınız...",
+      wait_agent: "Temsilci bekle",
+      waiting_title: "Temsilci bekleniyor...",
+      waiting_subtitle: "Temsilci çevrimiçi olduğunda otomatik bağlanacaksınız.",
+      cancel: "İptal",
+      rating_prompt: "Bu konuşmayı değerlendirin",
+      rating_comment: "Yorumunuz (isteğe bağlı)",
+      rating_thanks: "Değerlendirmeniz için teşekkürler! ⭐",
+      typing_suffix: "yazıyor...",
+      conv_closed_msg: "Konuşma kapatıldı. İyi günler!",
+      all_offline: "Şu an tüm temsilciler çevrimdışı. Mesaj bırakabilir veya bekleyebilirsiniz.",
+      offline_sent: "✅ Mesajınız alındı! En kısa sürede size döneceğiz.",
+      send_failed: "Mesaj gönderilemedi.",
+      file_failed: "Dosya yüklenemedi: ",
+      notif_new_msg: "Yeni mesaj",
+      notif_file: "Dosya gönderildi",
+    },
+    en: {
+      aria_chat: "Support Chat",
+      header_loading: "Loading...",
+      status_connecting: "Connecting...",
+      status_connected: "Connected",
+      status_disconnected: "Disconnected",
+      status_error: "Error",
+      status_online: "Online",
+      status_waiting_reply: "Awaiting reply",
+      status_closed: "Closed",
+      info_title: "Hello! 👋",
+      info_subtitle: "Enter your details to start chatting.",
+      field_name: "Your name",
+      field_email_optional: "Email (optional)",
+      start_chat: "Start Chat",
+      input_placeholder: "Type your message...",
+      send: "Send",
+      new_message: "↓ New message",
+      offline_title: "📬 Leave a Message",
+      offline_subtitle: "Our agents are currently offline. Leave a message and we'll get back to you by email.",
+      field_email: "Your email address",
+      field_message: "Your message...",
+      wait_agent: "Wait for agent",
+      waiting_title: "Waiting for an agent...",
+      waiting_subtitle: "You'll be connected automatically once an agent is online.",
+      cancel: "Cancel",
+      rating_prompt: "Rate this conversation",
+      rating_comment: "Your comment (optional)",
+      rating_thanks: "Thanks for your feedback! ⭐",
+      typing_suffix: "is typing...",
+      conv_closed_msg: "Conversation closed. Have a great day!",
+      all_offline: "All agents are currently offline. You can leave a message or wait.",
+      offline_sent: "✅ Your message has been received! We'll get back to you soon.",
+      send_failed: "Message could not be sent.",
+      file_failed: "File upload failed: ",
+      notif_new_msg: "New message",
+      notif_file: "File sent",
+    },
+  };
+
+  function t(key) {
+    if (cfg.texts && cfg.texts[key]) return cfg.texts[key];
+    var table = I18N[cfg.lang] || I18N.tr;
+    return (table[key] !== undefined) ? table[key] : (I18N.tr[key] || key);
+  }
 
   var MIN_W = 300, MAX_W = 560;
   function getStoredWidth() {
@@ -359,7 +450,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ score: selectedScore, comment: ratingComment.value.trim() }),
     }).then(function() {
-      ratingForm.innerHTML = '<p style="color:#22c55e;font-weight:500">Değerlendirmeniz için teşekkürler! ⭐</p>';
+      ratingForm.innerHTML = '<p style="color:#22c55e;font-weight:500">' + t("rating_thanks") + '</p>';
       state.rating_submitted = true;
     }).catch(function() {});
   });
@@ -376,6 +467,100 @@
     ratingSubmit.style.background = color;
   }
   applyColor(cfg.color);
+
+  // ── Appearance: position, icon, radius ────────────────────────────────────
+  function applyPosition(pos) {
+    cfg.position = (pos === "left") ? "left" : "right";
+    var left = cfg.position === "left";
+    var edge = left ? "left" : "right";
+    var opp = left ? "right" : "left";
+    var mobile = window.matchMedia("(max-width: 480px)").matches;
+    // Buton ve baloncuklar her zaman; pencere sadece masaüstünde (mobil tam ekran)
+    [btn, bubbleWrap].forEach(function(el) {
+      if (!el) return;
+      el.style[edge] = "24px";
+      el.style[opp] = "auto";
+    });
+    if (mobile) {
+      win.style.left = ""; win.style.right = "";
+    } else {
+      win.style[edge] = "24px";
+      win.style[opp] = "auto";
+    }
+    win.style.transformOrigin = "bottom " + edge;
+    // Resize tutamacı karşı kenara
+    if (resizeEl) {
+      resizeEl.style[left ? "right" : "left"] = "0";
+      resizeEl.style[left ? "left" : "right"] = "auto";
+    }
+    bubbleWrap.style.alignItems = left ? "flex-start" : "flex-end";
+  }
+
+  function applyIcon(icon) {
+    cfg.icon = icon || "";
+    if (cfg.icon) {
+      btn.innerHTML = '<span id="st-badge"' + (state.unread ? '' : ' class="hidden"') + '>' +
+        (state.unread || 0) + '</span><span style="font-size:26px;line-height:1">' + cfg.icon + '</span>';
+      badge = document.getElementById("st-badge");
+    }
+  }
+
+  function applyRadius(px) {
+    cfg.radius = (typeof px === "number") ? px : cfg.radius;
+    if (!window.matchMedia("(max-width: 480px)").matches) {
+      win.style.borderRadius = cfg.radius + "px";
+    }
+  }
+
+  // ── Apply all translated UI strings ───────────────────────────────────────
+  function setText(sel, key, attr) {
+    var el = win.querySelector(sel) || document.querySelector(sel);
+    if (!el) return;
+    if (attr) el.setAttribute(attr, t(key));
+    else el.textContent = t(key);
+  }
+
+  function applyTexts() {
+    btn.setAttribute("aria-label", t("aria_chat"));
+    win.setAttribute("aria-label", t("aria_chat"));
+    // Info form
+    setText("#st-info-form h3", "info_title");
+    setText("#st-info-form p", "info_subtitle");
+    setText("#st-name-input", "field_name", "placeholder");
+    setText("#st-email-input", "field_email_optional", "placeholder");
+    setText("#st-start-btn", "start_chat");
+    // Chat input
+    if (!state.form_active) inputEl.placeholder = t("input_placeholder");
+    sendBtn.textContent = t("send");
+    // Scroll btn
+    var sb = document.querySelector("#st-scroll-btn span:first-child");
+    if (sb) sb.textContent = t("new_message");
+    // Offline form
+    setText("#st-offline-form h3", "offline_title");
+    setText("#st-offline-form p", "offline_subtitle");
+    setText("#st-ol-name", "field_name", "placeholder");
+    setText("#st-ol-email", "field_email", "placeholder");
+    setText("#st-ol-msg", "field_message", "placeholder");
+    setText("#st-ol-submit", "send");
+    setText("#st-ol-wait", "wait_agent");
+    // Wait mode
+    var wm = document.getElementById("st-wait-mode");
+    if (wm) {
+      var wmDivs = wm.querySelectorAll("div");
+      if (wmDivs[1]) wmDivs[1].textContent = t("waiting_title");
+      if (wmDivs[2]) wmDivs[2].textContent = t("waiting_subtitle");
+    }
+    setText("#st-cancel-wait", "cancel");
+    // Rating form
+    var rfp = document.querySelector("#st-rating-form p");
+    if (rfp) rfp.textContent = t("rating_prompt");
+    setText("#st-rating-comment", "rating_comment", "placeholder");
+    setText("#st-rating-submit", "send");
+    // Header status if still loading
+    if (statusEl.textContent === "Yükleniyor..." || statusEl.textContent === "Loading...") {
+      statusEl.textContent = t("header_loading");
+    }
+  }
 
   // ── Width (admin default + visitor adjustable) ────────────────────────────
   function applyWidth(px) {
@@ -416,7 +601,11 @@
     document.addEventListener("touchend", endDrag);
   })();
 
-  window.addEventListener("resize", function () { applyWidth(cfg._width || getStoredWidth() || cfg.default_width); });
+  window.addEventListener("resize", function () {
+    applyWidth(cfg._width || getStoredWidth() || cfg.default_width);
+    applyPosition(cfg.position);
+    applyRadius();
+  });
   applyWidth(getStoredWidth() || cfg.default_width);
 
   // ── Proactive notification bubbles (admin tanımlı) ────────────────────────
@@ -458,6 +647,14 @@
     cfg.proactive_delay_seconds = data.proactive_delay_seconds || 0;
     title.textContent = data.site_name || "Destek";
     if (data.widget_color) applyColor(data.widget_color);
+
+    // Dil & görünüm (Faz 7)
+    cfg.lang = (data.widget_lang === "en" || data.widget_lang === "tr") ? data.widget_lang : "tr";
+    cfg.texts = (data.widget_texts && typeof data.widget_texts === "object") ? data.widget_texts : {};
+    applyTexts();
+    applyPosition(data.widget_position || "right");
+    if (data.widget_icon) applyIcon(data.widget_icon);
+    if (typeof data.widget_radius === "number") applyRadius(data.widget_radius);
 
     // Varsayılan genişlik (admin ayarı) — ziyaretçi tercihi varsa o öncelikli
     cfg.default_width = data.widget_width || cfg.default_width;
@@ -560,10 +757,10 @@
         page_url: window.location.href,
       }),
     }).then(function() {
-      offlineForm.innerHTML = '<div style="padding:20px;text-align:center"><p style="color:#22c55e;font-weight:500;font-size:14px">✅ Mesajınız alındı! En kısa sürede size döneceğiz.</p></div>';
+      offlineForm.innerHTML = '<div style="padding:20px;text-align:center"><p style="color:#22c55e;font-weight:500;font-size:14px">' + t("offline_sent") + '</p></div>';
     }).catch(function() {
       olSubmitBtn.disabled = false;
-      appendSystemMsg("Mesaj gönderilemedi.");
+      appendSystemMsg(t("send_failed"));
     });
   });
 
@@ -600,17 +797,17 @@
 
   function connectWS() {
     if (state.ws && state.ws.readyState < 2) return;
-    statusEl.textContent = "Bağlanıyor...";
+    statusEl.textContent = t("status_connecting");
     try {
       state.ws = new WebSocket(wsUrl());
     } catch (e) {
-      statusEl.textContent = "Bağlantı hatası";
+      statusEl.textContent = t("status_error");
       return;
     }
 
     state.ws.onopen = function () {
       state.reconnect_attempts = 0;
-      statusEl.textContent = "Bağlandı";
+      statusEl.textContent = t("status_connected");
       // Send current page
       state.ws.send(JSON.stringify({
         type: "page_view",
@@ -626,12 +823,12 @@
     };
 
     state.ws.onclose = function () {
-      statusEl.textContent = "Bağlantı kesildi";
+      statusEl.textContent = t("status_disconnected");
       scheduleReconnect();
     };
 
     state.ws.onerror = function () {
-      statusEl.textContent = "Hata";
+      statusEl.textContent = t("status_error");
     };
   }
 
@@ -833,7 +1030,7 @@
       if (data.config) {
         if (data.config.color) applyColor(data.config.color);
         if (data.config.site_name) title.textContent = data.config.site_name;
-        statusEl.textContent = data.config.agents_online ? "Çevrimiçi" : "Cevap bekleniyor";
+        statusEl.textContent = data.config.agents_online ? t("status_online") : t("status_waiting_reply");
       }
       messagesEl.innerHTML = "";
       if (!data.messages || !data.messages.length) {
@@ -849,7 +1046,7 @@
       }
       scrollBottom();
       if (data.config && !data.config.agents_online) {
-        appendSystemMsg("Şu an tüm temsilciler çevrimdışı. Mesaj bırakabilir veya bekleyebilirsiniz.");
+        appendSystemMsg(t("all_offline"));
       }
 
     } else if (data.type === "message") {
@@ -862,30 +1059,30 @@
       }
 
     } else if (data.type === "agent_typing") {
-      typingEl.textContent = (data.agent_name || "Destek") + " yazıyor...";
+      typingEl.textContent = (data.agent_name || t("status_online")) + " " + t("typing_suffix");
       clearTimeout(state.typing_timer);
       state.typing_timer = setTimeout(function () { typingEl.textContent = ""; }, 3000);
 
     } else if (data.type === "conversation_closed") {
       state.conv_closed = true;
-      statusEl.textContent = "Kapatıldı";
+      statusEl.textContent = t("status_closed");
       inputEl.disabled = true;
       sendBtn.disabled = true;
-      appendSystemMsg("Konuşma kapatıldı. İyi günler!");
+      appendSystemMsg(t("conv_closed_msg"));
       // Show rating form
       if (!state.rating_submitted) {
         ratingForm.style.display = "flex";
       }
 
     } else if (data.type === "conversation_assigned") {
-      statusEl.textContent = "Bağlandı";
+      statusEl.textContent = t("status_connected");
     } else if (data.type === "messages_read") {
       messagesEl.querySelectorAll(".st-msg.visitor .st-read-status").forEach(function(el) {
         el.textContent = "✓✓";
         el.style.color = "#22c55e";
       });
     } else if (data.type === "agent_online") {
-      statusEl.textContent = "Çevrimiçi";
+      statusEl.textContent = t("status_online");
       // If in wait mode, switch to chat
       if (state.waiting) {
         state.waiting = false;
@@ -1086,7 +1283,7 @@
       });
       scrollBottom();
     }).catch(function (e) {
-      appendSystemMsg("Dosya yüklenemedi: " + e.message);
+      appendSystemMsg(t("file_failed") + e.message);
     });
   });
 
@@ -1108,8 +1305,8 @@
   function showNotification(msg) {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") {
-      new Notification(cfg.site_name + " - Yeni mesaj", {
-        body: msg.content || "Dosya gönderildi",
+      new Notification(cfg.site_name + " - " + t("notif_new_msg"), {
+        body: msg.content || t("notif_file"),
         icon: SERVER + "/static/icon.png",
       });
     } else if (Notification.permission !== "denied") {
