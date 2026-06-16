@@ -20,6 +20,7 @@ from server.auth import hash_password
 from server.routes.chat import router as chat_router
 from server.routes.admin import router as admin_router
 from server.routes.files import router as files_router
+from server.routes.forms import router as forms_router
 
 
 async def _cleanup_loop():
@@ -75,6 +76,7 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(admin_router)
 app.include_router(files_router)
+app.include_router(forms_router)
 
 # Serve static files (widget + admin panel)
 _static = Path(__file__).parent / "static"

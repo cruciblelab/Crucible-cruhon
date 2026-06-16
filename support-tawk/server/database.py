@@ -252,12 +252,51 @@ class OfflineMessage(BaseModel):
         table_name = "offline_messages"
 
 
+class Form(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=128)
+    description = CharField(max_length=256, default="")
+    welcome_text = CharField(max_length=512, default="Lütfen aşağıdaki formu doldurun.")
+    submit_text = CharField(max_length=128, default="Gönder")
+    is_active = BooleanField(default=False)
+    department = ForeignKeyField(Department, null=True, backref="forms", on_delete="SET NULL")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "forms"
+
+
+class FormField(BaseModel):
+    id = AutoField()
+    form = ForeignKeyField(Form, backref="fields", on_delete="CASCADE")
+    order = IntegerField(default=0)
+    label = CharField(max_length=256)
+    field_type = CharField(max_length=16, default="text")  # text|email|phone|select|textarea|rating|number
+    required = BooleanField(default=True)
+    placeholder = CharField(max_length=128, default="")
+    # For select/radio: [{"label":"...", "reply":"..."}]
+    options_json = TextField(default="[]")
+    class Meta:
+        table_name = "form_fields"
+
+
+class FormSubmission(BaseModel):
+    id = AutoField()
+    form = ForeignKeyField(Form, backref="submissions", on_delete="CASCADE")
+    conversation = ForeignKeyField(Conversation, null=True, backref="form_submissions", on_delete="SET NULL")
+    visitor_id = CharField(max_length=64, default="")
+    answers_json = TextField(default="{}")  # {field_id_str: answer_str}
+    submitted_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "form_submissions"
+
+
 def init_db():
     with database:
         database.create_tables([
             Department, Agent, Conversation, Message, CannedResponse,
             Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
-            Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage
+            Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
+            Form, FormField, FormSubmission,
         ], safe=True)
         _safe_migrations = [
             "ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'",

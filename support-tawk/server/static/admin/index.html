@@ -366,6 +366,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="nav-item" data-page="schedule" onclick="showPage('schedule')">
       <span class="nav-icon">🕐</span> Mesai Saatleri
     </div>
+    <div class="nav-item" data-page="forms" id="nav-forms" style="display:none" onclick="showPage('forms')">
+      <span class="nav-icon">📋</span> Formlar
+    </div>
     <div class="nav-item" data-page="departments" id="nav-departments" style="display:none" onclick="showPage('departments')">
       <span class="nav-icon">🏢</span> Departmanlar
     </div>
@@ -813,6 +816,82 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="dept-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
     </div>
 
+    <!-- ── Forms page ── -->
+    <div class="page" id="page-forms" style="flex-direction:column;overflow-y:auto;padding:24px">
+      <!-- Form list view -->
+      <div id="forms-list-view">
+        <div class="page-header">
+          <h2>📋 Formlar</h2>
+          <button class="form-submit" onclick="showCreateFormPanel()">+ Yeni Form</button>
+        </div>
+        <div id="create-form-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;max-width:680px">
+          <h3 style="margin:0 0 14px;font-size:14px;font-weight:700">Yeni Form Oluştur</h3>
+          <div class="form-row">
+            <input id="nf-name" placeholder="Form adı (örn: Destek Talebi Formu)">
+            <input id="nf-submit-text" placeholder="Gönder butonu metni" value="Gönder">
+          </div>
+          <input id="nf-welcome" placeholder="Karşılama metni (örn: Lütfen bilgilerinizi doldurun)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
+          <div style="display:flex;gap:8px">
+            <button class="form-submit" onclick="saveNewForm()">Oluştur</button>
+            <button class="btn-sm" onclick="document.getElementById('create-form-panel').style.display='none'">İptal</button>
+          </div>
+        </div>
+        <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;max-width:680px"></div>
+      </div>
+      <!-- Form detail/builder view -->
+      <div id="forms-detail-view" style="display:none;max-width:780px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button class="btn-sm" onclick="backToFormsList()">← Geri</button>
+          <h3 id="fd-form-name" style="font-size:16px;font-weight:700;flex:1"></h3>
+          <button class="form-submit" id="fd-activate-btn" onclick="toggleFormActive()"></button>
+        </div>
+        <!-- Field builder -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div class="page-header" style="margin-bottom:14px">
+            <h4 style="font-size:14px;font-weight:700">Form Alanları</h4>
+            <button class="form-submit" onclick="showAddFieldPanel()">+ Alan Ekle</button>
+          </div>
+          <div id="add-field-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px">
+            <div class="form-row">
+              <input id="ff-label" placeholder="Soru metni (örn: Adınız nedir?)">
+              <select id="ff-type" onchange="onFieldTypeChange()" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;background:#fff">
+                <option value="text">Metin</option>
+                <option value="email">E-posta</option>
+                <option value="phone">Telefon</option>
+                <option value="number">Sayı</option>
+                <option value="textarea">Uzun Metin</option>
+                <option value="select">Çoktan Seç</option>
+                <option value="rating">Puan (1-5 ⭐)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <input id="ff-placeholder" placeholder="Yardım metni (placeholder, isteğe bağlı)">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="ff-required" checked> Zorunlu</label>
+            </div>
+            <div id="ff-options-wrap" style="display:none;margin-top:8px">
+              <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Seçenekler</div>
+              <div id="ff-options-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+              <button class="btn-sm" onclick="addFieldOption()">+ Seçenek Ekle</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="form-submit" onclick="saveField()">Ekle</button>
+              <button class="btn-sm" onclick="document.getElementById('add-field-panel').style.display='none'">İptal</button>
+            </div>
+          </div>
+          <div id="fields-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          <p id="fields-empty" style="font-size:13px;color:#94a3b8;text-align:center;padding:20px 0;display:none">Henüz alan eklenmedi. "Alan Ekle" butonuna tıklayın.</p>
+        </div>
+        <!-- Submissions -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+          <div class="page-header" style="margin-bottom:14px">
+            <h4 style="font-size:14px;font-weight:700">Form Yanıtları</h4>
+            <button class="btn-sm" onclick="loadCurrentFormSubmissions()">Yenile</button>
+          </div>
+          <div id="submissions-list"></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -893,6 +972,7 @@ if (AGENT.role === "admin") {
   document.getElementById("nav-webhooks").style.display = "";
   document.getElementById("nav-audit").style.display = "";
   document.getElementById("nav-departments").style.display = "";
+  document.getElementById("nav-forms").style.display = "";
 }
 var allDepartments = [];
 
@@ -980,6 +1060,7 @@ function showPage(name) {
   if (name === "offline-msgs") loadOfflineMsgs();
   if (name === "audit") loadAuditLog();
   if (name === "departments") loadDepartments();
+  if (name === "forms") loadForms();
 }
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
@@ -2416,6 +2497,284 @@ function setConvDept() {
     toast(deptId ? "Departman atandı" : "Departman kaldırıldı");
     renderConvList();
   });
+}
+
+// ── Forms ─────────────────────────────────────────────────────────────────────
+var currentFormId = null;
+var currentFormFields = [];
+var fieldOptions = []; // options for the field being edited
+
+var FIELD_TYPE_LABELS = {
+  text: "Metin", email: "E-posta", phone: "Telefon", number: "Sayı",
+  textarea: "Uzun Metin", select: "Çoktan Seç", rating: "Puan (⭐)",
+};
+
+function loadForms() {
+  api("GET", "/forms").then(function(forms) {
+    var list = document.getElementById("forms-list");
+    if (!forms.length) {
+      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;padding:16px 0">Henüz form oluşturulmadı.</p>';
+      return;
+    }
+    list.innerHTML = forms.map(function(f) {
+      return '<div style="background:#fff;border:1px solid ' + (f.is_active ? '#22c55e' : '#e2e8f0') + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1">' +
+          '<div style="font-size:14px;font-weight:700;color:#1e293b">' + escHtml(f.name) + (f.is_active ? ' <span style="background:#dcfce7;color:#16a34a;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px">Aktif</span>' : '') + '</div>' +
+          '<div style="font-size:12px;color:#94a3b8;margin-top:3px">' + f.field_count + ' alan · ' + f.submission_count + ' yanıt</div>' +
+        '</div>' +
+        '<button class="btn-sm" onclick="openFormDetail(' + f.id + ', ' + JSON.stringify(escHtml(f.name)) + ')">Düzenle</button>' +
+        '<button class="btn-sm" style="' + (f.is_active ? 'background:#fef2f2;color:#dc2626' : '') + '" onclick="setFormActive(' + f.id + ',' + !f.is_active + ')">' + (f.is_active ? 'Deaktif Et' : 'Aktif Yap') + '</button>' +
+        '<button class="btn-sm" style="background:#fef2f2;color:#dc2626" onclick="deleteForm(' + f.id + ')">Sil</button>' +
+      '</div>';
+    }).join("");
+  });
+}
+
+function showCreateFormPanel() {
+  document.getElementById("create-form-panel").style.display = "";
+  document.getElementById("nf-name").focus();
+}
+
+function saveNewForm() {
+  var name = document.getElementById("nf-name").value.trim();
+  if (!name) { document.getElementById("nf-name").focus(); return; }
+  var welcome = document.getElementById("nf-welcome").value.trim() || "Lütfen aşağıdaki formu doldurun.";
+  var submitText = document.getElementById("nf-submit-text").value.trim() || "Gönder";
+  api("POST", "/forms", { name: name, welcome_text: welcome, submit_text: submitText }).then(function(res) {
+    document.getElementById("create-form-panel").style.display = "none";
+    document.getElementById("nf-name").value = "";
+    document.getElementById("nf-welcome").value = "";
+    document.getElementById("nf-submit-text").value = "Gönder";
+    openFormDetail(res.id, res.name);
+  });
+}
+
+function openFormDetail(formId, formName) {
+  currentFormId = formId;
+  document.getElementById("forms-list-view").style.display = "none";
+  document.getElementById("forms-detail-view").style.display = "";
+  document.getElementById("fd-form-name").textContent = formName;
+  document.getElementById("add-field-panel").style.display = "none";
+  fieldOptions = [];
+  loadFormFields();
+  loadCurrentFormSubmissions();
+  // Update activate button label
+  api("GET", "/forms").then(function(forms) {
+    var f = forms.find(function(x) { return x.id === formId; });
+    if (f) {
+      document.getElementById("fd-activate-btn").textContent = f.is_active ? "Deaktif Et" : "Aktif Yap";
+      document.getElementById("fd-activate-btn").style.background = f.is_active ? "#fee2e2" : "";
+      document.getElementById("fd-activate-btn").style.color = f.is_active ? "#dc2626" : "";
+      document.getElementById("fd-form-name").textContent = f.name + (f.is_active ? " ✅" : "");
+    }
+  });
+}
+
+function backToFormsList() {
+  currentFormId = null;
+  document.getElementById("forms-list-view").style.display = "";
+  document.getElementById("forms-detail-view").style.display = "none";
+  loadForms();
+}
+
+function toggleFormActive() {
+  if (!currentFormId) return;
+  api("GET", "/forms").then(function(forms) {
+    var f = forms.find(function(x) { return x.id === currentFormId; });
+    if (!f) return;
+    setFormActive(currentFormId, !f.is_active);
+  });
+}
+
+function setFormActive(formId, active) {
+  api("PATCH", "/forms/" + formId, { is_active: active }).then(function() {
+    toast(active ? "Form aktifleştirildi" : "Form deaktifleştirildi");
+    if (currentFormId === formId) {
+      document.getElementById("fd-activate-btn").textContent = active ? "Deaktif Et" : "Aktif Yap";
+      document.getElementById("fd-activate-btn").style.background = active ? "#fee2e2" : "";
+      document.getElementById("fd-activate-btn").style.color = active ? "#dc2626" : "";
+      document.getElementById("fd-form-name").textContent = document.getElementById("fd-form-name").textContent.replace(" ✅", "") + (active ? " ✅" : "");
+    }
+    loadForms();
+  });
+}
+
+function deleteForm(formId) {
+  if (!confirm("Bu formu silmek istediğinizden emin misiniz?")) return;
+  api("DELETE", "/forms/" + formId).then(function() {
+    toast("Form silindi");
+    if (currentFormId === formId) backToFormsList();
+    else loadForms();
+  });
+}
+
+function loadFormFields() {
+  if (!currentFormId) return;
+  api("GET", "/forms/" + currentFormId + "/fields").then(function(fields) {
+    currentFormFields = fields;
+    renderFieldsList(fields);
+  });
+}
+
+function renderFieldsList(fields) {
+  var list = document.getElementById("fields-list");
+  var empty = document.getElementById("fields-empty");
+  if (!fields.length) {
+    list.innerHTML = "";
+    empty.style.display = "";
+    return;
+  }
+  empty.style.display = "none";
+  list.innerHTML = fields.map(function(f, idx) {
+    var typeLabel = FIELD_TYPE_LABELS[f.field_type] || f.field_type;
+    var optCount = "";
+    if (f.field_type === "select") {
+      try { var opts = JSON.parse(f.options_json); optCount = " · " + opts.length + " seçenek"; } catch(e){}
+    }
+    return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:10px 14px;display:flex;align-items:center;gap:10px">' +
+      '<div style="width:24px;height:24px;background:#e2e8f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#64748b;flex-shrink:0">' + (idx+1) + '</div>' +
+      '<div style="flex:1">' +
+        '<div style="font-size:13px;font-weight:600;color:#1e293b">' + escHtml(f.label) + (f.required ? ' <span style="color:#ef4444;font-size:11px">*</span>' : '') + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + typeLabel + optCount + '</div>' +
+      '</div>' +
+      '<button class="btn-sm" onclick="moveField(' + f.id + ',-1)" ' + (idx===0?'disabled':'') + '>↑</button>' +
+      '<button class="btn-sm" onclick="moveField(' + f.id + ',1)" ' + (idx===fields.length-1?'disabled':'') + '>↓</button>' +
+      '<button class="btn-sm" onclick="editFieldInline(' + f.id + ')">Düzenle</button>' +
+      '<button class="btn-sm" style="background:#fef2f2;color:#dc2626" onclick="deleteField(' + f.id + ')">Sil</button>' +
+    '</div>';
+  }).join("");
+}
+
+function moveField(fieldId, direction) {
+  var idx = currentFormFields.findIndex(function(f) { return f.id === fieldId; });
+  var newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= currentFormFields.length) return;
+  var temp = currentFormFields[idx];
+  currentFormFields[idx] = currentFormFields[newIdx];
+  currentFormFields[newIdx] = temp;
+  var ids = currentFormFields.map(function(f) { return f.id; });
+  api("PUT", "/forms/" + currentFormId + "/fields/order", { field_ids: ids }).then(function() {
+    renderFieldsList(currentFormFields);
+  });
+}
+
+function showAddFieldPanel() {
+  fieldOptions = [];
+  document.getElementById("ff-label").value = "";
+  document.getElementById("ff-type").value = "text";
+  document.getElementById("ff-placeholder").value = "";
+  document.getElementById("ff-required").checked = true;
+  document.getElementById("ff-options-wrap").style.display = "none";
+  document.getElementById("ff-options-list").innerHTML = "";
+  document.getElementById("add-field-panel").style.display = "";
+  document.getElementById("ff-label").focus();
+}
+
+function onFieldTypeChange() {
+  var type = document.getElementById("ff-type").value;
+  document.getElementById("ff-options-wrap").style.display = type === "select" ? "" : "none";
+}
+
+function addFieldOption() {
+  fieldOptions.push({ label: "", reply: "" });
+  renderFieldOptions();
+}
+
+function renderFieldOptions() {
+  var list = document.getElementById("ff-options-list");
+  list.innerHTML = fieldOptions.map(function(opt, i) {
+    return '<div style="display:flex;gap:6px;align-items:center">' +
+      '<input placeholder="Seçenek metni" value="' + escHtml(opt.label) + '" oninput="fieldOptions['+i+'].label=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
+      '<input placeholder="Cevap (isteğe bağlı)" value="' + escHtml(opt.reply) + '" oninput="fieldOptions['+i+'].reply=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
+      '<button class="btn-sm" style="background:#fef2f2;color:#dc2626;padding:5px 8px" onclick="fieldOptions.splice('+i+',1);renderFieldOptions()">✕</button>' +
+    '</div>';
+  }).join("");
+}
+
+function saveField() {
+  var label = document.getElementById("ff-label").value.trim();
+  if (!label) { document.getElementById("ff-label").focus(); return; }
+  var type = document.getElementById("ff-type").value;
+  var placeholder = document.getElementById("ff-placeholder").value.trim();
+  var required = document.getElementById("ff-required").checked;
+  var optionsJson = type === "select" ? JSON.stringify(fieldOptions.filter(function(o){return o.label;})) : "[]";
+  var payload = { label: label, field_type: type, placeholder: placeholder, required: required, options_json: optionsJson };
+  api("POST", "/forms/" + currentFormId + "/fields", payload).then(function() {
+    toast("Alan eklendi");
+    document.getElementById("add-field-panel").style.display = "none";
+    fieldOptions = [];
+    loadFormFields();
+  });
+}
+
+function editFieldInline(fieldId) {
+  var f = currentFormFields.find(function(x) { return x.id === fieldId; });
+  if (!f) return;
+  try { fieldOptions = JSON.parse(f.options_json || "[]"); } catch(e) { fieldOptions = []; }
+  document.getElementById("ff-label").value = f.label;
+  document.getElementById("ff-type").value = f.field_type;
+  document.getElementById("ff-placeholder").value = f.placeholder || "";
+  document.getElementById("ff-required").checked = f.required;
+  onFieldTypeChange();
+  renderFieldOptions();
+  document.getElementById("add-field-panel").style.display = "";
+  // Swap save button to update
+  var saveBtn = document.querySelector("#add-field-panel .form-submit");
+  saveBtn.textContent = "Güncelle";
+  saveBtn.onclick = function() {
+    var label = document.getElementById("ff-label").value.trim();
+    if (!label) return;
+    var type = document.getElementById("ff-type").value;
+    var optionsJson = type === "select" ? JSON.stringify(fieldOptions.filter(function(o){return o.label;})) : "[]";
+    api("PATCH", "/forms/" + currentFormId + "/fields/" + fieldId, {
+      label: label, field_type: type,
+      placeholder: document.getElementById("ff-placeholder").value.trim(),
+      required: document.getElementById("ff-required").checked,
+      options_json: optionsJson,
+    }).then(function() {
+      toast("Alan güncellendi");
+      document.getElementById("add-field-panel").style.display = "none";
+      saveBtn.textContent = "Ekle";
+      saveBtn.onclick = saveField;
+      fieldOptions = [];
+      loadFormFields();
+    });
+  };
+}
+
+function deleteField(fieldId) {
+  if (!confirm("Bu alanı silmek istediğinizden emin misiniz?")) return;
+  api("DELETE", "/forms/" + currentFormId + "/fields/" + fieldId).then(function() {
+    toast("Alan silindi");
+    loadFormFields();
+  });
+}
+
+function loadCurrentFormSubmissions() {
+  if (!currentFormId) return;
+  api("GET", "/forms/" + currentFormId + "/submissions").then(function(subs) {
+    var list = document.getElementById("submissions-list");
+    if (!subs.length) {
+      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:16px 0">Henüz yanıt yok.</p>';
+      return;
+    }
+    var labels = subs.length ? subs[0].field_labels : {};
+    list.innerHTML = '<table class="gen-table"><thead><tr><th>Tarih</th><th>Ziyaretçi</th>' +
+      Object.keys(labels).map(function(k) { return '<th>' + escHtml(labels[k]) + '</th>'; }).join("") +
+      '<th>Konuşma</th></tr></thead><tbody>' +
+      subs.map(function(s) {
+        return '<tr><td>' + new Date(s.submitted_at).toLocaleString("tr-TR") + '</td>' +
+          '<td style="font-size:11px;color:#64748b">' + escHtml(s.visitor_id.slice(0,12)) + '...</td>' +
+          Object.keys(labels).map(function(k) { return '<td>' + escHtml(s.answers[k] || "—") + '</td>'; }).join("") +
+          '<td>' + (s.conversation_id ? '<a href="#" style="color:#2563eb;font-size:12px" onclick="openConvById(' + s.conversation_id + ');return false">#' + s.conversation_id + '</a>' : '—') + '</td>' +
+          '</tr>';
+      }).join("") + '</tbody></table>';
+  });
+}
+
+function openConvById(convId) {
+  showPage("convs");
+  setTimeout(function() { openConv(convId); }, 400);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
