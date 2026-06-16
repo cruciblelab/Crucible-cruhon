@@ -325,7 +325,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   .stats-grid{grid-template-columns:1fr 1fr}
   .page-header{flex-wrap:wrap;gap:10px}
   .gen-table{display:block;overflow-x:auto;white-space:nowrap}
-  #page-stats,#page-tags,#page-blacklist,#page-botflow,#page-schedule,#page-webhooks,#page-offline-msgs,#page-audit,#page-visitors{padding:14px}
+  #page-stats,#page-tags,#page-blacklist,#page-botflow,#page-schedule,#page-webhooks,#page-offline-msgs,#page-audit,#page-visitors,#page-settings,#page-profile,#page-forms{padding:14px}
+  .settings-section{max-width:none}
+  .settings-row{flex-wrap:wrap;gap:6px}
+  .settings-row input[type=text],.settings-row textarea,.settings-row input[type=number]{width:100%;box-sizing:border-box}
+  #widget-texts-grid{grid-template-columns:1fr}
+  .profile-card{max-width:none}
 }
 </style>
 </head>
@@ -465,6 +470,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Ziyaretçi Bilgisi">👤 Bilgi</button>
               <button class="ch-btn" onclick="openTransferModal()" title="Aktar">↪ Aktar</button>
               <button class="ch-btn" onclick="exportConv()" title="CSV İndir">⬇ CSV</button>
+              <button class="ch-btn danger btn-sm" id="delete-visitor-btn" onclick="deleteVisitorData()" style="display:none" title="Ziyaretçiye ait tüm verileri sil">🗑 Veriyi Sil</button>
               <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
               <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
               <button class="ch-btn" id="reopen-btn" onclick="reopenConv()" style="display:none">↺ Yeniden Aç</button>
@@ -648,9 +654,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <textarea id="flow-greeting" rows="2" placeholder="Merhaba! Size nasıl yardımcı olabilirim?"></textarea>
         </div>
         <div class="form-field">
-          <label>Seçenekler (JSON)</label>
-          <textarea id="flow-options" rows="4" placeholder='[{"label":"Teknik Destek","reply":"Teknik destek ekibine bağlanıyorum..."}]'></textarea>
-          <small style="color:#94a3b8;font-size:11px">Her seçenek: label (buton metni) ve reply (bot yanıtı)</small>
+          <label>Seçenekler</label>
+          <div id="flow-opts-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+          <button class="btn-sm" type="button" onclick="addFlowOption()" style="margin-top:2px">+ Seçenek Ekle</button>
         </div>
         <div style="display:flex;gap:8px">
           <button class="form-submit" onclick="createBotflow()">Kaydet</button>
@@ -791,9 +797,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="settings-section" style="margin-top:16px">
         <h3>🔔 Bildirim Baloncukları</h3>
         <p style="font-size:12px;color:#64748b;margin-bottom:12px">Widget kapalıyken butonun üstünde baloncuk olarak gösterilir. Ziyaretçi tıklayınca sohbet açılır.</p>
-        <div id="bubbles-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="bubble-input" placeholder="Örn: Yardıma mı ihtiyacınız var? 👋" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
+        <div class="settings-row">
+          <label>Kapatınca Tekrar Gösterim</label>
+          <select id="set-bubble-dismiss" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none;width:200px">
+            <option value="0">Her oturumda göster</option>
+            <option value="1">1 gün sonra tekrar göster</option>
+            <option value="3">3 gün sonra tekrar göster</option>
+            <option value="7">7 gün sonra tekrar göster</option>
+            <option value="14">14 gün sonra tekrar göster</option>
+            <option value="999">Bir daha gösterme</option>
+          </select>
+        </div>
+        <div style="margin-top:10px">
+          <button class="form-submit" onclick="saveBubbleDismiss()">Kaydet</button>
+        </div>
+        <div id="bubbles-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;margin-top:16px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
+            <label style="font-size:11px;font-weight:600;color:#64748b">Metin</label>
+            <input type="text" id="bubble-input" placeholder="Yardıma mı ihtiyacınız var? 👋" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:11px;font-weight:600;color:#64748b">Renk</label>
+            <input type="color" id="bubble-color" value="#1e293b" style="width:46px;height:38px;border:1px solid #e2e8f0;border-radius:7px;padding:2px;cursor:pointer">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:11px;font-weight:600;color:#64748b">Boyut</label>
+            <select id="bubble-size" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+              <option value="small">Küçük</option>
+              <option value="normal" selected>Normal</option>
+              <option value="large">Büyük</option>
+            </select>
+          </div>
           <button class="form-submit" onclick="addBubble()">Ekle</button>
         </div>
       </div>
@@ -1009,6 +1044,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <p style="font-size:13px;color:#64748b;margin-bottom:14px">Hangi temsilciye aktarmak istiyorsunuz?</p>
     <select id="transfer-agent-select"></select>
     <button class="form-submit" onclick="doTransfer()">Aktar</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="close-conv-modal">
+  <div class="modal" style="width:380px">
+    <button class="modal-close" onclick="closeModal('close-conv-modal')">✕</button>
+    <h2>Konuşmayı Kapat</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:16px">Konuşmayı kapatmak istediğinizden emin misiniz?</p>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#374151;margin-bottom:20px;cursor:pointer">
+      <input type="checkbox" id="close-send-rating" checked style="width:16px;height:16px;cursor:pointer">
+      Kullanıcıdan değerlendirme iste (⭐ puan + yorum)
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-sm" onclick="closeModal('close-conv-modal')">İptal</button>
+      <button class="form-submit" onclick="confirmCloseConv()">Kapat</button>
+    </div>
   </div>
 </div>
 
@@ -1376,6 +1427,9 @@ function openConv(id) {
     document.getElementById("reopen-btn").style.display = isClosed ? "" : "none";
     document.getElementById("msg-input").disabled = isClosed;
     document.getElementById("send-btn").disabled = isClosed;
+    // Show delete visitor button for admins only
+    var dvBtn = document.getElementById("delete-visitor-btn");
+    if (dvBtn) dvBtn.style.display = (AGENT && AGENT.role === "admin") ? "" : "none";
 
     (data.messages || []).forEach(appendMsg);
     scrollBottom();
@@ -1579,8 +1633,15 @@ function assignConv() {
 
 function closeConv() {
   if (!currentConvId) return;
-  if (!confirm("Konuşmayı kapatmak istediğinizden emin misiniz?")) return;
-  api("POST", "/conversations/close", { conversation_id: currentConvId }).then(function() {
+  document.getElementById("close-send-rating").checked = true;
+  document.getElementById("close-conv-modal").classList.add("open");
+}
+
+function confirmCloseConv() {
+  if (!currentConvId) return;
+  var sendRating = document.getElementById("close-send-rating").checked;
+  closeModal("close-conv-modal");
+  api("POST", "/conversations/close", { conversation_id: currentConvId, send_rating: sendRating }).then(function() {
     document.getElementById("close-btn").style.display = "none";
     document.getElementById("reopen-btn").style.display = "";
     document.getElementById("msg-input").disabled = true;
@@ -1592,6 +1653,20 @@ function closeConv() {
     document.getElementById("active-chat").style.display = "none";
     document.getElementById("no-conv").style.display = "flex";
   });
+}
+
+function deleteVisitorData() {
+  var vid = currentConvSecurity.visitor_id;
+  if (!vid) { toast("Ziyaretçi ID bulunamadı", "error"); return; }
+  if (!confirm("Bu ziyaretçiye ait TÜM veriler (konuşmalar, mesajlar, form yanıtları) kalıcı olarak silinecek. Emin misiniz?")) return;
+  api("DELETE", "/visitors/" + vid + "/data").then(function() {
+    toast("Ziyaretçi verisi silindi");
+    convs = convs.filter(function(c){ return c.visitor_id !== vid; });
+    renderConvList();
+    currentConvId = null;
+    document.getElementById("active-chat").style.display = "none";
+    document.getElementById("no-conv").style.display = "flex";
+  }).catch(function() { toast("Silme başarısız", "error"); });
 }
 
 function reopenConv() {
@@ -1999,7 +2074,40 @@ function loadBotflows() {
   });
 }
 
+var flowOptionsList = [];
+
+function renderFlowOptions() {
+  var el = document.getElementById("flow-opts-list");
+  if (!flowOptionsList.length) {
+    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">Henüz seçenek eklenmedi.</div>';
+    return;
+  }
+  el.innerHTML = flowOptionsList.map(function(o, i) {
+    return '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center">' +
+      '<input type="text" value="' + escHtml(o.label) + '" placeholder="Buton metni" ' +
+        'oninput="flowOptionsList['+i+'].label=this.value" ' +
+        'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
+      '<input type="text" value="' + escHtml(o.reply) + '" placeholder="Bot yanıtı" ' +
+        'oninput="flowOptionsList['+i+'].reply=this.value" ' +
+        'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
+      '<button onclick="removeFlowOption('+i+')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>' +
+      '</div>';
+  }).join("");
+}
+
+function addFlowOption() {
+  flowOptionsList.push({ label: "", reply: "" });
+  renderFlowOptions();
+}
+
+function removeFlowOption(i) {
+  flowOptionsList.splice(i, 1);
+  renderFlowOptions();
+}
+
 function showAddFlowForm() {
+  flowOptionsList = [];
+  renderFlowOptions();
   document.getElementById("add-flow-form").style.display = "block";
 }
 
@@ -2010,15 +2118,15 @@ function hideAddFlowForm() {
 function createBotflow() {
   var name = document.getElementById("flow-name").value.trim() || "Ana Akış";
   var greeting = document.getElementById("flow-greeting").value.trim();
-  var options_json = document.getElementById("flow-options").value.trim() || "[]";
   if (!greeting) { toast("Karşılama mesajı zorunlu", "error"); return; }
-  try { JSON.parse(options_json); } catch(e) { toast("Seçenekler geçersiz JSON", "error"); return; }
-  api("POST", "/botflow", { name, greeting, options_json }).then(function() {
+  var validOpts = flowOptionsList.filter(function(o){ return o.label.trim(); });
+  var options_json = JSON.stringify(validOpts.map(function(o){ return {label: o.label.trim(), reply: o.reply.trim()}; }));
+  api("POST", "/botflow", { name: name, greeting: greeting, options_json: options_json }).then(function() {
     toast("Bot akışı oluşturuldu");
     hideAddFlowForm();
     document.getElementById("flow-name").value = "";
     document.getElementById("flow-greeting").value = "";
-    document.getElementById("flow-options").value = "";
+    flowOptionsList = [];
     loadBotflows();
   });
 }
@@ -2211,6 +2319,14 @@ function loadSiteSettings() {
     try { siteBubbles = JSON.parse(data.proactive_bubbles || "[]"); } catch(e) { siteBubbles = []; }
     if (!Array.isArray(siteBubbles)) siteBubbles = [];
     renderBubbles();
+    var dismissDays = parseInt(data.bubble_dismiss_days) || 0;
+    var dismissSel = document.getElementById("set-bubble-dismiss");
+    if (dismissSel) {
+      // Pick the closest option
+      var opts = [0,1,3,7,14,999];
+      var best = opts.reduce(function(a,b){ return Math.abs(b-dismissDays) < Math.abs(a-dismissDays) ? b : a; });
+      dismissSel.value = String(best);
+    }
   }).catch(function() {});
 }
 
@@ -2269,19 +2385,27 @@ function renderBubbles() {
     el.innerHTML = '<div style="font-size:12px;color:#94a3b8">Henüz baloncuk eklenmedi.</div>';
     return;
   }
-  el.innerHTML = siteBubbles.map(function(text, i) {
+  el.innerHTML = siteBubbles.map(function(item, i) {
+    var text  = typeof item === "string" ? item : (item.text || "");
+    var color = typeof item === "object" && item.color ? item.color : "#1e293b";
+    var size  = typeof item === "object" && item.size  ? item.size  : "normal";
+    var sizeLabel = {small:"Küçük", normal:"Normal", large:"Büyük"}[size] || "Normal";
     return '<div style="display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px">' +
+      '<span style="width:16px;height:16px;border-radius:3px;background:' + escHtml(color) + ';flex-shrink:0;display:inline-block"></span>' +
       '<span style="flex:1;font-size:13px">💬 ' + escHtml(text) + '</span>' +
+      '<span style="font-size:11px;color:#94a3b8">' + escHtml(sizeLabel) + '</span>' +
       '<button onclick="removeBubble(' + i + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:14px">✕</button>' +
       '</div>';
   }).join("");
 }
 
 function addBubble() {
-  var inp = document.getElementById("bubble-input");
+  var inp   = document.getElementById("bubble-input");
+  var color = document.getElementById("bubble-color").value;
+  var size  = document.getElementById("bubble-size").value;
   var v = inp.value.trim();
   if (!v) { inp.focus(); return; }
-  siteBubbles.push(v);
+  siteBubbles.push({ text: v, color: color, size: size });
   inp.value = "";
   renderBubbles();
   saveSettings(true);
@@ -2291,6 +2415,13 @@ function removeBubble(i) {
   siteBubbles.splice(i, 1);
   renderBubbles();
   saveSettings(true);
+}
+
+function saveBubbleDismiss() {
+  var days = parseInt(document.getElementById("set-bubble-dismiss").value) || 0;
+  api("PUT", "/settings", { bubble_dismiss_days: days }).then(function() {
+    toast("Kaydedildi");
+  });
 }
 
 function saveSettings(silent) {

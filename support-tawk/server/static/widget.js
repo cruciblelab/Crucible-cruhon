@@ -36,6 +36,7 @@
     icon: "",
     radius: 16,
     texts: {},
+    bubble_dismiss_days: 0,
   };
 
   // ── i18n ──────────────────────────────────────────────────────────────────
@@ -615,24 +616,45 @@
 
   function hideProactiveBubbles() { bubbleWrap.innerHTML = ""; }
 
+  function _bubbleDismissed() {
+    var until = localStorage.getItem("st_bubble_dismiss_until");
+    if (until && parseInt(until) > Date.now()) return true;
+    if (until) localStorage.removeItem("st_bubble_dismiss_until");
+    return sessionStorage.getItem("st_bubbles_dismissed") === "1";
+  }
+
+  function _dismissBubbles() {
+    hideProactiveBubbles();
+    if (cfg.bubble_dismiss_days > 0) {
+      localStorage.setItem("st_bubble_dismiss_until", String(Date.now() + cfg.bubble_dismiss_days * 86400000));
+    } else {
+      sessionStorage.setItem("st_bubbles_dismissed", "1");
+    }
+  }
+
   function showProactiveBubbles() {
     if (state.open) return;
-    if (sessionStorage.getItem("st_bubbles_dismissed") === "1") return;
+    if (_bubbleDismissed()) return;
     hideProactiveBubbles();
-    cfg.proactive_bubbles.slice(0, 3).forEach(function (text) {
+    cfg.proactive_bubbles.slice(0, 3).forEach(function (item) {
+      var text = typeof item === "string" ? item : (item && item.text);
       if (!text) return;
+      var color = (typeof item === "object" && item.color) ? item.color : "";
+      var size  = (typeof item === "object" && item.size)  ? item.size  : "normal";
       var b = document.createElement("div");
       b.className = "st-bubble-pop";
+      if (color) b.style.background = color;
+      if (size === "small") b.style.fontSize = "12px";
+      else if (size === "large") b.style.fontSize = "16px";
       b.textContent = text;
-      b.addEventListener("click", function () { hideProactiveBubbles(); openChat(); });
+      b.addEventListener("click", function () { _dismissBubbles(); openChat(); });
       var x = document.createElement("button");
       x.className = "st-bubble-x";
       x.textContent = "✕";
       x.setAttribute("aria-label", "Kapat");
       x.addEventListener("click", function (e) {
         e.stopPropagation();
-        hideProactiveBubbles();
-        sessionStorage.setItem("st_bubbles_dismissed", "1");
+        _dismissBubbles();
       });
       b.appendChild(x);
       bubbleWrap.appendChild(b);
@@ -668,6 +690,7 @@
     }
 
     // Admin tanımlı bildirim baloncukları (widget üstünde)
+    cfg.bubble_dismiss_days = typeof data.bubble_dismiss_days === "number" ? data.bubble_dismiss_days : 0;
     cfg.proactive_bubbles = Array.isArray(data.proactive_bubbles) ? data.proactive_bubbles : [];
     if (cfg.proactive_bubbles.length) {
       setTimeout(showProactiveBubbles, 1500);
@@ -700,7 +723,9 @@
     if (!state.ws || state.ws.readyState > 1) {
       connectWS();
     }
-    setTimeout(function () { inputEl.focus(); }, 300);
+    if (window.innerWidth > 480) {
+      setTimeout(function () { inputEl.focus(); }, 300);
+    }
   }
 
   function closeChat() {
@@ -996,7 +1021,7 @@
         (field.field_type === "email" ? "E-posta adresinizi yazın…" :
          field.field_type === "phone" ? "Telefon numaranızı yazın…" :
          field.field_type === "number" ? "Sayı girin…" : "Yanıtınızı yazın…");
-      inputEl.focus();
+      if (window.innerWidth > 480) inputEl.focus();
     }
   }
 
@@ -1069,8 +1094,7 @@
       inputEl.disabled = true;
       sendBtn.disabled = true;
       appendSystemMsg(t("conv_closed_msg"));
-      // Show rating form
-      if (!state.rating_submitted) {
+      if (!state.rating_submitted && data.request_rating !== false) {
         ratingForm.style.display = "flex";
       }
 

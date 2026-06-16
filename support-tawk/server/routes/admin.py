@@ -86,6 +86,7 @@ class AssignRequest(BaseModel):
 
 class CloseRequest(BaseModel):
     conversation_id: int
+    send_rating: bool = True
 
 
 class SendMessageRequest(BaseModel):
@@ -161,6 +162,7 @@ class AppSettingsUpdate(BaseModel):
     widget_icon: Optional[str] = None      # buton ikonu (emoji)
     widget_radius: Optional[int] = None    # köşe yuvarlaklığı (px)
     widget_texts: Optional[str] = None     # JSON: {"key": "metin", ...} dil metni geçersiz kılma
+    bubble_dismiss_days: Optional[int] = None  # 0=oturum, N=N gün
 
 
 class NoteCreate(BaseModel):
@@ -483,7 +485,8 @@ async def close_conversation(req: CloseRequest, agent: Agent = Depends(get_curre
 
     await manager.send_to_visitor(conv.visitor_id, {
         "type": "conversation_closed",
-        "message": "Konuşma kapatıldı. Teşekkürler."
+        "message": "Konuşma kapatıldı. Teşekkürler.",
+        "request_rating": req.send_rating,
     })
     await manager.broadcast_to_agents({
         "type": "conversation_closed",
@@ -966,6 +969,8 @@ def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_
         data["widget_radius"] = str(max(0, min(28, req.widget_radius)))
     if req.widget_texts is not None:
         data["widget_texts"] = req.widget_texts
+    if req.bubble_dismiss_days is not None:
+        data["bubble_dismiss_days"] = str(max(0, req.bubble_dismiss_days))
     for key, value in data.items():
         (Setting.insert(key=key, value=str(value), updated_at=datetime.utcnow())
          .on_conflict(conflict_target=[Setting.key],
@@ -1387,6 +1392,24 @@ def set_visitor_field(visitor_id: str, req: VisitorFieldCreate, agent: Agent = D
 @router.delete("/visitors/{visitor_id}/fields/{key}")
 def delete_visitor_field(visitor_id: str, key: str, agent: Agent = Depends(get_current_agent)):
     VisitorField.delete().where(VisitorField.visitor_id == visitor_id, VisitorField.key == key).execute()
+    return {"ok": True}
+
+
+@router.delete("/visitors/{visitor_id}/data")
+def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_admin)):
+    conv_ids = [c.id for c in Conversation.select(Conversation.id).where(Conversation.visitor_id == visitor_id)]
+    if conv_ids:
+        Message.delete().where(Message.conversation_id.in_(conv_ids)).execute()
+        Note.delete().where(Note.conversation_id.in_(conv_ids)).execute()
+        Rating.delete().where(Rating.conversation_id.in_(conv_ids)).execute()
+        ConversationTag.delete().where(ConversationTag.conversation_id.in_(conv_ids)).execute()
+        FormSubmission.delete().where(FormSubmission.conversation_id.in_(conv_ids)).execute()
+        Conversation.delete().where(Conversation.id.in_(conv_ids)).execute()
+    FormSubmission.delete().where(FormSubmission.visitor_id == visitor_id).execute()
+    VisitorField.delete().where(VisitorField.visitor_id == visitor_id).execute()
+    VisitorPageView.delete().where(VisitorPageView.visitor_id == visitor_id).execute()
+    OfflineMessage.delete().where(OfflineMessage.visitor_id == visitor_id).execute()
+    _audit(admin.display_name or admin.username, "delete_visitor_data", "visitor", None, visitor_id)
     return {"ok": True}
 
 

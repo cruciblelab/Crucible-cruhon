@@ -27,7 +27,7 @@ async def _cleanup_loop():
     while True:
         await asyncio.sleep(86400)  # günde bir
         try:
-            cutoff = datetime.utcnow() - timedelta(days=7)
+            cutoff = datetime.utcnow() - timedelta(days=14)
             old_ids = [c.id for c in Conversation.select(Conversation.id)
                        .where(Conversation.status == "closed", Conversation.closed_at < cutoff)]
             if old_ids:
@@ -132,6 +132,10 @@ def public_config():
     except Exception:
         widget_radius = 16
     try:
+        bubble_dismiss_days = int(overrides.get("bubble_dismiss_days", "0") or 0)
+    except Exception:
+        bubble_dismiss_days = 0
+    try:
         widget_texts = json.loads(overrides.get("widget_texts", "{}"))
         if not isinstance(widget_texts, dict):
             widget_texts = {}
@@ -153,6 +157,7 @@ def public_config():
         "widget_icon": overrides.get("widget_icon", ""),
         "widget_radius": widget_radius,
         "widget_texts": widget_texts,
+        "bubble_dismiss_days": bubble_dismiss_days,
     }
 
 
