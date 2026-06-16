@@ -24,6 +24,7 @@ from ..auth import (
     hash_password, verify_password, create_token,
     get_current_agent, require_admin, require_permission, verify_ws_token,
     agent_permissions, validate_password_strength, PERMISSIONS,
+    check_login_rate, record_login_failure, reset_login_rate, _DUMMY_HASH,
 )
 from ..ws_manager import manager
 from ..config import config
@@ -231,10 +232,22 @@ class FieldOrderRequest(BaseModel):
 @router.post("/login")
 def login(req: LoginRequest, request: Request):
     ip = seclog.client_ip(request)
+
+    # App-level rate limit — checked before hitting the DB
+    check_login_rate(ip, req.username)
+
     agent = Agent.get_or_none(Agent.username == req.username, Agent.is_active == True)
-    if not agent or not verify_password(req.password, agent.password_hash):
+
+    # Always run bcrypt to prevent username enumeration via response time
+    candidate_hash = agent.password_hash if agent else _DUMMY_HASH
+    password_ok = verify_password(req.password, candidate_hash)
+
+    if not agent or not password_ok:
+        record_login_failure(ip, req.username)
         seclog.login_failed(ip, req.username)
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    reset_login_rate(ip, req.username)
     seclog.login_ok(ip, req.username)
     token = create_token(agent.id, agent.role)
     return {

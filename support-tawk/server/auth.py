@@ -1,8 +1,10 @@
 from __future__ import annotations
 import json
+import time
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
+from threading import Lock
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .config import config
@@ -67,6 +69,59 @@ def validate_password_strength(plain: str) -> str | None:
     if classes < 2:
         return "Password must include at least two of: lowercase, uppercase, digits, symbols"
     return None
+
+
+# ── Login rate limiter ────────────────────────────────────────────────────────
+# Sliding-window counter keyed on IP + username.
+# After MAX_ATTEMPTS failures within WINDOW_SECONDS the key is locked for
+# LOCKOUT_SECONDS; the counter resets automatically once that period expires.
+
+_MAX_ATTEMPTS   = 5
+_WINDOW_SECONDS = 600   # 10 min — window tracked for each attempt
+_LOCKOUT_SECONDS = 900  # 15 min — lock duration after hitting the limit
+
+_rl_store: dict[str, list[float]] = {}
+_rl_lock = Lock()
+
+
+def _rl_key(ip: str, username: str) -> str:
+    return f"{ip}\x00{username.lower()}"
+
+
+def check_login_rate(ip: str, username: str) -> None:
+    """Raise HTTP 429 if this IP+username combo is currently locked out."""
+    key = _rl_key(ip, username)
+    now = time.monotonic()
+    with _rl_lock:
+        ts = [t for t in _rl_store.get(key, []) if now - t < _LOCKOUT_SECONDS]
+        _rl_store[key] = ts
+        if len(ts) >= _MAX_ATTEMPTS:
+            retry_after = int(_LOCKOUT_SECONDS - (now - ts[0]))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Try again in {retry_after // 60 + 1} minutes.",
+                headers={"Retry-After": str(max(retry_after, 1))},
+            )
+
+
+def record_login_failure(ip: str, username: str) -> None:
+    key = _rl_key(ip, username)
+    now = time.monotonic()
+    with _rl_lock:
+        ts = [t for t in _rl_store.get(key, []) if now - t < _LOCKOUT_SECONDS]
+        ts.append(now)
+        _rl_store[key] = ts
+
+
+def reset_login_rate(ip: str, username: str) -> None:
+    key = _rl_key(ip, username)
+    with _rl_lock:
+        _rl_store.pop(key, None)
+
+
+# Dummy hash used when username not found — keeps response time constant
+# to prevent username enumeration via timing.
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
 
 
 def hash_password(plain: str) -> str:
