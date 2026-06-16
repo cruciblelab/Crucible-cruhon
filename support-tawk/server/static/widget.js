@@ -268,7 +268,7 @@
     ".fw-reply-hint { background:#f0fdf4; color:#15803d; padding:9px 13px; border-radius:9px; font-size:12.5px; border:1px solid #bbf7d0; }",
     ".fw-success { text-align:center; padding:24px 16px; }",
     ".fw-success .fw-tick { font-size:48px; margin-bottom:12px; }",
-    ".fw-success p { font-size:13.5px; color:#64748b; margin-top:6px; }"
+    ".fw-success p { font-size:13.5px; color:#64748b; margin-top:6px; }",
     ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
     "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
     "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-wrapper.st-chat-open #st-btn { display:none; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
