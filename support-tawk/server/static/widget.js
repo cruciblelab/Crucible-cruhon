@@ -89,6 +89,7 @@
       forget_me: "Verilerimi sil",
       forget_confirm: "İsim, e-posta ve geçmiş oturum bilgileriniz bu cihazdan silinecek. Sunucudaki konuşmalar 2 hafta daha saklanır. Devam edilsin mi?",
       forget_done: "Verileriniz silindi.",
+      form_thanks: "Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede sizinle ilgilenecek.",
     },
     en: {
       aria_chat: "Support Chat",
@@ -138,6 +139,7 @@
       forget_me: "Clear my data",
       forget_confirm: "Your name, email and session info will be removed from this device. Server-side conversations are kept for 2 weeks. Continue?",
       forget_done: "Your data has been cleared.",
+      form_thanks: "Thank you! Your information has been received. Our support team will assist you shortly.",
     },
   };
 
@@ -167,17 +169,14 @@
     conv_closed: false,
     rating_submitted: false,
     bot_flow: null,
-    bot_shown: false,
     emoji_open: false,
     proactive_timer: null,
     at_bottom: true,
     new_msg_count: 0,
-    offline_mode: false,
     waiting: false,
     form_data: null,
     form_step: 0,
     form_answers: {},
-    form_shown: false,
     form_active: false,
     banned: false,
     ban_reason: "",
@@ -784,6 +783,7 @@
   }
 
   function showWaitMode() {
+    state.waiting = true;
     infoForm.style.display = "none";
     chatArea.style.display = "none";
     offlineForm.style.display = "none";
@@ -983,67 +983,90 @@
   }
 
   // ── Bot flow ──────────────────────────────────────────────────────────────
+  // Relays bot/visitor-authored text to the server so it becomes a real,
+  // persisted chat message and survives reconnects (see handleMessage's
+  // "history" branch — once anything is persisted, this never re-runs).
+  function sendBotText(content, senderName) {
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify({ type: "bot_text", content: content, sender_name: senderName || "Bot" }));
+    }
+  }
+
+  function sendVisitorText(content) {
+    appendMsg({ sender_type: "visitor", content: content, created_at: new Date().toISOString() });
+    scrollBottom();
+    var payload = {
+      type: "message",
+      content: content,
+      visitor_name: state.name,
+      visitor_email: state.email,
+      page_url: window.location.href,
+    };
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify(payload));
+    } else {
+      state.pending.push(payload);
+      connectWS();
+    }
+  }
+
   function showBotFlow() {
-    if (!state.bot_flow || state.bot_shown) return;
-    state.bot_shown = true;
+    if (!state.bot_flow) return;
     appendMsg({
       sender_type: "bot",
       sender_name: "Bot",
       content: state.bot_flow.greeting,
     });
-    if (state.bot_flow.options && state.bot_flow.options.length) {
-      var optDiv = document.createElement("div");
-      optDiv.className = "st-bot-options";
-      state.bot_flow.options.forEach(function(opt) {
-        var b = document.createElement("button");
-        b.className = "st-bot-btn";
-        b.textContent = opt.label;
-        b.addEventListener("click", function() {
-          optDiv.remove();
-          appendMsg({ sender_type: "visitor", content: opt.label });
-          if (opt.reply) {
-            setTimeout(function() {
-              appendMsg({ sender_type: "bot", sender_name: "Bot", content: opt.reply });
-              scrollBottom();
-            }, 600);
-          }
-          if (state.ws && state.ws.readyState === 1) {
-            state.ws.send(JSON.stringify({
-              type: "message",
-              content: opt.label,
-              visitor_name: state.name,
-              visitor_email: state.email,
-              page_url: window.location.href,
-            }));
-            // Eğer bu seçenek bir departmana yönlendiriyorsa bildir
-            if (opt.department_id) {
-              state.ws.send(JSON.stringify({
-                type: "set_department",
-                department_id: opt.department_id,
-              }));
-            }
-          }
-        });
-        optDiv.appendChild(b);
+    sendBotText(state.bot_flow.greeting, "Bot");
+    renderBotOptions();
+  }
+
+  function renderBotOptions() {
+    if (!state.bot_flow || !state.bot_flow.options || !state.bot_flow.options.length) return;
+    var optDiv = document.createElement("div");
+    optDiv.className = "st-bot-options";
+    state.bot_flow.options.forEach(function(opt) {
+      var b = document.createElement("button");
+      b.className = "st-bot-btn";
+      b.textContent = opt.label;
+      b.addEventListener("click", function() {
+        optDiv.remove();
+        sendVisitorText(opt.label);
+        if (opt.reply) {
+          setTimeout(function() {
+            appendMsg({ sender_type: "bot", sender_name: "Bot", content: opt.reply });
+            sendBotText(opt.reply, "Bot");
+            scrollBottom();
+          }, 600);
+        }
+        // Eğer bu seçenek bir departmana yönlendiriyorsa bildir
+        if (opt.department_id && state.ws && state.ws.readyState === 1) {
+          state.ws.send(JSON.stringify({
+            type: "set_department",
+            department_id: opt.department_id,
+          }));
+        }
       });
-      messagesEl.appendChild(optDiv);
-      scrollBottom();
-    }
+      optDiv.appendChild(b);
+    });
+    messagesEl.appendChild(optDiv);
+    scrollBottom();
   }
 
   // ── Form flow (in-chat) ────────────────────────────────────────────────────
   function startFormInChat() {
-    if (!state.form_data || state.form_shown) return;
-    state.form_shown = true;
+    if (!state.form_data) return;
     state.form_active = true;
     state.form_step = 0;
     state.form_answers = {};
     // Greet with welcome text
+    var welcome = state.form_data.welcome_text || state.form_data.name;
     appendMsg({
       sender_type: "bot",
       sender_name: state.form_data.name,
-      content: state.form_data.welcome_text || state.form_data.name,
+      content: welcome,
     });
+    sendBotText(welcome, state.form_data.name);
     scrollBottom();
     setTimeout(function() { askNextFormField(); }, 500);
   }
@@ -1057,6 +1080,7 @@
     var qText = "(" + (step + 1) + "/" + total + ") " + field.label + (field.required ? " *" : "");
 
     appendMsg({ sender_type: "bot", sender_name: state.form_data.name, content: qText });
+    sendBotText(qText, state.form_data.name);
     scrollBottom();
 
     if (field.field_type === "select" || field.field_type === "radio") {
@@ -1070,11 +1094,11 @@
         btn.addEventListener("click", function() {
           optDiv.remove();
           state.form_answers[String(field.id)] = opt.label;
-          appendMsg({ sender_type: "visitor", content: opt.label, created_at: new Date().toISOString() });
-          scrollBottom();
+          sendVisitorText(opt.label);
           if (opt.reply) {
             setTimeout(function() {
               appendMsg({ sender_type: "bot", sender_name: state.form_data.name, content: opt.reply });
+              sendBotText(opt.reply, state.form_data.name);
               scrollBottom();
               setTimeout(function() { state.form_step++; askNextFormField(); }, 700);
             }, 450);
@@ -1109,10 +1133,9 @@
           star.addEventListener("click", function() {
             ratingDiv.remove();
             state.form_answers[String(field.id)] = score + "/5 ⭐";
-            appendMsg({ sender_type: "visitor", content: score + "/5 ⭐", created_at: new Date().toISOString() });
+            sendVisitorText(score + "/5 ⭐");
             state.form_step++;
             setTimeout(function() { askNextFormField(); }, 350);
-            scrollBottom();
           });
           starsRow.appendChild(star);
         })(i);
@@ -1136,11 +1159,13 @@
     state.form_active = false;
     inputEl.placeholder = t("input_placeholder");
 
+    var thanks = "✅ " + t("form_thanks");
     appendMsg({
       sender_type: "bot",
       sender_name: state.form_data.name,
-      content: "✅ Thank you! Your information has been received. Our support team will assist you shortly.",
+      content: thanks,
     });
+    sendBotText(thanks, state.form_data.name);
     scrollBottom();
 
     fetch(SERVER + "/api/form/submit", {
@@ -1182,21 +1207,34 @@
         statusEl.textContent = data.config.agents_online ? t("status_online") : t("status_waiting_reply");
       }
       messagesEl.innerHTML = "";
-      if (!data.messages || !data.messages.length) {
-        if (state.form_data && !state.form_shown) {
+      var histMsgs = data.messages || [];
+      var hasVisitorMsg = histMsgs.some(function (m) { return m.sender_type === "visitor"; });
+      if (!histMsgs.length) {
+        // Nothing persisted yet for this conversation — offer the form/bot/
+        // welcome. Once any of these relay their text via sendBotText(),
+        // history will never be empty again, so this branch won't re-fire
+        // on later reconnects (no duplicate greetings).
+        if (state.form_data) {
           startFormInChat();
         } else if (state.bot_flow) {
           showBotFlow();
+        } else if (data.config && data.config.agents_online === false) {
+          showOfflineForm();
         } else {
           appendWelcome();
         }
       } else {
-        data.messages.forEach(appendMsg);
+        histMsgs.forEach(appendMsg);
+        // Re-offer bot option buttons after a reconnect if the visitor
+        // hasn't picked one yet (the greeting itself is already in history).
+        if (!hasVisitorMsg && state.bot_flow) {
+          renderBotOptions();
+        }
+        if (data.config && !data.config.agents_online) {
+          appendSystemMsg(t("all_offline"));
+        }
       }
       scrollBottom();
-      if (data.config && !data.config.agents_online) {
-        appendSystemMsg(t("all_offline"));
-      }
 
     } else if (data.type === "message") {
       appendMsg(data.message);
@@ -1344,11 +1382,10 @@
       var field = fields[state.form_step];
       if (field) {
         state.form_answers[String(field.id)] = content;
-        appendMsg({ sender_type: "visitor", content: content, created_at: new Date().toISOString() });
-        scrollBottom();
+        sendVisitorText(content);
         inputEl.value = "";
         inputEl.style.height = "";
-        inputEl.placeholder = "Mesajınızı yazın...";
+        inputEl.placeholder = t("input_placeholder");
         state.form_step++;
         setTimeout(function() { askNextFormField(); }, 350);
         return;

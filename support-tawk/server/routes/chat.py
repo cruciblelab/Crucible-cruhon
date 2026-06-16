@@ -332,6 +332,33 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                                   update={VisitorField.value: value})
                      .execute())
 
+            elif msg_type == "bot_text":
+                # Relays bot/form-flow generated text (greeting, option reply,
+                # form question, etc.) into real chat history so it survives
+                # reconnects instead of living only in the widget's DOM.
+                content = str(data.get("content", "")).strip()
+                if not content:
+                    continue
+                content = content[:config.limits.max_message_length]
+                sender_name = str(data.get("sender_name", "Bot")).strip()[:64] or "Bot"
+
+                msg = Message.create(
+                    conversation=conv,
+                    sender_type="bot",
+                    sender_id="bot",
+                    sender_name=sender_name,
+                    content=content,
+                )
+                Conversation.update(updated_at=datetime.utcnow()).where(Conversation.id == conv.id).execute()
+
+                payload = {
+                    "type": "message",
+                    "conversation_id": conv.id,
+                    "message": _msg_dict(msg),
+                }
+                await manager.broadcast_to_watchers(conv.id, payload)
+                await manager.broadcast_to_agents({**payload, "visitor_name": conv.visitor_name})
+
     except WebSocketDisconnect:
         manager.disconnect_visitor(visitor_id)
         await manager.broadcast_to_agents({

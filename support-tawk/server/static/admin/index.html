@@ -1212,7 +1212,14 @@ function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   }).then(function(r) {
     if (r.status === 401) { logout(); throw new Error("Session expired"); }
-    return r.json().catch(function() { return {}; });
+    return r.json().catch(function() { return {}; }).then(function(data) {
+      if (!r.ok) {
+        var msg = (data && data.detail) || ("Request failed (" + r.status + ")");
+        toast(msg, "error");
+        throw new Error(msg);
+      }
+      return data;
+    });
   });
 }
 
