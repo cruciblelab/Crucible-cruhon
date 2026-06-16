@@ -25,14 +25,14 @@
 
   var cfg = {
     color: "#2563eb",
-    welcome_message: "Merhaba! Size nasıl yardımcı olabilirim?",
-    site_name: "Destek",
+    welcome_message: "Hello! How can I help you?",
+    site_name: "Support",
     notification_sound: true,
     proactive_delay_seconds: 0,
     default_width: 360,
     proactive_bubbles: [],
     position: "right",
-    lang: "tr",
+    lang: "en",
     icon: "",
     radius: 16,
     texts: {},
@@ -667,11 +667,11 @@
     cfg.site_name = data.site_name || cfg.site_name;
     cfg.notification_sound = data.notification_sound !== false;
     cfg.proactive_delay_seconds = data.proactive_delay_seconds || 0;
-    title.textContent = data.site_name || "Destek";
+    title.textContent = data.site_name || "Support";
     if (data.widget_color) applyColor(data.widget_color);
 
     // Dil & görünüm (Faz 7)
-    cfg.lang = (data.widget_lang === "en" || data.widget_lang === "tr") ? data.widget_lang : "tr";
+    cfg.lang = (data.language === "en" || data.language === "tr") ? data.language : "en";
     cfg.texts = (data.widget_texts && typeof data.widget_texts === "object") ? data.widget_texts : {};
     applyTexts();
     applyPosition(data.widget_position || "right");

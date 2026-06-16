@@ -13,6 +13,7 @@ class SiteConfig:
     name: str = "Support Tawk"
     domain: str = ""
     logo_url: str = ""
+    language: str = "en"
 
 
 @dataclass
@@ -44,9 +45,9 @@ class DatabaseConfig:
 @dataclass
 class ChatConfig:
     widget_color: str = "#2563eb"
-    welcome_message: str = "Merhaba! Size nasıl yardımcı olabilirim?"
-    offline_message: str = "Şu an çevrimdışıyız, mesajınızı bırakın."
-    response_time_text: str = "Genellikle birkaç dakika içinde yanıtlarız"
+    welcome_message: str = "Hello! How can I help you?"
+    offline_message: str = "We're offline right now. Leave a message and we'll get back to you."
+    response_time_text: str = "Usually replies within a few minutes"
     notification_sound: bool = True
 
 
@@ -67,9 +68,9 @@ class AIConfig:
     provider: str = "openai"
     api_key: str = ""
     model: str = "gpt-3.5-turbo"
-    system_prompt: str = "Sen bir müşteri destek asistanısın. Kibarca ve yardımcı ol."
+    system_prompt: str = "You are a customer support assistant. Be polite and helpful."
     auto_reply: bool = True
-    handoff_message: str = "Sizi bir destek temsilcisine bağlıyorum, lütfen bekleyin."
+    handoff_message: str = "Connecting you to a support agent, please wait."
     confidence_threshold: float = 0.7
 
 

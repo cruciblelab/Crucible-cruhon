@@ -1,75 +1,100 @@
 # Support Tawk
 
-Ücretsiz, self-hosted, her web teknolojisiyle çalışan canlı destek chat sistemi.
+Self-hosted live chat widget for any website. Built with FastAPI + WebSockets — no external services required.
 
-## Kurulum (3 adım)
+## Quick Install (Ubuntu 22.04)
 
-### 1. config.yml'i düzenle
+```bash
+sudo apt update && sudo apt install -y git && \
+git clone https://github.com/cruciblelab/support-tawk.git /opt/support-tawk && \
+sudo bash /opt/support-tawk/install.sh
+```
+
+The installer prompts for domain, company name, admin password and language (English / Turkish). Everything else — Python setup, systemd service, Nginx, SSL, firewall — is handled automatically.
+
+**Silent install (no prompts):**
+```bash
+DOMAIN=chat.yoursite.com SITE_NAME="My Company" ADMIN_PASS="StrongPass" \
+  EMAIL=you@yoursite.com LANG_CHOICE=en \
+  sudo -E bash /opt/support-tawk/install.sh
+```
+
+## Manual / Local Setup
+
+```bash
+git clone https://github.com/cruciblelab/support-tawk.git
+cd support-tawk
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+# Edit config.yml, then:
+python3 -m uvicorn server.main:app --reload
+```
+
+Admin panel: http://localhost:8000/admin  
+Default login: **admin** / **admin123**
+
+## Embed the Widget
+
+```html
+<script src="https://chat.yoursite.com/widget.js"></script>
+</body>
+```
+
+Works with any tech stack — plain HTML, PHP, React, Vue, etc.
+
+## Features
+
+- Live chat widget (vanilla JS, zero dependencies)
+- Real-time WebSocket messaging
+- Agent roles with granular permissions
+- Department routing
+- Bot flows (keyword-triggered auto-replies)
+- Proactive chat bubbles
+- File & image sharing
+- Visitor info panel (browser, OS, location, page history)
+- Canned replies with `/shortcuts`
+- Conversation tagging and priority
+- Work hour schedules per agent
+- Webhooks / integrations
+- CSV export & audit log
+- AI assistant (OpenAI / Anthropic)
+- **English and Turkish UI** (set in config, changeable in admin settings)
+
+## Languages
+
+`config.yml`:
 ```yaml
 site:
-  name: "Şirketim"
-admin:
-  default_username: "admin"
-  default_password: "guclu_sifre_yaz"
+  language: "en"   # en | tr
 ```
 
-### 2. Başlat
-```bash
-docker compose up -d
-```
+Change at any time in the admin panel under **Site Settings** — no restart needed.
 
-### 3. Widgeti sitenize ekle (tek satır)
-```html
-<script src="https://sunucunuz.com/widget.js"></script>
-```
+## AI Integration
 
-PHP, HTML, Python Flask, Node.js — herhangi bir teknoloji çalışır.
-
----
-
-## Admin Panel
-
-`https://sunucunuz.com/admin` → config.yml'deki bilgilerle giriş yapın.
-
-### Özellikler
-- Tüm konuşmalar tek havuzda
-- "Üstüme Al" ile konuşma devralma
-- Gerçek zamanlı WebSocket mesajlaşma
-- Hazır yanıtlar (`/selamla` gibi kısayollarla)
-- Dosya / resim yükleme
-- AI otomatik yanıt (OpenAI veya Anthropic)
-- Temsilci hesabı yönetimi
-- Tarayıcı bildirimleri
-
----
-
-## AI Entegrasyonu
-
-config.yml:
 ```yaml
 ai:
   enabled: true
-  provider: "openai"      # openai | anthropic
+  provider: "openai"   # openai | anthropic
   api_key: "sk-..."
   auto_reply: true
 ```
 
----
-
-## Docker'sız Kurulum
-
-```bash
-pip install -r requirements.txt
-python -m uvicorn server.main:app --host 0.0.0.0 --port 8000
-```
-
----
-
-## Dosya Limitleri (config.yml)
+## File Limits
 
 ```yaml
 limits:
   max_file_size_mb: 10
-  max_image_size_mb: 5
-  allowed_file_types: [jpg, png, pdf, docx]
+  allowed_file_types: [jpg, png, pdf, docx, zip]
 ```
+
+## Stack
+
+- **Backend:** Python 3.11+, FastAPI, Uvicorn, Peewee ORM, SQLite
+- **Frontend:** Vanilla JS (no framework)
+- **Auth:** PyJWT + bcrypt
+- **Deploy:** systemd + Nginx + Let's Encrypt
+
+---
+
+Built by [Crucible Lab](https://github.com/cruciblelab)

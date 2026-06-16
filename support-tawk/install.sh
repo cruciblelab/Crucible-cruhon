@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 #
-# Support Tawk — Tek Komutluk Otomatik Kurulum
-# ---------------------------------------------
-# Kullanım (sunucuda root olarak):
+# Support Tawk — One-Command Auto Installer
+# ------------------------------------------
+# Usage (as root on your server):
 #
-#   bash <(curl -fsSL https://raw.githubusercontent.com/cruciblelab/crucible-cruhon/main/support-tawk/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/cruciblelab/support-tawk/main/install.sh)
 #
-# ya da depo zaten indirildiyse:
+# Or if you already cloned the repo:
 #
-#   cd /opt/crucible-cruhon/support-tawk && sudo bash install.sh
+#   cd /opt/support-tawk && sudo bash install.sh
 #
-# İsteğe bağlı ortam değişkenleri (sormadan kurmak için):
-#   DOMAIN=chat.siteniz.com  ADMIN_PASS=GucluSifre  SITE_NAME="Şirketim"  EMAIL=ben@siteniz.com
+# Optional env vars (to skip prompts):
+#   DOMAIN=chat.yoursite.com  ADMIN_PASS=StrongPass  SITE_NAME="My Company"
+#   EMAIL=you@yoursite.com    LANG_CHOICE=en
 #
 set -euo pipefail
 
-# ── Renkler ───────────────────────────────────────────────────────────────────
+# ── Colors ────────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; C=$'\e[36m'; W=$'\e[1m'; X=$'\e[0m'
 else
@@ -27,12 +28,11 @@ warn() { echo "${Y}!${X} $*"; }
 err()  { echo "${R}✗ $*${X}" >&2; }
 step() { echo; echo "${W}${B}── $* ${X}"; }
 
-trap 'err "Kurulum bir hatayla durdu (satır $LINENO). Yukarıdaki mesaja bakın."' ERR
+trap 'err "Installation failed at line $LINENO. Check the output above."' ERR
 
-# ── Ayarlar ───────────────────────────────────────────────────────────────────
-REPO_URL="https://github.com/cruciblelab/crucible-cruhon.git"
-APP_DIR="/opt/crucible-cruhon"
-SUB_DIR="$APP_DIR/support-tawk"
+# ── Settings ──────────────────────────────────────────────────────────────────
+REPO_URL="https://github.com/cruciblelab/support-tawk.git"
+APP_DIR="/opt/support-tawk"
 SERVICE="support-tawk"
 PORT="8000"
 
@@ -40,96 +40,108 @@ DOMAIN="${DOMAIN:-}"
 ADMIN_PASS="${ADMIN_PASS:-}"
 SITE_NAME="${SITE_NAME:-}"
 EMAIL="${EMAIL:-}"
+LANG_CHOICE="${LANG_CHOICE:-}"
 
-# ── 0. Ön kontroller ──────────────────────────────────────────────────────────
-step "Ön kontroller"
+# ── 0. Pre-checks ─────────────────────────────────────────────────────────────
+step "Pre-checks"
 if [ "$(id -u)" -ne 0 ]; then
-  err "Bu betik root yetkisiyle çalışmalı. Şunu deneyin:  sudo bash install.sh"
+  err "This script must be run as root. Try:  sudo bash install.sh"
   exit 1
 fi
 if ! grep -qi "ubuntu\|debian" /etc/os-release 2>/dev/null; then
-  warn "Bu betik Ubuntu/Debian için yazıldı. Farklı dağıtımda sorun çıkabilir."
+  warn "This script is written for Ubuntu/Debian. Other distributions may have issues."
 fi
-ok "root yetkisi var"
+ok "Running as root"
 
-# ── 1. Bilgileri topla ────────────────────────────────────────────────────────
-step "Kurulum bilgileri"
+# ── 1. Collect information ────────────────────────────────────────────────────
+step "Setup information"
+if [ -z "$LANG_CHOICE" ]; then
+  echo "  Choose admin panel language:"
+  echo "  1) English (default)"
+  echo "  2) Turkish (Türkçe)"
+  read -rp "  Selection [1/2]: " _lang_sel
+  case "$_lang_sel" in
+    2) LANG_CHOICE="tr" ;;
+    *) LANG_CHOICE="en" ;;
+  esac
+fi
+ok "Language: $LANG_CHOICE"
+
 if [ -z "$DOMAIN" ]; then
-  read -rp "Alan adınız (örn: chat.siteniz.com) — yoksa boş bırakın: " DOMAIN
+  read -rp "Your domain (e.g. chat.yoursite.com) — leave blank to skip: " DOMAIN
 fi
 if [ -z "$SITE_NAME" ]; then
-  read -rp "Şirket/Site adı [Destek Hattı]: " SITE_NAME
-  SITE_NAME="${SITE_NAME:-Destek Hattı}"
+  read -rp "Company / site name [Support Desk]: " SITE_NAME
+  SITE_NAME="${SITE_NAME:-Support Desk}"
 fi
 if [ -z "$ADMIN_PASS" ]; then
-  read -rsp "Admin şifresi belirleyin (boş bırakırsanız otomatik üretilir): " ADMIN_PASS; echo
+  read -rsp "Admin password (leave blank to auto-generate): " ADMIN_PASS; echo
 fi
 if [ -z "$ADMIN_PASS" ]; then
   ADMIN_PASS="$(head -c 9 /dev/urandom | base64 | tr -d '/+=' | head -c 12)"
   GENERATED_PASS=1
 fi
 if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
-  read -rp "SSL sertifikası için e-posta (Let's Encrypt) — atlamak için boş bırakın: " EMAIL
+  read -rp "Email for SSL certificate (Let's Encrypt) — leave blank to skip: " EMAIL
 fi
 SECRET_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
-ok "Bilgiler alındı"
+ok "Information collected"
 
-# ── 2. Sistem paketleri ───────────────────────────────────────────────────────
-step "Sistem paketleri kuruluyor (1-3 dk)"
+# ── 2. System packages ────────────────────────────────────────────────────────
+step "Installing system packages (1-3 min)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip git nginx \
   libmagic1 certbot python3-certbot-nginx ufw >/dev/null
-ok "python3, git, nginx, certbot ve bağımlılıklar kuruldu"
+ok "python3, git, nginx, certbot and dependencies installed"
 
-# ── 3. Depoyu indir / güncelle ────────────────────────────────────────────────
-step "Uygulama indiriliyor"
-if [ -d "$SUB_DIR/.git" ] || [ -d "$APP_DIR/.git" ]; then
-  info "Depo zaten var, güncelleniyor…"
-  git -C "$APP_DIR" pull --ff-only || warn "git pull atlandı (yerel değişiklikler olabilir)"
+# ── 3. Download / update repo ─────────────────────────────────────────────────
+step "Downloading application"
+if [ -d "$APP_DIR/.git" ]; then
+  info "Repository already exists, updating…"
+  git -C "$APP_DIR" pull --ff-only || warn "git pull skipped (local changes may exist)"
 elif [ -f "$(pwd)/server/main.py" ]; then
-  info "Betik depo içinden çalıştırıldı, mevcut dosyalar kullanılıyor"
-  APP_DIR="$(cd .. && pwd)"; SUB_DIR="$(pwd)"
+  info "Running from inside the repo, using existing files"
+  APP_DIR="$(pwd)"
 else
   git clone --depth 1 "$REPO_URL" "$APP_DIR"
 fi
-cd "$SUB_DIR"
-ok "Uygulama hazır: $SUB_DIR"
+cd "$APP_DIR"
+ok "Application ready: $APP_DIR"
 
-# ── 4. Python ortamı ──────────────────────────────────────────────────────────
-step "Python ortamı kuruluyor"
+# ── 4. Python environment ─────────────────────────────────────────────────────
+step "Setting up Python environment"
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt -q
-ok "Bağımlılıklar yüklendi"
+ok "Dependencies installed"
 
-# ── 5. config.yml ayarla ──────────────────────────────────────────────────────
-step "Yapılandırma yazılıyor"
-[ -f config.yml ] || cp config.example.yml config.yml 2>/dev/null || true
-# Mevcut config.yml üzerinde anahtarları güncelle
+# ── 5. Configure config.yml ───────────────────────────────────────────────────
+step "Writing configuration"
 PUBLIC_URL="${DOMAIN:+https://$DOMAIN}"; PUBLIC_URL="${PUBLIC_URL:-http://localhost:$PORT}"
-python3 - "$SITE_NAME" "$PUBLIC_URL" "$SECRET_KEY" "$ADMIN_PASS" <<'PY'
+python3 - "$SITE_NAME" "$PUBLIC_URL" "$SECRET_KEY" "$ADMIN_PASS" "$LANG_CHOICE" <<'PY'
 import re, sys
-name, domain, secret, passwd = sys.argv[1:5]
+name, domain, secret, passwd, lang = sys.argv[1:6]
 with open("config.yml", encoding="utf-8") as f:
     c = f.read()
 def repl(pattern, value):
     global c
     c = re.sub(pattern, value, c, count=1, flags=re.M)
-repl(r'^(\s*name:\s*).*$',            r'\g<1>"%s"' % name)
-repl(r'^(\s*domain:\s*).*$',          r'\g<1>"%s"' % domain)
-repl(r'^(\s*secret_key:\s*).*$',      r'\g<1>"%s"' % secret)
-repl(r'^(\s*default_password:\s*).*$',r'\g<1>"%s"' % passwd)
+repl(r'^(\s*name:\s*).*$',             r'\g<1>"%s"' % name)
+repl(r'^(\s*domain:\s*).*$',           r'\g<1>"%s"' % domain)
+repl(r'^(\s*secret_key:\s*).*$',       r'\g<1>"%s"' % secret)
+repl(r'^(\s*default_password:\s*).*$', r'\g<1>"%s"' % passwd)
+repl(r'^(\s*language:\s*).*$',         r'\g<1>"%s"' % lang)
 with open("config.yml", "w", encoding="utf-8") as f:
     f.write(c)
-print("config.yml güncellendi")
+print("config.yml updated")
 PY
-ok "config.yml yazıldı (gizli anahtar + admin şifresi)"
+ok "config.yml written (secret key, admin password, language)"
 
-# ── 6. Systemd servisi ────────────────────────────────────────────────────────
-step "Otomatik başlatma servisi"
+# ── 6. Systemd service ────────────────────────────────────────────────────────
+step "Setting up auto-start service"
 cat > "/etc/systemd/system/${SERVICE}.service" <<EOF
 [Unit]
 Description=Support Tawk Live Chat
@@ -137,8 +149,8 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=$SUB_DIR
-ExecStart=$SUB_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $PORT
+WorkingDirectory=$APP_DIR
+ExecStart=$APP_DIR/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port $PORT
 Restart=always
 RestartSec=5
 
@@ -150,15 +162,15 @@ systemctl enable "$SERVICE" >/dev/null 2>&1
 systemctl restart "$SERVICE"
 sleep 2
 if systemctl is-active --quiet "$SERVICE"; then
-  ok "Servis çalışıyor (otomatik başlatma açık)"
+  ok "Service is running (auto-start enabled)"
 else
-  err "Servis başlamadı. Log için:  journalctl -u $SERVICE -n 40"
+  err "Service failed to start. Check logs:  journalctl -u $SERVICE -n 40"
   exit 1
 fi
 
 # ── 7. Nginx ──────────────────────────────────────────────────────────────────
 if [ -n "$DOMAIN" ]; then
-  step "Nginx ters proxy ayarlanıyor"
+  step "Configuring Nginx reverse proxy"
   cat > "/etc/nginx/sites-available/${SERVICE}" <<EOF
 server {
     listen 80;
@@ -182,58 +194,59 @@ EOF
   rm -f /etc/nginx/sites-enabled/default
   if nginx -t >/dev/null 2>&1; then
     systemctl reload nginx
-    ok "Nginx ayarlandı ($DOMAIN → 127.0.0.1:$PORT)"
+    ok "Nginx configured ($DOMAIN → 127.0.0.1:$PORT)"
   else
-    err "Nginx yapılandırması hatalı. Kontrol:  nginx -t"
+    err "Nginx configuration error. Check:  nginx -t"
     exit 1
   fi
 
   # ── 8. SSL ─────────────────────────────────────────────────────────────────
   if [ -n "$EMAIL" ]; then
-    step "SSL sertifikası alınıyor"
+    step "Obtaining SSL certificate"
     if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect >/dev/null 2>&1; then
-      ok "HTTPS etkin (sertifika otomatik yenilenecek)"
+      ok "HTTPS enabled (certificate auto-renews)"
     else
-      warn "SSL alınamadı. Alan adının DNS'i bu sunucuya bakıyor mu? Sonra şunu çalıştırın:"
+      warn "SSL failed. Is your domain's DNS pointing to this server? Run manually:"
       warn "  certbot --nginx -d $DOMAIN"
     fi
   else
-    warn "E-posta verilmedi, SSL atlandı. Sonra:  certbot --nginx -d $DOMAIN"
+    warn "No email provided, SSL skipped. Run later:  certbot --nginx -d $DOMAIN"
   fi
 fi
 
-# ── 9. Güvenlik duvarı ────────────────────────────────────────────────────────
-step "Güvenlik duvarı"
+# ── 9. Firewall ───────────────────────────────────────────────────────────────
+step "Configuring firewall"
 ufw allow 22 >/dev/null 2>&1 || true
 ufw allow 80 >/dev/null 2>&1 || true
 ufw allow 443 >/dev/null 2>&1 || true
 yes | ufw enable >/dev/null 2>&1 || true
-ok "Portlar açıldı (22, 80, 443)"
+ok "Ports opened (22, 80, 443)"
 
-# ── Özet ──────────────────────────────────────────────────────────────────────
+# ── Summary ───────────────────────────────────────────────────────────────────
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 PANEL_URL="${DOMAIN:+https://$DOMAIN/admin}"; PANEL_URL="${PANEL_URL:-http://$SERVER_IP:$PORT/admin}"
 echo
 echo "${G}${W}════════════════════════════════════════════════${X}"
-echo "${G}${W}  🎉  Support Tawk kuruldu ve çalışıyor!${X}"
+echo "${G}${W}  🎉  Support Tawk installed and running!${X}"
 echo "${G}${W}════════════════════════════════════════════════${X}"
 echo
-echo "  ${W}Admin paneli:${X}  $PANEL_URL"
-echo "  ${W}Kullanıcı:${X}     admin"
+echo "  ${W}Admin panel:${X}   $PANEL_URL"
+echo "  ${W}Username:${X}      admin"
 if [ "${GENERATED_PASS:-0}" = "1" ]; then
-  echo "  ${W}Şifre:${X}        ${Y}$ADMIN_PASS${X}   ${R}(bunu kaydedin! otomatik üretildi)${X}"
+  echo "  ${W}Password:${X}      ${Y}$ADMIN_PASS${X}   ${R}← save this! auto-generated${X}"
 else
-  echo "  ${W}Şifre:${X}        (belirlediğiniz şifre)"
+  echo "  ${W}Password:${X}      (the password you set)"
 fi
+echo "  ${W}Language:${X}      $LANG_CHOICE"
 echo
-echo "  ${C}Faydalı komutlar:${X}"
-echo "    Durum:      systemctl status $SERVICE"
-echo "    Loglar:     journalctl -u $SERVICE -f"
-echo "    Yeniden:    systemctl restart $SERVICE"
-echo "    Güncelle:   cd $APP_DIR && git pull && systemctl restart $SERVICE"
+echo "  ${C}Useful commands:${X}"
+echo "    Status:     systemctl status $SERVICE"
+echo "    Logs:       journalctl -u $SERVICE -f"
+echo "    Restart:    systemctl restart $SERVICE"
+echo "    Update:     cd $APP_DIR && git pull && systemctl restart $SERVICE"
 echo
 if [ -z "$DOMAIN" ]; then
-  warn "Alan adı vermediniz. Panele şu an IP üzerinden erişebilirsiniz:"
-  warn "  http://$SERVER_IP:$PORT/admin   (HTTPS için alan adıyla tekrar çalıştırın)"
+  warn "No domain provided. Access the panel via IP for now:"
+  warn "  http://$SERVER_IP:$PORT/admin   (re-run with a domain for HTTPS)"
 fi
 echo

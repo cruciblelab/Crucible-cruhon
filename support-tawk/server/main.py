@@ -1,18 +1,18 @@
 from __future__ import annotations
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-# Allow running from the support-tawk directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from server.config import config
 from server.database import database, Agent, Conversation, Message, Setting, init_db
@@ -22,10 +22,13 @@ from server.routes.admin import router as admin_router
 from server.routes.files import router as files_router
 from server.routes.forms import router as forms_router
 
+_static = Path(__file__).parent / "static"
+_SUPPORTED_LANGS = {"en", "tr"}
+
 
 async def _cleanup_loop():
     while True:
-        await asyncio.sleep(86400)  # günde bir
+        await asyncio.sleep(86400)
         try:
             cutoff = datetime.utcnow() - timedelta(days=14)
             old_ids = [c.id for c in Conversation.select(Conversation.id)
@@ -33,9 +36,9 @@ async def _cleanup_loop():
             if old_ids:
                 Message.delete().where(Message.conversation_id.in_(old_ids)).execute()
                 Conversation.delete().where(Conversation.id.in_(old_ids)).execute()
-                print(f"[Support Tawk] {len(old_ids)} eski konuşma silindi")
+                print(f"[Support Tawk] Deleted {len(old_ids)} old conversations")
         except Exception as e:
-            print(f"[Support Tawk] Temizlik hatası: {e}")
+            print(f"[Support Tawk] Cleanup error: {e}")
 
 
 @asynccontextmanager
@@ -52,10 +55,10 @@ def _seed_admin():
         Agent.create(
             username=config.admin.default_username,
             password_hash=hash_password(config.admin.default_password),
-            display_name="Yönetici",
+            display_name="Administrator",
             role="admin",
         )
-        print(f"[Support Tawk] Admin hesabı oluşturuldu: {config.admin.default_username}")
+        print(f"[Support Tawk] Admin account created: {config.admin.default_username}")
 
 
 app = FastAPI(
@@ -78,8 +81,6 @@ app.include_router(admin_router)
 app.include_router(files_router)
 app.include_router(forms_router)
 
-# Serve static files (widget + admin panel)
-_static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 
@@ -91,14 +92,24 @@ def serve_widget():
 @app.get("/admin", include_in_schema=False)
 @app.get("/admin/{path:path}", include_in_schema=False)
 def serve_admin(path: str = ""):
-    # Serve real static assets under /admin/ (login.html, etc.) when they exist,
-    # otherwise fall back to the SPA entry point.
     if path:
         admin_dir = (_static / "admin").resolve()
         candidate = (admin_dir / path).resolve()
         if str(candidate).startswith(str(admin_dir) + os.sep) and candidate.is_file():
             return FileResponse(str(candidate))
     return FileResponse(str(_static / "admin" / "index.html"))
+
+
+@app.get("/api/locale/{lang}")
+def get_locale(lang: str):
+    lang = lang.lower()
+    if lang not in _SUPPORTED_LANGS:
+        lang = "en"
+    locale_file = _static / "locales" / f"{lang}.json"
+    if not locale_file.exists():
+        raise HTTPException(status_code=404, detail="Locale not found")
+    with open(locale_file, encoding="utf-8") as f:
+        return JSONResponse(json.load(f))
 
 
 @app.get("/")
@@ -115,7 +126,6 @@ def root():
 
 @app.get("/api/config")
 def public_config():
-    import json
     overrides = {s.key: s.value for s in Setting.select()}
     try:
         bubbles = json.loads(overrides.get("proactive_bubbles", "[]"))
@@ -141,6 +151,14 @@ def public_config():
             widget_texts = {}
     except Exception:
         widget_texts = {}
+
+    active_lang = overrides.get("language", config.site.language) or "en"
+    # Legacy key migration
+    if active_lang == "en" and overrides.get("widget_lang") == "tr":
+        active_lang = "tr"
+    if active_lang not in _SUPPORTED_LANGS:
+        active_lang = "en"
+
     return {
         "site_name": overrides.get("site_name", config.site.name),
         "widget_color": overrides.get("widget_color", config.chat.widget_color),
@@ -153,7 +171,7 @@ def public_config():
         "widget_width": widget_width,
         "proactive_bubbles": bubbles,
         "widget_position": overrides.get("widget_position", "right"),
-        "widget_lang": overrides.get("widget_lang", "tr"),
+        "language": active_lang,
         "widget_icon": overrides.get("widget_icon", ""),
         "widget_radius": widget_radius,
         "widget_texts": widget_texts,

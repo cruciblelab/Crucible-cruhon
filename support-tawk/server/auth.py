@@ -12,27 +12,24 @@ _SECRET = config.server.secret_key
 _HOURS = config.admin.session_hours
 _bearer = HTTPBearer(auto_error=False)
 
-# ── Yetki (Permission) kataloğu ───────────────────────────────────────────────
-# Her yetki: anahtar → (etiket, açıklama). "admin" rolü tüm yetkilere sahiptir.
 PERMISSIONS = [
-    {"key": "manage_agents",      "label": "Temsilci & Rol Yönetimi", "desc": "Temsilci ekleme/silme, yetki verme"},
-    {"key": "manage_blacklist",   "label": "Kara Liste & Banlama",    "desc": "IP/ziyaretçi engelleme ve kaldırma"},
-    {"key": "manage_departments", "label": "Departman Yönetimi",       "desc": "Departman oluşturma ve atama"},
-    {"key": "manage_settings",    "label": "Site Ayarları",            "desc": "Widget, dil, görünüm ayarları"},
-    {"key": "manage_forms",       "label": "Form Yönetimi",            "desc": "Form oluşturma ve düzenleme"},
-    {"key": "manage_botflow",     "label": "Bot Akışları",             "desc": "Otomatik bot akışlarını yönetme"},
-    {"key": "manage_tags",        "label": "Etiket Yönetimi",          "desc": "Etiket oluşturma/silme"},
-    {"key": "manage_webhooks",    "label": "Webhook Yönetimi",         "desc": "Webhook/entegrasyon ayarları"},
-    {"key": "manage_schedule",    "label": "Mesai Saatleri",           "desc": "Temsilci mesai saatlerini ayarlama"},
-    {"key": "delete_data",        "label": "Veri Silme",               "desc": "Ziyaretçi verilerini kalıcı silme"},
-    {"key": "view_audit",         "label": "Denetim Logu",             "desc": "Yönetici işlem kayıtlarını görme"},
-    {"key": "export_data",        "label": "Dışa Aktarma",             "desc": "CSV/Excel rapor indirme"},
+    {"key": "manage_agents",      "label": "Agent & Role Management",  "desc": "Add/remove agents, assign roles"},
+    {"key": "manage_blacklist",   "label": "Blocklist Management",      "desc": "Block/unblock IPs and visitors"},
+    {"key": "manage_departments", "label": "Department Management",     "desc": "Create and assign departments"},
+    {"key": "manage_settings",    "label": "Site Settings",             "desc": "Widget, language, appearance"},
+    {"key": "manage_forms",       "label": "Form Management",           "desc": "Create and edit forms"},
+    {"key": "manage_botflow",     "label": "Bot Flows",                 "desc": "Manage automated bot flows"},
+    {"key": "manage_tags",        "label": "Tag Management",            "desc": "Create and delete tags"},
+    {"key": "manage_webhooks",    "label": "Webhook Management",        "desc": "Webhook and integration settings"},
+    {"key": "manage_schedule",    "label": "Work Hours",                "desc": "Set agent work schedules"},
+    {"key": "delete_data",        "label": "Data Deletion",             "desc": "Permanently delete visitor data"},
+    {"key": "view_audit",         "label": "Audit Log",                 "desc": "View admin activity logs"},
+    {"key": "export_data",        "label": "Data Export",               "desc": "Download CSV/Excel reports"},
 ]
 PERMISSION_KEYS = {p["key"] for p in PERMISSIONS}
 
 
 def agent_permissions(agent: Agent) -> set:
-    """Bir temsilcinin sahip olduğu yetki anahtarları. Admin = tümü."""
     if agent.role == "admin":
         return set(PERMISSION_KEYS)
     try:
@@ -69,33 +66,31 @@ def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, _SECRET, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token süresi doldu")
+        raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Geçersiz token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def get_current_agent(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> Agent:
     if not creds:
-        raise HTTPException(status_code=401, detail="Kimlik doğrulama gerekli")
+        raise HTTPException(status_code=401, detail="Authentication required")
     payload = decode_token(creds.credentials)
     agent = Agent.get_or_none(Agent.id == int(payload["sub"]), Agent.is_active == True)
     if not agent:
-        raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı")
+        raise HTTPException(status_code=401, detail="User not found")
     return agent
 
 
 def require_admin(agent: Agent = Depends(get_current_agent)) -> Agent:
     if agent.role != "admin":
-        raise HTTPException(status_code=403, detail="Yönetici yetkisi gerekli")
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     return agent
 
 
 def require_permission(perm: str):
-    """Belirli bir yetki gerektiren endpoint'ler için dependency üretir.
-    Admin rolü her zaman geçer."""
     def _dep(agent: Agent = Depends(get_current_agent)) -> Agent:
         if not has_permission(agent, perm):
-            raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok")
+            raise HTTPException(status_code=403, detail="You do not have permission to perform this action")
         return agent
     return _dep
 

@@ -161,7 +161,7 @@ class AppSettingsUpdate(BaseModel):
     proactive_bubbles: Optional[str] = None  # JSON dizisi: ["mesaj1", "mesaj2"]
     # Görünüm & dil
     widget_position: Optional[str] = None  # right | left
-    widget_lang: Optional[str] = None      # tr | en
+    language: Optional[str] = None          # en | tr
     widget_icon: Optional[str] = None      # buton ikonu (emoji)
     widget_radius: Optional[int] = None    # köşe yuvarlaklığı (px)
     widget_texts: Optional[str] = None     # JSON: {"key": "metin", ...} dil metni geçersiz kılma
@@ -988,8 +988,8 @@ def update_site_settings(req: AppSettingsUpdate, admin: Agent = Depends(require_
         data["proactive_bubbles"] = req.proactive_bubbles
     if req.widget_position is not None:
         data["widget_position"] = "left" if req.widget_position == "left" else "right"
-    if req.widget_lang is not None:
-        data["widget_lang"] = req.widget_lang if req.widget_lang in ("tr", "en") else "tr"
+    if req.language is not None:
+        data["language"] = req.language if req.language in ("en", "tr") else "en"
     if req.widget_icon is not None:
         data["widget_icon"] = req.widget_icon[:8]
     if req.widget_radius is not None:

@@ -1,29 +1,30 @@
 # ─────────────────────────────────────────────
-#  Support Tawk — Yapılandırma Dosyası
-#  Kurulumdan önce bu dosyayı doldurun.
+#  Support Tawk — Configuration File
+#  Fill in this file before running the server.
 # ─────────────────────────────────────────────
 
 site:
-  name: "Şirketim"                  # Admin panelinde ve widget başlığında görünür
-  domain: "https://siteniz.com"     # Widgetin gömüleceği sitenin adresi
-  logo_url: ""                      # İsteğe bağlı logo URL'si
+  name: "My Company"                 # Shown in admin panel and widget header
+  domain: "https://yoursite.com"     # Domain where the widget is embedded
+  logo_url: ""                       # Optional logo URL
+  language: "en"                     # Admin panel & widget language: en | tr
 
 server:
   host: "0.0.0.0"
   port: 8000
-  secret_key: "BURAYA_GUCLU_BIR_ANAHTAR_YAZIN"   # JWT imzalama anahtarı, değiştirin
-  cors_origins:                     # Widgete izin verilen origin'ler (* = hepsi)
+  secret_key: "CHANGE_THIS_TO_A_STRONG_RANDOM_KEY"   # JWT signing key — change this!
+  cors_origins:                      # Origins allowed for the widget (* = all)
     - "*"
 
 admin:
   default_username: "admin"
-  default_password: "admin123"      # İlk girişten sonra değiştirin!
+  default_password: "admin123"       # Change this after first login!
   session_hours: 24
 
 database:
-  type: "sqlite"                    # sqlite | postgres | mysql
-  path: "./data/support.db"        # Sadece SQLite için
-  # Postgres/MySQL için aşağıdakileri doldurun:
+  type: "sqlite"                     # sqlite | postgres | mysql
+  path: "./data/support.db"         # SQLite only
+  # For Postgres/MySQL, fill in the following:
   # host: "localhost"
   # port: 5432
   # name: "support_tawk"
@@ -31,15 +32,15 @@ database:
   # password: "dbpassword"
 
 chat:
-  widget_color: "#2563eb"           # Sohbet butonu rengi (hex)
-  welcome_message: "Merhaba! Size nasıl yardımcı olabilirim?"
-  offline_message: "Şu an çevrimdışıyız, mesajınızı bırakın."
-  response_time_text: "Genellikle birkaç dakika içinde yanıtlarız"
+  widget_color: "#2563eb"            # Chat button color (hex)
+  welcome_message: "Hello! How can I help you?"
+  offline_message: "We're offline right now. Leave a message and we'll get back to you."
+  response_time_text: "Usually replies within a few minutes"
   notification_sound: true
 
 limits:
-  max_file_size_mb: 10             # Dosya yükleme limiti
-  max_image_size_mb: 5             # Resim yükleme limiti
+  max_file_size_mb: 10              # File upload limit
+  max_image_size_mb: 5              # Image upload limit
   allowed_file_types:
     - "jpg"
     - "jpeg"
@@ -55,12 +56,12 @@ limits:
 
 ai:
   enabled: false
-  provider: "openai"               # openai | anthropic | none
+  provider: "openai"                 # openai | anthropic | none
   api_key: ""
-  model: "gpt-3.5-turbo"          # OpenAI: gpt-3.5-turbo, gpt-4 | Anthropic: claude-haiku-4-5-20251001
+  model: "gpt-3.5-turbo"           # OpenAI: gpt-3.5-turbo, gpt-4 | Anthropic: claude-haiku-4-5-20251001
   system_prompt: |
-    Sen bir müşteri destek asistanısın. Kibarca ve yardımcı ol.
-    Soruyu cevaplamak için yeterli bilgin yoksa kullanıcıyı bir insana yönlendir.
-  auto_reply: true                 # Destek temsilcisi yokken otomatik cevap ver
-  handoff_message: "Sizi bir destek temsilcisine bağlıyorum, lütfen bekleyin."
-  confidence_threshold: 0.7        # Bu değerin altında AI cevap vermez, insan devreye girer
+    You are a customer support assistant. Be polite and helpful.
+    If you don't have enough information to answer, direct the user to a human agent.
+  auto_reply: true                   # Auto-reply when no agent is available
+  handoff_message: "Connecting you to a support agent, please wait."
+  confidence_threshold: 0.7         # AI won't reply below this threshold; human takes over

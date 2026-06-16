@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -347,22 +347,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <body>
 
 <div id="topbar">
-  <button id="nav-toggle" onclick="toggleNav()" title="Menü">☰</button>
+  <button id="nav-toggle" onclick="toggleNav()" title="Menu">☰</button>
   <div class="logo">💬 Support Tawk</div>
   <div class="spacer"></div>
-  <div class="agent-name" id="agent-name-display">Yükleniyor...</div>
-  <div id="topbar-avatar" onclick="showPage('profile')" title="Profilim">A</div>
-  <button class="logout-btn" onclick="logout()">Çıkış</button>
+  <div class="agent-name" id="agent-name-display">Loading...</div>
+  <div id="topbar-avatar" onclick="showPage('profile')" title="My Profile">A</div>
+  <button class="logout-btn" onclick="logout()">Sign Out</button>
 </div>
 
 <div id="statsbar">
-  <div class="stat-item"><div class="stat-dot" style="background:#f59e0b"></div><span id="stat-open">0 açık</span></div>
-  <div class="stat-item"><div class="stat-dot" style="background:#3b82f6"></div><span id="stat-assigned">0 atanmış</span></div>
-  <div class="stat-item"><div class="stat-dot" style="background:#22c55e"></div><span id="stat-agents">0 temsilci</span></div>
-  <div class="stat-item"><div class="stat-dot" style="background:#8b5cf6"></div><span id="stat-visitors">0 ziyaretçi</span></div>
+  <div class="stat-item"><div class="stat-dot" style="background:#f59e0b"></div><span id="stat-open">0 open</span></div>
+  <div class="stat-item"><div class="stat-dot" style="background:#3b82f6"></div><span id="stat-assigned">0 assigned</span></div>
+  <div class="stat-item"><div class="stat-dot" style="background:#22c55e"></div><span id="stat-agents">0 agent(s)</span></div>
+  <div class="stat-item"><div class="stat-dot" style="background:#8b5cf6"></div><span id="stat-visitors">0 visitor(s)</span></div>
   <div style="margin-left:auto;display:flex;gap:8px">
-    <button class="ch-btn" onclick="openCannedModal()">Hazır Yanıtlar</button>
-    <button class="ch-btn" id="agents-btn" style="display:none" onclick="openAgentsModal()">Temsilciler</button>
+    <button class="ch-btn" onclick="openCannedModal()">Canned Replies</button>
+    <button class="ch-btn" id="agents-btn" style="display:none" onclick="openAgentsModal()">Agents</button>
   </div>
 </div>
 
@@ -370,48 +370,48 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="nav-backdrop" onclick="toggleNav()"></div>
   <!-- Left nav -->
   <div id="left-nav">
-    <!-- Günlük operasyon -->
+    <!-- Daily operations -->
     <div class="nav-item active" data-page="convs" onclick="showPage('convs')">
-      <span class="nav-icon">💬</span> Konuşmalar
+      <span class="nav-icon">💬</span> Conversations
     </div>
     <div class="nav-item" data-page="visitors" onclick="showPage('visitors')">
-      <span class="nav-icon">👥</span> Canlı Ziyaretçiler
+      <span class="nav-icon">👥</span> Live Visitors
     </div>
     <div class="nav-item" data-page="offline-msgs" onclick="showPage('offline-msgs')">
-      <span class="nav-icon">📬</span> Çevrimdışı Mesajlar
+      <span class="nav-icon">📬</span> Offline Messages
     </div>
     <div class="nav-item" data-page="stats" onclick="showPage('stats')">
-      <span class="nav-icon">📊</span> İstatistikler
+      <span class="nav-icon">📊</span> Statistics
     </div>
 
-    <!-- Yönetim grubu -->
-    <div class="nav-group" id="nav-group-mgmt">Yönetim</div>
+    <!-- Management group -->
+    <div class="nav-group" id="nav-group-mgmt">Management</div>
     <div class="nav-item" data-page="departments" id="nav-departments" style="display:none" onclick="showPage('departments')">
-      <span class="nav-icon">🏢</span> Departmanlar
+      <span class="nav-icon">🏢</span> Departments
     </div>
     <div class="nav-item" data-page="botflow" id="nav-botflow" style="display:none" onclick="showPage('botflow')">
-      <span class="nav-icon">🤖</span> Bot Akışları
+      <span class="nav-icon">🤖</span> Bot Flows
     </div>
     <div class="nav-item" data-page="forms" id="nav-forms" style="display:none" onclick="showPage('forms')">
-      <span class="nav-icon">📋</span> Formlar
+      <span class="nav-icon">📋</span> Forms
     </div>
     <div class="nav-item" data-page="tags" id="nav-tags" style="display:none" onclick="showPage('tags')">
-      <span class="nav-icon">🏷️</span> Etiketler
+      <span class="nav-icon">🏷️</span> Tags
     </div>
     <div class="nav-item" data-page="blacklist" id="nav-blacklist" style="display:none" onclick="showPage('blacklist')">
-      <span class="nav-icon">🚫</span> Engel Listesi
+      <span class="nav-icon">🚫</span> Blocklist
     </div>
     <div class="nav-item" data-page="schedule" id="nav-schedule" style="display:none" onclick="showPage('schedule')">
-      <span class="nav-icon">🕐</span> Mesai Saatleri
+      <span class="nav-icon">🕐</span> Work Hours
     </div>
     <div class="nav-item" data-page="webhooks" id="nav-webhooks" style="display:none" onclick="showPage('webhooks')">
       <span class="nav-icon">🔗</span> Webhooks
     </div>
     <div class="nav-item" data-page="settings" id="nav-settings" style="display:none" onclick="showPage('settings')">
-      <span class="nav-icon">⚙️</span> Site Ayarları
+      <span class="nav-icon">⚙️</span> Site Settings
     </div>
     <div class="nav-item" data-page="audit" id="nav-audit" style="display:none" onclick="showPage('audit')">
-      <span class="nav-icon">📋</span> Denetim Logu
+      <span class="nav-icon">📋</span> Audit Log
     </div>
   </div>
 
@@ -422,137 +422,137 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="page active" id="page-convs">
       <div id="sidebar">
         <div id="sidebar-tabs">
-          <div class="stab active" data-tab="open" onclick="switchTab('open')">Açık</div>
-          <div class="stab" data-tab="mine" onclick="switchTab('mine')">Benimkiler</div>
-          <div class="stab" data-tab="dept" onclick="switchTab('dept')" id="tab-dept" style="display:none">Departman</div>
-          <div class="stab" data-tab="closed" onclick="switchTab('closed')">Kapalı</div>
+          <div class="stab active" data-tab="open" onclick="switchTab('open')">Open</div>
+          <div class="stab" data-tab="mine" onclick="switchTab('mine')">Mine</div>
+          <div class="stab" data-tab="dept" onclick="switchTab('dept')" id="tab-dept" style="display:none">Department</div>
+          <div class="stab" data-tab="closed" onclick="switchTab('closed')">Closed</div>
         </div>
         <div id="search-box">
-          <input type="text" id="search-input" placeholder="Konuşma ara..." oninput="filterConvs()">
+          <input type="text" id="search-input" placeholder="Search conversations..." oninput="filterConvs()">
         </div>
         <div id="filter-bar" style="display:flex;align-items:center;gap:6px;padding:4px 10px 6px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#64748b;cursor:pointer">
-            <input type="checkbox" id="filter-unread" onchange="filterConvs()"> Okunmamış
+            <input type="checkbox" id="filter-unread" onchange="filterConvs()"> Unread
           </label>
           <select id="filter-priority" onchange="filterConvs()" style="font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:5px;color:#64748b;outline:none">
-            <option value="">Tüm Öncelikler</option>
-            <option value="high">🔴 Yüksek</option>
+            <option value="">All Priorities</option>
+            <option value="high">🔴 High</option>
             <option value="normal">🟡 Normal</option>
-            <option value="low">🟢 Düşük</option>
+            <option value="low">🟢 Low</option>
           </select>
           <select id="filter-dept" onchange="filterConvs()" style="font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:5px;color:#64748b;outline:none;max-width:90px">
-            <option value="">Tüm Dept.</option>
+            <option value="">All Depts.</option>
           </select>
         </div>
         <div id="bulk-toolbar" style="display:none;padding:4px 10px;background:#eff6ff;border-bottom:1px solid #bfdbfe;align-items:center;gap:6px;flex-wrap:wrap">
           <span id="bulk-count" style="font-size:11px;font-weight:600;color:#2563eb"></span>
-          <button class="btn-sm" onclick="bulkAction('close')">Kapat</button>
-          <button class="btn-sm primary" onclick="bulkAction('assign')">Üstüme Al</button>
-          <button class="btn-sm" onclick="bulkAction('reopen')">Yeniden Aç</button>
-          <button class="btn-sm danger" onclick="clearBulk()">İptal</button>
+          <button class="btn-sm" onclick="bulkAction('close')">Close</button>
+          <button class="btn-sm primary" onclick="bulkAction('assign')">Assign to Me</button>
+          <button class="btn-sm" onclick="bulkAction('reopen')">Reopen</button>
+          <button class="btn-sm danger" onclick="clearBulk()">Cancel</button>
         </div>
         <div id="conv-list"></div>
       </div>
       <div id="chat-panel">
         <div id="no-conv">
           <div class="nc-icon">💬</div>
-          <div>Bir konuşma seçin</div>
+          <div>Select a conversation to start</div>
         </div>
         <div id="active-chat" style="display:none;flex-direction:column;height:100%">
           <div id="chat-header">
-            <button id="mobile-back" onclick="closeChatMobile()" title="Geri">←</button>
+            <button id="mobile-back" onclick="closeChatMobile()" title="Back">←</button>
             <div>
               <div class="ch-name" id="ch-name">-</div>
               <div class="ch-meta" id="ch-meta">-</div>
               <div id="ch-tags" style="margin-top:4px"></div>
             </div>
             <div class="ch-actions">
-              <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Ziyaretçi Bilgisi">👤 Bilgi</button>
-              <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Üstüme Al</button>
-              <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Kapat</button>
-              <button class="ch-btn" id="reopen-btn" onclick="reopenConv()" style="display:none">↺ Yeniden Aç</button>
+              <button class="ch-btn" onclick="toggleVisitorInfo()" id="visitor-info-btn" title="Visitor Info">👤 Info</button>
+              <button class="ch-btn primary" id="assign-btn" onclick="assignConv()">Assign to Me</button>
+              <button class="ch-btn danger" id="close-btn" onclick="closeConv()">Close</button>
+              <button class="ch-btn" id="reopen-btn" onclick="reopenConv()" style="display:none">↺ Reopen</button>
               <div class="ch-more-wrap">
-                <button class="ch-btn" id="ch-more-btn" onclick="toggleChMore(event)" title="Diğer işlemler">⋯</button>
+                <button class="ch-btn" id="ch-more-btn" onclick="toggleChMore(event)" title="More actions">⋯</button>
                 <div class="ch-more-menu" id="ch-more-menu">
-                  <button onclick="openTransferModal(); closeChMore()">↪ Başka temsilciye aktar</button>
-                  <button onclick="exportConv(); closeChMore()">⬇ CSV olarak indir</button>
-                  <button id="ch-more-delete" class="danger" onclick="deleteVisitorData(); closeChMore()" style="display:none">🗑 Ziyaretçi verisini sil</button>
+                  <button onclick="openTransferModal(); closeChMore()">↪ Transfer to agent</button>
+                  <button onclick="exportConv(); closeChMore()">⬇ Download CSV</button>
+                  <button id="ch-more-delete" class="danger" onclick="deleteVisitorData(); closeChMore()" style="display:none">🗑 Delete visitor data</button>
                 </div>
               </div>
             </div>
           </div>
           <div id="chat-subbar">
             <select id="tag-select" onchange="addTagToConv()">
-              <option value="">+ Etiket</option>
+              <option value="">+ Tag</option>
             </select>
-            <select id="priority-select" onchange="setPriority()" title="Öncelik">
-              <option value="low">🟢 Düşük</option>
+            <select id="priority-select" onchange="setPriority()" title="Priority">
+              <option value="low">🟢 Low</option>
               <option value="normal" selected>🟡 Normal</option>
-              <option value="high">🔴 Yüksek</option>
+              <option value="high">🔴 High</option>
             </select>
-            <select id="dept-select" onchange="setConvDept()" title="Departman">
-              <option value="">🏢 Departman</option>
+            <select id="dept-select" onchange="setConvDept()" title="Department">
+              <option value="">🏢 Department</option>
             </select>
           </div>
           <div style="position:relative;flex:1;overflow:hidden;display:flex;flex-direction:column">
-            <button id="scroll-to-bottom">↓ Yeni mesaj <span id="scroll-unread-badge">0</span></button>
+            <button id="scroll-to-bottom">↓ New message <span id="scroll-unread-badge">0</span></button>
             <div id="messages"></div>
           </div>
           <div id="typing-indicator"></div>
           <div id="notes-panel">
             <div class="notes-header">
-              <span class="notes-title">📝 Dahili Notlar</span>
+              <span class="notes-title">📝 Internal Notes</span>
               <button onclick="toggleNotes()" style="background:none;border:none;font-size:12px;color:#854d0e;cursor:pointer" id="notes-toggle">▾</button>
             </div>
             <div id="notes-list"></div>
             <div id="notes-input-row" style="display:flex;gap:8px;margin-top:8px">
-              <input id="note-input" type="text" placeholder="Dahili not ekle..." style="flex:1;padding:6px 10px;border:1px solid #fcd34d;border-radius:6px;font-size:12px;outline:none;background:#fff">
-              <button onclick="addNote()" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Ekle</button>
+              <input id="note-input" type="text" placeholder="Add internal note..." style="flex:1;padding:6px 10px;border:1px solid #fcd34d;border-radius:6px;font-size:12px;outline:none;background:#fff">
+              <button onclick="addNote()" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Add</button>
             </div>
           </div>
           <div style="position:relative">
             <div id="canned-dropdown"></div>
           </div>
           <div id="input-row">
-            <textarea id="msg-input" rows="1" placeholder="Mesajınızı yazın... (/ ile hazır yanıt)"></textarea>
+            <textarea id="msg-input" rows="1" placeholder="Type your message... (/ for canned replies)"></textarea>
             <label class="input-btn file-btn" style="display:flex;align-items:center;cursor:pointer">📎<input type="file" id="file-input" style="display:none"></label>
-            <button class="input-btn" id="send-btn">Gönder</button>
+            <button class="input-btn" id="send-btn">Send</button>
           </div>
         </div>
       </div>
       <div id="visitor-info-panel">
         <div class="vip-section">
-          <h4>Ziyaretçi</h4>
-          <div class="vip-field"><span class="vf-key">Ad:</span><span id="vip-name">-</span></div>
-          <div class="vip-field"><span class="vf-key">E-posta:</span><span id="vip-email">-</span></div>
+          <h4>Visitor</h4>
+          <div class="vip-field"><span class="vf-key">Name:</span><span id="vip-name">-</span></div>
+          <div class="vip-field"><span class="vf-key">Email:</span><span id="vip-email">-</span></div>
           <div class="vip-field"><span class="vf-key">ID:</span><span id="vip-id" style="font-size:10px;word-break:break-all">-</span></div>
         </div>
         <div class="vip-section" id="vip-security-section">
-          <h4>🔐 Güvenlik Bilgileri</h4>
+          <h4>🔐 Security Info</h4>
           <div class="vip-field"><span class="vf-key">IP:</span><span id="vip-ip" style="font-family:monospace;font-size:11px">-</span></div>
-          <div class="vip-field"><span class="vf-key">Konum:</span><span id="vip-location">-</span></div>
-          <div class="vip-field"><span class="vf-key">Dil:</span><span id="vip-lang">-</span></div>
-          <div class="vip-field" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="vf-key">Tarayıcı:</span><span id="vip-ua" style="font-size:10px;color:#64748b;word-break:break-all">-</span></div>
+          <div class="vip-field"><span class="vf-key">Location:</span><span id="vip-location">-</span></div>
+          <div class="vip-field"><span class="vf-key">Language:</span><span id="vip-lang">-</span></div>
+          <div class="vip-field" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="vf-key">Browser:</span><span id="vip-ua" style="font-size:10px;color:#64748b;word-break:break-all">-</span></div>
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-            <button class="btn-sm danger" onclick="banVisitorIp()">🚫 IP Engelle</button>
-            <button class="btn-sm danger" onclick="banVisitorId()">🚫 ID Engelle</button>
+            <button class="btn-sm danger" onclick="banVisitorIp()">🚫 Block IP</button>
+            <button class="btn-sm danger" onclick="banVisitorId()">🚫 Block ID</button>
           </div>
         </div>
         <div class="vip-section">
-          <h4>Özel Alanlar</h4>
+          <h4>Custom Fields</h4>
           <div id="vip-fields-list"></div>
           <div class="custom-field-row">
-            <input id="vip-field-key" placeholder="Alan adı">
-            <input id="vip-field-val" placeholder="Değer">
+            <input id="vip-field-key" placeholder="Field name">
+            <input id="vip-field-val" placeholder="Value">
             <button onclick="addVisitorField()" style="padding:4px 8px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;cursor:pointer">+</button>
           </div>
         </div>
         <div class="vip-section">
-          <h4>Sayfa Geçmişi</h4>
+          <h4>Page History</h4>
           <div id="vip-pages-list"></div>
         </div>
         <div class="vip-section">
-          <h4>Önceki Konuşmalar</h4>
+          <h4>Previous Conversations</h4>
           <div id="vip-history-list"></div>
         </div>
       </div>
@@ -561,62 +561,62 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Stats page -->
     <div class="page" id="page-stats">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-size:18px;font-weight:700">📊 Raporlar &amp; Analitik</h2>
+        <h2 style="font-size:18px;font-weight:700">📊 Reports &amp; Analytics</h2>
         <div id="stats-range" style="display:flex;gap:4px;background:#f1f5f9;border-radius:9px;padding:3px">
-          <button class="range-btn active" data-days="7" onclick="setStatsRange(7)">7 Gün</button>
-          <button class="range-btn" data-days="30" onclick="setStatsRange(30)">30 Gün</button>
-          <button class="range-btn" data-days="90" onclick="setStatsRange(90)">90 Gün</button>
+          <button class="range-btn active" data-days="7" onclick="setStatsRange(7)">7 Days</button>
+          <button class="range-btn" data-days="30" onclick="setStatsRange(30)">30 Days</button>
+          <button class="range-btn" data-days="90" onclick="setStatsRange(90)">90 Days</button>
         </div>
       </div>
       <div class="stats-grid" id="stats-cards">
-        <div class="stat-card"><div class="sc-label">Dönem Konuşmaları</div><div class="sc-value" id="sc-period">-</div><div class="sc-sub" id="sc-total-sub">toplam: -</div></div>
-        <div class="stat-card"><div class="sc-label">Ort. Yanıt Süresi</div><div class="sc-value" id="sc-resp">-</div><div class="sc-sub" id="sc-median-sub">medyan: - dk</div></div>
-        <div class="stat-card"><div class="sc-label">Çözüm Oranı</div><div class="sc-value" id="sc-resolution">-</div><div class="sc-sub">% kapatılan</div></div>
-        <div class="stat-card"><div class="sc-label">Ort. Puan</div><div class="sc-value" id="sc-rating">-</div><div class="sc-sub" id="sc-rating-sub">/ 5 · - oy</div></div>
-        <div class="stat-card"><div class="sc-label">Toplam Mesaj</div><div class="sc-value" id="sc-messages">-</div></div>
-        <div class="stat-card"><div class="sc-label">En Yoğun Gün</div><div class="sc-value" id="sc-busiest" style="font-size:18px">-</div><div class="sc-sub" id="sc-busiest-sub"></div></div>
+        <div class="stat-card"><div class="sc-label">Period Conversations</div><div class="sc-value" id="sc-period">-</div><div class="sc-sub" id="sc-total-sub">total: -</div></div>
+        <div class="stat-card"><div class="sc-label">Avg. Response Time</div><div class="sc-value" id="sc-resp">-</div><div class="sc-sub" id="sc-median-sub">median: - min</div></div>
+        <div class="stat-card"><div class="sc-label">Resolution Rate</div><div class="sc-value" id="sc-resolution">-</div><div class="sc-sub">% closed</div></div>
+        <div class="stat-card"><div class="sc-label">Avg. Rating</div><div class="sc-value" id="sc-rating">-</div><div class="sc-sub" id="sc-rating-sub">/ 5 · - votes</div></div>
+        <div class="stat-card"><div class="sc-label">Total Messages</div><div class="sc-value" id="sc-messages">-</div></div>
+        <div class="stat-card"><div class="sc-label">Busiest Day</div><div class="sc-value" id="sc-busiest" style="font-size:18px">-</div><div class="sc-sub" id="sc-busiest-sub"></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="chart-section">
-          <h3 id="daily-title">Günlük Konuşmalar</h3>
+          <h3 id="daily-title">Daily Conversations</h3>
           <div class="bar-chart" id="daily-chart"></div>
         </div>
         <div class="chart-section">
-          <h3>Saatlik Dağılım</h3>
+          <h3>Hourly Distribution</h3>
           <div class="hourly-chart" id="hourly-chart"></div>
           <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:4px">
             <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
           </div>
         </div>
         <div class="chart-section">
-          <h3>Puan Dağılımı</h3>
+          <h3>Rating Distribution</h3>
           <div id="rating-dist-chart"></div>
         </div>
         <div class="chart-section">
-          <h3>Durum Dağılımı</h3>
+          <h3>Status Distribution</h3>
           <div id="status-chart"></div>
         </div>
         <div class="chart-section">
-          <h3>En Aktif Temsilciler</h3>
+          <h3>Top Agents</h3>
           <div class="top-agents-list" id="top-agents-list"></div>
         </div>
         <div class="chart-section">
-          <h3>Departman Dağılımı</h3>
+          <h3>Department Breakdown</h3>
           <div class="top-agents-list" id="dept-breakdown-list"></div>
         </div>
         <div class="chart-section" id="stats-export-section" style="grid-column:1 / -1">
-          <h3>Dışa Aktar</h3>
+          <h3>Export</h3>
           <p style="font-size:13px;color:#64748b;margin-bottom:8px">CSV:</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-            <button class="btn-sm primary" onclick="exportAllConvs(7)">7 Gün CSV</button>
-            <button class="btn-sm primary" onclick="exportAllConvs(30)">30 Gün CSV</button>
-            <button class="btn-sm primary" onclick="exportAllConvs(90)">90 Gün CSV</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(7)">7 Day CSV</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(30)">30 Day CSV</button>
+            <button class="btn-sm primary" onclick="exportAllConvs(90)">90 Day CSV</button>
           </div>
-          <p style="font-size:13px;color:#64748b;margin-bottom:8px">Excel (IP, konum, öncelik dahil):</p>
+          <p style="font-size:13px;color:#64748b;margin-bottom:8px">Excel (with IP, location, priority):</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(7)">7 Gün Excel</button>
-            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(30)">30 Gün Excel</button>
-            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(90)">90 Gün Excel</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(7)">7 Day Excel</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(30)">30 Day Excel</button>
+            <button class="btn-sm" style="background:#16a34a;color:#fff" onclick="exportAllXlsx(90)">90 Day Excel</button>
           </div>
         </div>
       </div>
@@ -625,12 +625,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Tags page -->
     <div class="page" id="page-tags">
       <div class="page-header">
-        <h2>🏷️ Etiketler</h2>
+        <h2>🏷️ Tags</h2>
       </div>
       <div class="add-tag-row">
-        <input id="new-tag-name" placeholder="Etiket adı" maxlength="64" style="width:180px">
+        <input id="new-tag-name" placeholder="Tag name" maxlength="64" style="width:180px">
         <input id="new-tag-color" type="color" value="#6366f1" style="width:46px;height:38px;border:1px solid #e2e8f0;border-radius:8px;padding:2px;cursor:pointer">
-        <button class="form-submit" onclick="createTag()">Ekle</button>
+        <button class="form-submit" onclick="createTag()">Add</button>
       </div>
       <div class="tags-grid" id="tags-grid"></div>
     </div>
@@ -638,19 +638,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Blacklist page -->
     <div class="page" id="page-blacklist">
       <div class="page-header">
-        <h2>🚫 Engel Listesi</h2>
+        <h2>🚫 Blocklist</h2>
       </div>
       <div class="add-bl-row">
         <select id="new-bl-kind" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
-          <option value="ip">IP Adresi</option>
-          <option value="visitor">Ziyaretçi ID</option>
+          <option value="ip">IP Address</option>
+          <option value="visitor">Visitor ID</option>
         </select>
-        <input id="new-bl-ip" placeholder="IP adresi veya ziyaretçi ID'si" style="max-width:240px">
-        <input id="new-bl-reason" placeholder="Neden (isteğe bağlı)">
-        <button class="form-submit" onclick="addBlacklist()">Ekle</button>
+        <input id="new-bl-ip" placeholder="IP address or visitor ID" style="max-width:240px">
+        <input id="new-bl-reason" placeholder="Reason (optional)">
+        <button class="form-submit" onclick="addBlacklist()">Add</button>
       </div>
       <table class="bl-table" id="bl-table">
-        <thead><tr><th>Tür</th><th>Değer</th><th>Neden</th><th>Tarih</th><th></th></tr></thead>
+        <thead><tr><th>Type</th><th>Value</th><th>Reason</th><th>Date</th><th></th></tr></thead>
         <tbody id="bl-tbody"></tbody>
       </table>
     </div>
@@ -658,27 +658,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Bot Flow page -->
     <div class="page" id="page-botflow">
       <div class="page-header">
-        <h2>🤖 Bot Akışları</h2>
-        <button class="form-submit" onclick="showAddFlowForm()">+ Yeni Akış</button>
+        <h2>🤖 Bot Flows</h2>
+        <button class="form-submit" onclick="showAddFlowForm()">+ New Flow</button>
       </div>
       <div class="add-flow-form" id="add-flow-form" style="display:none">
-        <h3>Yeni Bot Akışı</h3>
+        <h3>New Bot Flow</h3>
         <div class="form-field">
-          <label>Akış Adı</label>
-          <input id="flow-name" placeholder="Ana Akış">
+          <label>Flow Name</label>
+          <input id="flow-name" placeholder="Main Flow">
         </div>
         <div class="form-field">
-          <label>Karşılama Mesajı</label>
-          <textarea id="flow-greeting" rows="2" placeholder="Merhaba! Size nasıl yardımcı olabilirim?"></textarea>
+          <label>Greeting Message</label>
+          <textarea id="flow-greeting" rows="2" placeholder="Hello! How can I help you?"></textarea>
         </div>
         <div class="form-field">
-          <label>Seçenekler</label>
+          <label>Options</label>
           <div id="flow-opts-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
-          <button class="btn-sm" type="button" onclick="addFlowOption()" style="margin-top:2px">+ Seçenek Ekle</button>
+          <button class="btn-sm" type="button" onclick="addFlowOption()" style="margin-top:2px">+ Add Option</button>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="form-submit" onclick="createBotflow()">Kaydet</button>
-          <button class="btn-sm" onclick="hideAddFlowForm()">İptal</button>
+          <button class="form-submit" onclick="createBotflow()">Save</button>
+          <button class="btn-sm" onclick="hideAddFlowForm()">Cancel</button>
         </div>
       </div>
       <div id="flows-list"></div>
@@ -687,20 +687,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Schedule page -->
     <div class="page" id="page-schedule">
       <div class="page-header">
-        <h2>🕐 Mesai Saatleri</h2>
+        <h2>🕐 Work Hours</h2>
       </div>
       <div class="schedule-card">
-        <h3>Temsilci Seçin</h3>
+        <h3>Select Agent</h3>
         <select class="sched-agent-select" id="sched-agent-select" onchange="loadSchedule()">
-          <option value="">Temsilci seçin...</option>
+          <option value="">Select an agent...</option>
         </select>
         <div id="sched-form" style="display:none">
           <div class="form-field" style="margin-bottom:12px">
-            <label>Saat Dilimi</label>
+            <label>Timezone</label>
             <input class="tz-input" id="sched-tz" value="Europe/Istanbul">
           </div>
           <div id="day-rows"></div>
-          <button class="form-submit" style="margin-top:16px" onclick="saveSchedule()">Kaydet</button>
+          <button class="form-submit" style="margin-top:16px" onclick="saveSchedule()">Save</button>
         </div>
       </div>
     </div>
@@ -708,146 +708,146 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Profile page -->
     <div class="page" id="page-profile">
       <div class="profile-card">
-        <h3>👤 Profil Bilgilerim</h3>
+        <h3>👤 My Profile</h3>
         <div class="profile-avatar-preview" id="prof-avatar-preview">A</div>
-        <label class="form-label">Renk</label>
+        <label class="form-label">Color</label>
         <div class="profile-color-row" id="avatar-color-row"></div>
-        <label class="form-label">Kullanıcı Adı</label>
+        <label class="form-label">Username</label>
         <input class="form-input" id="prof-username" readonly style="background:#f8fafc;color:#64748b">
-        <label class="form-label">Görünen Ad</label>
-        <input class="form-input" id="prof-displayname" placeholder="Görünen adınız">
-        <button class="form-submit" onclick="saveProfile()">Profili Kaydet</button>
+        <label class="form-label">Display Name</label>
+        <input class="form-input" id="prof-displayname" placeholder="Your display name">
+        <button class="form-submit" onclick="saveProfile()">Save Profile</button>
       </div>
       <div class="profile-card">
-        <h3>🔐 Şifre Değiştir</h3>
-        <label class="form-label">Yeni Şifre</label>
-        <input class="form-input" id="prof-new-password" type="password" placeholder="Yeni şifre">
-        <label class="form-label">Şifre Tekrar</label>
-        <input class="form-input" id="prof-confirm-password" type="password" placeholder="Şifreyi tekrar girin">
-        <button class="form-submit" onclick="changePassword()">Şifreyi Değiştir</button>
+        <h3>🔐 Change Password</h3>
+        <label class="form-label">New Password</label>
+        <input class="form-input" id="prof-new-password" type="password" placeholder="New password">
+        <label class="form-label">Confirm Password</label>
+        <input class="form-input" id="prof-confirm-password" type="password" placeholder="Confirm password">
+        <button class="form-submit" onclick="changePassword()">Change Password</button>
       </div>
     </div>
 
     <!-- Settings page (admin only) -->
     <div class="page" id="page-settings">
       <div class="settings-section">
-        <h3>🌐 Site Ayarları</h3>
+        <h3>🌐 Site Settings</h3>
         <div class="settings-row">
-          <label>Site Adı</label>
+          <label>Site Name</label>
           <input type="text" id="set-site-name" placeholder="Support Tawk">
         </div>
         <div class="settings-row">
-          <label>Widget Rengi</label>
+          <label>Widget Color</label>
           <input type="color" id="set-widget-color" value="#2563eb" style="width:46px;height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:2px;cursor:pointer">
         </div>
         <div class="settings-row">
-          <label>Karşılama Mesajı</label>
-          <textarea id="set-welcome-msg" placeholder="Merhaba! Size nasıl yardımcı olabilirim?"></textarea>
+          <label>Greeting Message</label>
+          <textarea id="set-welcome-msg" placeholder="Hello! How can I help you?"></textarea>
         </div>
         <div class="settings-row">
-          <label>Çevrimdışı Mesajı</label>
-          <input type="text" id="set-offline-msg" placeholder="Şu an çevrimdışıyız...">
+          <label>Offline Message</label>
+          <input type="text" id="set-offline-msg" placeholder="We're offline right now...">
         </div>
         <div class="settings-row">
-          <label>Proaktif Açılma (saniye)</label>
-          <input type="number" id="set-proactive" min="0" max="300" placeholder="0 = kapalı" style="width:120px">
+          <label>Proactive Open (seconds)</label>
+          <input type="number" id="set-proactive" min="0" max="300" placeholder="0 = disabled" style="width:120px">
         </div>
         <div class="settings-row">
-          <label>Bildirim Sesi</label>
+          <label>Notification Sound</label>
           <div class="toggle-wrap">
             <label class="toggle">
               <input type="checkbox" id="set-notif-sound" checked>
               <span class="toggle-slider"></span>
             </label>
-            <span>Açık</span>
+            <span>Open</span>
           </div>
         </div>
         <div class="settings-row">
-          <label>Varsayılan Widget Genişliği (px)</label>
+          <label>Default Widget Width (px)</label>
           <input type="number" id="set-widget-width" min="280" max="560" step="10" placeholder="360" style="width:120px">
-          <small style="color:#94a3b8;margin-left:8px">280–560 arası · Ziyaretçi kenardan kendi de ayarlayabilir</small>
+          <small style="color:#94a3b8;margin-left:8px">280–560 range · Visitors can also resize from the edge</small>
         </div>
         <div style="margin-top:16px">
-          <button class="form-submit" onclick="saveSettings()">Ayarları Kaydet</button>
+          <button class="form-submit" onclick="saveSettings()">Save Settings</button>
         </div>
       </div>
 
       <div class="settings-section" style="margin-top:16px">
-        <h3>🎨 Widget Görünüm &amp; Dil</h3>
+        <h3>🎨 Widget Appearance &amp; Language</h3>
         <div class="settings-row">
-          <label>Konum</label>
+          <label>Position</label>
           <select id="set-widget-position" style="width:160px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
-            <option value="right">Sağ alt</option>
-            <option value="left">Sol alt</option>
+            <option value="right">Bottom right</option>
+            <option value="left">Bottom left</option>
           </select>
         </div>
         <div class="settings-row">
-          <label>Dil</label>
+          <label>Language</label>
           <select id="set-widget-lang" onchange="onWidgetLangChange()" style="width:160px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
-            <option value="tr">Türkçe</option>
+            <option value="tr">Turkish</option>
             <option value="en">English</option>
           </select>
         </div>
         <div class="settings-row">
-          <label>Buton İkonu</label>
-          <input type="text" id="set-widget-icon" maxlength="4" placeholder="örn: 💬 (boş = varsayılan)" style="width:160px">
-          <small style="color:#94a3b8;margin-left:8px">Emoji veya tek karakter</small>
+          <label>Button Icon</label>
+          <input type="text" id="set-widget-icon" maxlength="4" placeholder="e.g. 💬 (empty = default)" style="width:160px">
+          <small style="color:#94a3b8;margin-left:8px">Emoji or single character</small>
         </div>
         <div class="settings-row">
-          <label>Köşe Yuvarlaklığı (px)</label>
+          <label>Corner Radius (px)</label>
           <input type="number" id="set-widget-radius" min="0" max="28" step="2" placeholder="16" style="width:120px">
           <small style="color:#94a3b8;margin-left:8px">0–28 px</small>
         </div>
         <div style="margin-top:16px">
-          <button class="form-submit" onclick="saveSettings()">Ayarları Kaydet</button>
+          <button class="form-submit" onclick="saveSettings()">Save Settings</button>
         </div>
       </div>
 
       <div class="settings-section" style="margin-top:16px">
-        <h3>📝 Widget Metinleri (Özelleştirme)</h3>
-        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Boş bırakılan alanlar seçili dilin varsayılan metnini kullanır. Buradan widget'taki yazıları kendinize göre değiştirebilirsiniz.</p>
+        <h3>📝 Widget Text Overrides</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Empty fields use the default text for the selected language. Override widget text here.</p>
         <div id="widget-texts-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
         <div style="margin-top:16px">
-          <button class="form-submit" onclick="saveWidgetTexts()">Metinleri Kaydet</button>
+          <button class="form-submit" onclick="saveWidgetTexts()">Save Texts</button>
         </div>
       </div>
 
       <div class="settings-section" style="margin-top:16px">
-        <h3>🔔 Bildirim Baloncukları</h3>
-        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Widget kapalıyken butonun üstünde baloncuk olarak gösterilir. Ziyaretçi tıklayınca sohbet açılır.</p>
+        <h3>🔔 Proactive Bubbles</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Shown as bubbles above the chat button when it is closed. Clicking opens the chat.</p>
         <div class="settings-row">
-          <label>Kapatınca Tekrar Gösterim</label>
+          <label>Show Again After Dismiss</label>
           <select id="set-bubble-dismiss" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none;width:200px">
-            <option value="0">Her oturumda göster</option>
-            <option value="1">1 gün sonra tekrar göster</option>
-            <option value="3">3 gün sonra tekrar göster</option>
-            <option value="7">7 gün sonra tekrar göster</option>
-            <option value="14">14 gün sonra tekrar göster</option>
-            <option value="999">Bir daha gösterme</option>
+            <option value="0">Show every session</option>
+            <option value="1">Show again after 1 day</option>
+            <option value="3">Show again after 3 days</option>
+            <option value="7">Show again after 7 days</option>
+            <option value="14">Show again after 14 days</option>
+            <option value="999">Never show again</option>
           </select>
         </div>
         <div style="margin-top:10px">
-          <button class="form-submit" onclick="saveBubbleDismiss()">Kaydet</button>
+          <button class="form-submit" onclick="saveBubbleDismiss()">Save</button>
         </div>
         <div id="bubbles-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;margin-top:16px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
           <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
-            <label style="font-size:11px;font-weight:600;color:#64748b">Metin</label>
-            <input type="text" id="bubble-input" placeholder="Yardıma mı ihtiyacınız var? 👋" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
+            <label style="font-size:11px;font-weight:600;color:#64748b">Text</label>
+            <input type="text" id="bubble-input" placeholder="Need help? 👋" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none">
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:11px;font-weight:600;color:#64748b">Renk</label>
+            <label style="font-size:11px;font-weight:600;color:#64748b">Color</label>
             <input type="color" id="bubble-color" value="#1e293b" style="width:46px;height:38px;border:1px solid #e2e8f0;border-radius:7px;padding:2px;cursor:pointer">
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:11px;font-weight:600;color:#64748b">Boyut</label>
+            <label style="font-size:11px;font-weight:600;color:#64748b">Size</label>
             <select id="bubble-size" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
-              <option value="small">Küçük</option>
+              <option value="small">Small</option>
               <option value="normal" selected>Normal</option>
-              <option value="large">Büyük</option>
+              <option value="large">Large</option>
             </select>
           </div>
-          <button class="form-submit" onclick="addBubble()">Ekle</button>
+          <button class="form-submit" onclick="addBubble()">Add</button>
         </div>
       </div>
     </div>
@@ -855,11 +855,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Live Visitors page -->
     <div class="page" id="page-visitors">
       <div class="page-header">
-        <h2>👥 Canlı Ziyaretçiler</h2>
-        <button class="form-submit" onclick="loadLiveVisitors()">Yenile</button>
+        <h2>👥 Live Visitors</h2>
+        <button class="form-submit" onclick="loadLiveVisitors()">Refresh</button>
       </div>
       <table class="gen-table" id="visitors-table">
-        <thead><tr><th>Ziyaretçi</th><th>Sayfa</th><th>Durum</th><th>Konuşma</th></tr></thead>
+        <thead><tr><th>Visitor</th><th>Page</th><th>Status</th><th>Conversation</th></tr></thead>
         <tbody id="visitors-tbody"></tbody>
       </table>
     </div>
@@ -870,9 +870,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <h2>🔗 Webhooks</h2>
       </div>
       <div class="settings-section" style="max-width:700px;margin-bottom:16px">
-        <h3>Yeni Webhook Ekle</h3>
+        <h3>Add New Webhook</h3>
         <div class="form-row">
-          <input id="wh-name" placeholder="İsim" value="Webhook">
+          <input id="wh-name" placeholder="Name" value="Webhook">
           <select id="wh-type" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;flex:1">
             <option value="generic">Generic</option>
             <option value="slack">Slack</option>
@@ -882,12 +882,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div class="form-row">
           <input id="wh-url" placeholder="Webhook URL" style="flex:2">
-          <input id="wh-tg-chat" placeholder="Telegram Chat ID (opsiyonel)">
+          <input id="wh-tg-chat" placeholder="Telegram Chat ID (optional)">
         </div>
         <div class="form-row">
           <input id="wh-events" placeholder='["new_conversation","new_message","offline_message"]' value='["new_conversation","new_message","offline_message"]' style="flex:1">
         </div>
-        <button class="form-submit" onclick="createWebhook()">Ekle</button>
+        <button class="form-submit" onclick="createWebhook()">Add</button>
       </div>
       <div id="webhooks-list"></div>
     </div>
@@ -895,11 +895,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Offline Messages page -->
     <div class="page" id="page-offline-msgs">
       <div class="page-header">
-        <h2>📬 Çevrimdışı Mesajlar</h2>
-        <button class="form-submit" onclick="loadOfflineMsgs()">Yenile</button>
+        <h2>📬 Offline Messages</h2>
+        <button class="form-submit" onclick="loadOfflineMsgs()">Refresh</button>
       </div>
       <table class="gen-table">
-        <thead><tr><th>Ziyaretçi</th><th>E-posta</th><th>Mesaj</th><th>Sayfa</th><th>Tarih</th><th></th></tr></thead>
+        <thead><tr><th>Visitor</th><th>Email</th><th>Message</th><th>Page</th><th>Date</th><th></th></tr></thead>
         <tbody id="offline-msgs-tbody"></tbody>
       </table>
     </div>
@@ -907,11 +907,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Audit Log page -->
     <div class="page" id="page-audit">
       <div class="page-header">
-        <h2>📋 Denetim Logu</h2>
-        <button class="form-submit" onclick="loadAuditLog()">Yenile</button>
+        <h2>📋 Audit Log</h2>
+        <button class="form-submit" onclick="loadAuditLog()">Refresh</button>
       </div>
       <table class="gen-table">
-        <thead><tr><th>Temsilci</th><th>İşlem</th><th>Hedef</th><th>Detay</th><th>Tarih</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Action</th><th>Target</th><th>Detail</th><th>Date</th></tr></thead>
         <tbody id="audit-tbody"></tbody>
       </table>
     </div>
@@ -919,20 +919,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Departments page -->
     <div class="page" id="page-departments" style="flex-direction:column;overflow-y:auto;padding:24px">
       <div class="page-header">
-        <h2>🏢 Departmanlar</h2>
-        <button class="form-submit" onclick="showAddDeptForm()">+ Yeni Departman</button>
+        <h2>🏢 Departments</h2>
+        <button class="form-submit" onclick="showAddDeptForm()">+ New Department</button>
       </div>
       <div id="add-dept-form" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;max-width:600px">
-        <h3 style="margin:0 0 12px;font-size:14px">Yeni Departman</h3>
+        <h3 style="margin:0 0 12px;font-size:14px">New Department</h3>
         <div class="form-row">
-          <input id="dept-name" placeholder="Departman adı (örn: Teknik Destek)">
-          <input id="dept-icon" placeholder="İkon" value="💼" style="max-width:60px;text-align:center">
+          <input id="dept-name" placeholder="Department name (e.g. Technical Support)">
+          <input id="dept-icon" placeholder="Icon" value="💼" style="max-width:60px;text-align:center">
           <input id="dept-color" type="color" value="#6366f1" style="width:42px;height:38px;border:1px solid #e2e8f0;border-radius:7px;padding:2px;cursor:pointer">
         </div>
-        <input id="dept-desc" placeholder="Açıklama (isteğe bağlı)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
+        <input id="dept-desc" placeholder="Description (optional)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
         <div style="display:flex;gap:8px">
-          <button class="form-submit" onclick="createDepartment()">Kaydet</button>
-          <button class="btn-sm" onclick="document.getElementById('add-dept-form').style.display='none'">İptal</button>
+          <button class="form-submit" onclick="createDepartment()">Save</button>
+          <button class="btn-sm" onclick="document.getElementById('add-dept-form').style.display='none'">Cancel</button>
         </div>
       </div>
       <div id="dept-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
@@ -943,19 +943,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <!-- Form list view -->
       <div id="forms-list-view">
         <div class="page-header">
-          <h2>📋 Formlar</h2>
-          <button class="form-submit" onclick="showCreateFormPanel()">+ Yeni Form</button>
+          <h2>📋 Forms</h2>
+          <button class="form-submit" onclick="showCreateFormPanel()">+ New Form</button>
         </div>
         <div id="create-form-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;max-width:680px">
-          <h3 style="margin:0 0 14px;font-size:14px;font-weight:700">Yeni Form Oluştur</h3>
+          <h3 style="margin:0 0 14px;font-size:14px;font-weight:700">Create New Form</h3>
           <div class="form-row">
-            <input id="nf-name" placeholder="Form adı (örn: Destek Talebi Formu)">
-            <input id="nf-submit-text" placeholder="Gönder butonu metni" value="Gönder">
+            <input id="nf-name" placeholder="Form name (e.g. Support Request Form)">
+            <input id="nf-submit-text" placeholder="Submit button text" value="Submit">
           </div>
-          <input id="nf-welcome" placeholder="Karşılama metni (örn: Lütfen bilgilerinizi doldurun)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
+          <input id="nf-welcome" placeholder="Welcome text (e.g. Please fill in your details)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:10px">
           <div style="display:flex;gap:8px">
-            <button class="form-submit" onclick="saveNewForm()">Oluştur</button>
-            <button class="btn-sm" onclick="document.getElementById('create-form-panel').style.display='none'">İptal</button>
+            <button class="form-submit" onclick="saveNewForm()">Create</button>
+            <button class="btn-sm" onclick="document.getElementById('create-form-panel').style.display='none'">Cancel</button>
           </div>
         </div>
         <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;max-width:680px"></div>
@@ -963,51 +963,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <!-- Form detail/builder view -->
       <div id="forms-detail-view" style="display:none;max-width:780px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-          <button class="btn-sm" onclick="backToFormsList()">← Geri</button>
+          <button class="btn-sm" onclick="backToFormsList()">← Back</button>
           <h3 id="fd-form-name" style="font-size:16px;font-weight:700;flex:1"></h3>
           <button class="form-submit" id="fd-activate-btn" onclick="toggleFormActive()"></button>
         </div>
         <!-- Field builder -->
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
           <div class="page-header" style="margin-bottom:14px">
-            <h4 style="font-size:14px;font-weight:700">Form Alanları</h4>
-            <button class="form-submit" onclick="showAddFieldPanel()">+ Alan Ekle</button>
+            <h4 style="font-size:14px;font-weight:700">Form Fields</h4>
+            <button class="form-submit" onclick="showAddFieldPanel()">+ Add Field</button>
           </div>
           <div id="add-field-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px">
             <div class="form-row">
-              <input id="ff-label" placeholder="Soru metni (örn: Adınız nedir?)">
+              <input id="ff-label" placeholder="Question text (e.g. What is your name?)">
               <select id="ff-type" onchange="onFieldTypeChange()" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;background:#fff">
-                <option value="text">Metin</option>
-                <option value="email">E-posta</option>
-                <option value="phone">Telefon</option>
-                <option value="number">Sayı</option>
-                <option value="textarea">Uzun Metin</option>
-                <option value="select">Çoktan Seç</option>
+                <option value="text">Text</option>
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="number">Number</option>
+                <option value="textarea">Long Text</option>
+                <option value="select">Multiple Choice</option>
                 <option value="rating">Puan (1-5 ⭐)</option>
               </select>
             </div>
             <div class="form-row">
-              <input id="ff-placeholder" placeholder="Yardım metni (placeholder, isteğe bağlı)">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="ff-required" checked> Zorunlu</label>
+              <input id="ff-placeholder" placeholder="Help text (placeholder, optional)">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="ff-required" checked> Required</label>
             </div>
             <div id="ff-options-wrap" style="display:none;margin-top:8px">
-              <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Seçenekler</div>
+              <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Options</div>
               <div id="ff-options-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
-              <button class="btn-sm" onclick="addFieldOption()">+ Seçenek Ekle</button>
+              <button class="btn-sm" onclick="addFieldOption()">+ Add Option</button>
             </div>
             <div style="display:flex;gap:8px;margin-top:10px">
-              <button class="form-submit" onclick="saveField()">Ekle</button>
-              <button class="btn-sm" onclick="document.getElementById('add-field-panel').style.display='none'">İptal</button>
+              <button class="form-submit" onclick="saveField()">Add</button>
+              <button class="btn-sm" onclick="document.getElementById('add-field-panel').style.display='none'">Cancel</button>
             </div>
           </div>
           <div id="fields-list" style="display:flex;flex-direction:column;gap:8px"></div>
-          <p id="fields-empty" style="font-size:13px;color:#94a3b8;text-align:center;padding:20px 0;display:none">Henüz alan eklenmedi. "Alan Ekle" butonuna tıklayın.</p>
+          <p id="fields-empty" style="font-size:13px;color:#94a3b8;text-align:center;padding:20px 0;display:none">No fields added yet. Click "Add Field" to get started.</p>
         </div>
         <!-- Submissions -->
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
           <div class="page-header" style="margin-bottom:14px">
-            <h4 style="font-size:14px;font-weight:700">Form Yanıtları</h4>
-            <button class="btn-sm" onclick="loadCurrentFormSubmissions()">Yenile</button>
+            <h4 style="font-size:14px;font-weight:700">Form Submissions</h4>
+            <button class="btn-sm" onclick="loadCurrentFormSubmissions()">Refresh</button>
           </div>
           <div id="submissions-list"></div>
         </div>
@@ -1021,32 +1021,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="modal-overlay" id="agents-modal">
   <div class="modal" style="width:560px">
     <button class="modal-close" onclick="closeModal('agents-modal')">✕</button>
-    <h2>Temsilciler & Roller</h2>
+    <h2>Agents & Roles</h2>
     <div id="agents-list"></div>
     <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0">
-    <h3 id="agent-form-title" style="font-size:14px;margin-bottom:12px">Yeni Temsilci Ekle</h3>
+    <h3 id="agent-form-title" style="font-size:14px;margin-bottom:12px">Add New Agent</h3>
     <input type="hidden" id="edit-agent-id" value="">
     <div class="form-row">
-      <input id="new-username" placeholder="Kullanıcı adı">
-      <input id="new-password" type="password" placeholder="Şifre">
+      <input id="new-username" placeholder="Username">
+      <input id="new-password" type="password" placeholder="Password">
     </div>
     <div class="form-row">
-      <input id="new-displayname" placeholder="Görünen ad">
+      <input id="new-displayname" placeholder="Display name">
       <select id="new-role" onchange="onAgentRoleChange()">
-        <option value="agent">Temsilci (sınırlı yetki)</option>
-        <option value="admin">Yönetici (tam yetki)</option>
+        <option value="agent">Agent (limited permissions)</option>
+        <option value="admin">Administrator (full access)</option>
       </select>
     </div>
     <div id="agent-perms-wrap" style="margin:6px 0 14px">
-      <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px">Yetkiler</div>
+      <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px">Permissions</div>
       <div id="agent-perms-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
     </div>
     <div id="agent-admin-note" style="display:none;font-size:12px;color:#0369a1;background:#e0f2fe;padding:9px 12px;border-radius:8px;margin-bottom:14px">
-      ⓘ Yöneticiler tüm yetkilere sahiptir.
+      ⓘ Admins have all permissions.
     </div>
     <div style="display:flex;gap:8px">
-      <button class="form-submit" id="agent-save-btn" onclick="saveAgent()">Ekle</button>
-      <button class="btn-sm" id="agent-cancel-btn" onclick="resetAgentForm()" style="display:none">İptal</button>
+      <button class="form-submit" id="agent-save-btn" onclick="saveAgent()">Add</button>
+      <button class="btn-sm" id="agent-cancel-btn" onclick="resetAgentForm()" style="display:none">Cancel</button>
     </div>
   </div>
 </div>
@@ -1055,16 +1055,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="modal-overlay" id="canned-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('canned-modal')">✕</button>
-    <h2>Hazır Yanıtlar</h2>
+    <h2>Canned Replies</h2>
     <div id="canned-list"></div>
     <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0">
-    <h3 style="font-size:14px;margin-bottom:12px">Yeni Yanıt Ekle</h3>
+    <h3 style="font-size:14px;margin-bottom:12px">Add New Reply</h3>
     <div class="form-row">
-      <input id="cr-title" placeholder="Başlık">
-      <input id="cr-shortcut" placeholder="Kısayol (örn: selamla)">
+      <input id="cr-title" placeholder="Title">
+      <input id="cr-shortcut" placeholder="Shortcut (e.g. greet)">
     </div>
-    <textarea id="cr-content" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;resize:vertical;min-height:80px;outline:none;margin-bottom:12px" placeholder="Yanıt metni..."></textarea>
-    <button class="form-submit" onclick="createCanned()">Ekle</button>
+    <textarea id="cr-content" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;resize:vertical;min-height:80px;outline:none;margin-bottom:12px" placeholder="Reply text..."></textarea>
+    <button class="form-submit" onclick="createCanned()">Add</button>
   </div>
 </div>
 
@@ -1072,25 +1072,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="modal-overlay" id="transfer-modal">
   <div class="modal" style="width:360px">
     <button class="modal-close" onclick="closeModal('transfer-modal')">✕</button>
-    <h2>Konuşmayı Aktar</h2>
-    <p style="font-size:13px;color:#64748b;margin-bottom:14px">Hangi temsilciye aktarmak istiyorsunuz?</p>
+    <h2>Transfer Conversation</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:14px">Which agent do you want to transfer to?</p>
     <select id="transfer-agent-select"></select>
-    <button class="form-submit" onclick="doTransfer()">Aktar</button>
+    <button class="form-submit" onclick="doTransfer()">Transfer</button>
   </div>
 </div>
 
 <div class="modal-overlay" id="close-conv-modal">
   <div class="modal" style="width:380px">
     <button class="modal-close" onclick="closeModal('close-conv-modal')">✕</button>
-    <h2>Konuşmayı Kapat</h2>
-    <p style="font-size:13px;color:#64748b;margin-bottom:16px">Konuşmayı kapatmak istediğinizden emin misiniz?</p>
+    <h2>Close Conversation</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:16px">Are you sure you want to close this conversation?</p>
     <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#374151;margin-bottom:20px;cursor:pointer">
       <input type="checkbox" id="close-send-rating" checked style="width:16px;height:16px;cursor:pointer">
-      Kullanıcıdan değerlendirme iste (⭐ puan + yorum)
+      Ask visitor to rate the conversation (⭐ rating + comment)
     </label>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn-sm" onclick="closeModal('close-conv-modal')">İptal</button>
-      <button class="form-submit" onclick="confirmCloseConv()">Kapat</button>
+      <button class="btn-sm" onclick="closeModal('close-conv-modal')">Cancel</button>
+      <button class="form-submit" onclick="confirmCloseConv()">Close</button>
     </div>
   </div>
 </div>
@@ -1119,14 +1119,14 @@ if (!TOKEN || !AGENT) { window.location.href = "/admin/login.html"; }
 
 document.getElementById("agent-name-display").textContent = AGENT.display_name || AGENT.username;
 
-// Yetki kontrolü: admin tüm yetkilere sahip
+// Permission check: admin has all permissions
 function can(perm) {
   if (!AGENT) return false;
   if (AGENT.role === "admin") return true;
   return (AGENT.permissions || []).indexOf(perm) >= 0;
 }
 
-// Nav görünürlüğünü yetkilere göre ayarla
+// Apply nav visibility based on permissions
 function applyNavVisibility() {
   var map = {
     "agents-btn": "manage_agents",
@@ -1157,7 +1157,7 @@ function applyPermVisibility() {
 }
 applyPermVisibility();
 
-// Oturum açıkken yetkileri tazele (eski localStorage'da permissions olmayabilir)
+// Refresh permissions in case the stored token is missing them
 api("GET", "/me").then(function(me) {
   if (me && me.role) {
     AGENT.role = me.role;
@@ -1191,7 +1191,7 @@ function api(method, path, body) {
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN },
     body: body ? JSON.stringify(body) : undefined,
   }).then(function(r) {
-    if (r.status === 401) { logout(); throw new Error("Oturum süresi doldu"); }
+    if (r.status === 401) { logout(); throw new Error("Session expired"); }
     return r.json().catch(function() { return {}; });
   });
 }
@@ -1269,7 +1269,7 @@ function handleWS(data) {
   if (data.type === "new_conversation") {
     convs.unshift(data.conversation);
     renderConvList();
-    showBrowserNotif("Yeni konuşma: " + (data.conversation.visitor_name || "Ziyaretçi"));
+    showBrowserNotif("New conversation: " + (data.conversation.visitor_name || "Visitor"));
   } else if (data.type === "message") {
     var conv = convs.find(function(c) { return c.id === data.conversation_id; });
     if (conv) {
@@ -1282,11 +1282,11 @@ function handleWS(data) {
       appendMsg(data.message);
       maybeChatScrollBottom();
     } else {
-      showBrowserNotif("Yeni mesaj: " + (data.message.content || "Dosya"));
+      showBrowserNotif("New message: " + (data.message.content || "File"));
     }
   } else if (data.type === "visitor_typing") {
     if (data.conversation_id === currentConvId) {
-      document.getElementById("typing-indicator").textContent = "Ziyaretçi yazıyor...";
+      document.getElementById("typing-indicator").textContent = "Visitor is typing...";
       clearTimeout(typingTimer);
       typingTimer = setTimeout(function() { document.getElementById("typing-indicator").textContent = ""; }, 3000);
     }
@@ -1300,7 +1300,7 @@ function handleWS(data) {
     if (data.conversation_id === currentConvId) {
       document.getElementById("msg-input").disabled = true;
       document.getElementById("send-btn").disabled = true;
-      appendSystemMsg("Konuşma kapatıldı.");
+      appendSystemMsg("Conversation closed.");
     }
   } else if (data.type === "agent_online" || data.type === "agent_offline") {
     loadStats();
@@ -1309,7 +1309,7 @@ function handleWS(data) {
       document.getElementById("typing-indicator").textContent = "";
     }
   } else if (data.type === "offline_message") {
-    showBrowserNotif("Çevrimdışı mesaj: " + (data.offline_message.visitor_name || "Ziyaretçi"));
+    showBrowserNotif("Offline message: " + (data.offline_message.visitor_name || "Visitor"));
   } else if (data.type === "visitor_page_view") {
     if (data.conversation_id === currentConvId) {
       var chMeta = document.getElementById("ch-meta");
@@ -1373,11 +1373,11 @@ function renderConvList() {
     return true;
   });
   if (!filtered.length) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">Konuşma bulunamadı.</div>';
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">No conversations found.</div>';
     return;
   }
   list.innerHTML = filtered.map(function(c) {
-    var preview = c.last_message ? (c.last_message.content || "📎 Dosya") : "Yeni konuşma";
+    var preview = c.last_message ? (c.last_message.content || "📎 File") : "New conversation";
     var time = c.updated_at ? new Date(c.updated_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
     var badge = c.unread_count ? '<div class="ci-badge">' + c.unread_count + '</div>' : "";
     var online = c.visitor_online ? '<span class="ci-status online"></span>' : '<span class="ci-status offline"></span>';
@@ -1393,7 +1393,7 @@ function renderConvList() {
       '<input type="checkbox" class="bulk-chk" ' + chkd + ' onclick="toggleBulk(event,' + c.id + ')" style="flex-shrink:0">' +
       '<div style="flex:1;min-width:0" onclick="openConv(' + c.id + ')">' +
         badge +
-        '<div class="ci-name">' + online + prioIcon + ' ' + escHtml(c.visitor_name||"Ziyaretçi") + deptBadge + langBadge + '</div>' +
+        '<div class="ci-name">' + online + prioIcon + ' ' + escHtml(c.visitor_name||"Visitor") + deptBadge + langBadge + '</div>' +
         '<div class="ci-preview">' + escHtml(preview.substring(0,60)) + '</div>' +
         (tags ? '<div style="margin-top:3px">' + tags + '</div>' : '') +
         '<div class="ci-time">' + time + (c.assigned_to ? ' · ' + escHtml(c.assigned_to.display_name||c.assigned_to.username) : '') + '</div>' +
@@ -1415,7 +1415,7 @@ function updateBulkToolbar() {
   var cnt = document.getElementById("bulk-count");
   if (bulkSelected.size > 0) {
     tb.style.display = "flex";
-    cnt.textContent = bulkSelected.size + " seçildi";
+    cnt.textContent = bulkSelected.size + " selected";
   } else {
     tb.style.display = "none";
   }
@@ -1431,10 +1431,10 @@ function bulkAction(action) {
   if (!bulkSelected.size) return;
   var ids = Array.from(bulkSelected);
   api("POST", "/conversations/bulk", {conversation_ids: ids, action: action}).then(function(res) {
-    toast("İşlem tamamlandı: " + (res.ok||0) + " başarılı");
+    toast("Operation completed: " + (res.ok||0) + " successful");
     bulkSelected.clear();
     loadConvs();
-  }).catch(function() { toast("Hata oluştu", "error"); });
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 function openConv(id) {
@@ -1464,12 +1464,12 @@ function openConv(id) {
   populateTagSelect();
 
   api("GET", "/conversations/" + id).then(function(data) {
-    document.getElementById("ch-name").textContent = data.visitor_name || "Ziyaretçi";
+    document.getElementById("ch-name").textContent = data.visitor_name || "Visitor";
     var meta = [];
     if (data.visitor_email) meta.push(data.visitor_email);
     if (data.city || data.country) meta.push([data.city, data.country].filter(Boolean).join(", "));
     if (data.page_url) meta.push(data.page_url);
-    document.getElementById("ch-meta").textContent = meta.join(" · ") || "Bilgi yok";
+    document.getElementById("ch-meta").textContent = meta.join(" · ") || "No information";
 
     // Priority select
     var ps = document.getElementById("priority-select");
@@ -1484,16 +1484,16 @@ function openConv(id) {
     // Show rating if exists
     if (data.rating) {
       var stars = "⭐".repeat(data.rating.score);
-      appendSystemMsg("Değerlendirme: " + stars + " (" + data.rating.score + "/5)" + (data.rating.comment ? " — " + data.rating.comment : ""));
+      appendSystemMsg("Rating: " + stars + " (" + data.rating.score + "/5)" + (data.rating.comment ? " — " + data.rating.comment : ""));
     }
 
     var isClosed = data.status === "closed";
     var assignBtn = document.getElementById("assign-btn");
     if (data.status === "assigned" && data.assigned_to && data.assigned_to.id === AGENT.id) {
-      assignBtn.textContent = "Atanmış (Ben)";
+      assignBtn.textContent = "Assigned (Me)";
       assignBtn.disabled = true;
     } else {
-      assignBtn.textContent = "Üstüme Al";
+      assignBtn.textContent = "Assign to Me";
       assignBtn.disabled = false;
     }
     document.getElementById("close-btn").style.display = isClosed ? "none" : "";
@@ -1525,7 +1525,7 @@ function renderConvTags(tags) {
 
 function populateTagSelect() {
   var sel = document.getElementById("tag-select");
-  sel.innerHTML = '<option value="">+ Etiket</option>' +
+  sel.innerHTML = '<option value="">+ Tag</option>' +
     allTags.map(function(t) {
       return '<option value="' + t.id + '">' + escHtml(t.name) + '</option>';
     }).join("");
@@ -1595,7 +1595,7 @@ function appendMsg(msg) {
       a.className = "file-link";
       a.href = msg.file_url;
       a.target = "_blank";
-      a.textContent = "📎 " + (msg.file_name || "Dosya");
+      a.textContent = "📎 " + (msg.file_name || "File");
       bubble.appendChild(a);
     }
   } else {
@@ -1690,17 +1690,17 @@ document.getElementById("file-input").addEventListener("change", function() {
     body: fd,
   }).then(function(r) { return r.json(); }).then(function() {
     document.getElementById("file-input").value = "";
-    toast("Dosya gönderildi");
-  }).catch(function(e) { toast("Hata: " + e.message, "error"); });
+    toast("File sent");
+  }).catch(function(e) { toast("Error: " + e.message, "error"); });
 });
 
 // ── Assign / Close / Transfer ─────────────────────────────────────────────────
 function assignConv() {
   if (!currentConvId) return;
   api("POST", "/conversations/assign", { conversation_id: currentConvId }).then(function() {
-    document.getElementById("assign-btn").textContent = "Atanmış (Ben)";
+    document.getElementById("assign-btn").textContent = "Assigned (Me)";
     document.getElementById("assign-btn").disabled = true;
-    toast("Konuşma üstünüze alındı");
+    toast("Conversation assigned to you");
   });
 }
 
@@ -1719,7 +1719,7 @@ function confirmCloseConv() {
     document.getElementById("reopen-btn").style.display = "";
     document.getElementById("msg-input").disabled = true;
     document.getElementById("send-btn").disabled = true;
-    toast("Konuşma kapatıldı");
+    toast("Conversation closed");
     convs = convs.filter(function(c){ return c.id !== currentConvId; });
     renderConvList();
     currentConvId = null;
@@ -1730,16 +1730,16 @@ function confirmCloseConv() {
 
 function deleteVisitorData() {
   var vid = currentConvSecurity.visitor_id;
-  if (!vid) { toast("Ziyaretçi ID bulunamadı", "error"); return; }
-  if (!confirm("Bu ziyaretçiye ait TÜM veriler (konuşmalar, mesajlar, form yanıtları) kalıcı olarak silinecek. Emin misiniz?")) return;
+  if (!vid) { toast("Visitor ID not found", "error"); return; }
+  if (!confirm("All data for this visitor (conversations, messages, form responses) will be permanently deleted. Are you sure?")) return;
   api("DELETE", "/visitors/" + vid + "/data").then(function() {
-    toast("Ziyaretçi verisi silindi");
+    toast("Visitor data deleted");
     convs = convs.filter(function(c){ return c.visitor_id !== vid; });
     renderConvList();
     currentConvId = null;
     document.getElementById("active-chat").style.display = "none";
     document.getElementById("no-conv").style.display = "flex";
-  }).catch(function() { toast("Silme başarısız", "error"); });
+  }).catch(function() { toast("Deletion failed", "error"); });
 }
 
 function reopenConv() {
@@ -1749,7 +1749,7 @@ function reopenConv() {
     document.getElementById("reopen-btn").style.display = "none";
     document.getElementById("msg-input").disabled = false;
     document.getElementById("send-btn").disabled = false;
-    toast("Konuşma yeniden açıldı");
+    toast("Conversation reopened");
   });
 }
 
@@ -1759,29 +1759,29 @@ function setPriority() {
   api("PATCH", "/conversations/" + currentConvId + "/priority", { priority: prio }).then(function() {
     var conv = convs.find(function(c){ return c.id === currentConvId; });
     if (conv) conv.priority = prio;
-    toast("Öncelik güncellendi");
+    toast("Priority updated");
     renderConvList();
   });
 }
 
 function banVisitorIp() {
   if (!currentConvSecurity.ip || currentConvSecurity.ip === "unknown") {
-    toast("IP bilgisi yok", "error"); return;
+    toast("No IP information", "error"); return;
   }
-  var reason = prompt("Engel nedeni (isteğe bağlı):", "");
+  var reason = prompt("Block reason (optional):", "");
   if (reason === null) return;
   api("POST", "/blacklist", {ip: currentConvSecurity.ip, kind: "ip", reason: reason}).then(function() {
-    toast("IP engellendi: " + currentConvSecurity.ip);
-  }).catch(function(e) { toast("Hata", "error"); });
+    toast("IP blocked: " + currentConvSecurity.ip);
+  }).catch(function(e) { toast("Error", "error"); });
 }
 
 function banVisitorId() {
-  if (!currentConvSecurity.visitor_id) { toast("Ziyaretçi ID yok", "error"); return; }
-  var reason = prompt("Engel nedeni (isteğe bağlı):", "");
+  if (!currentConvSecurity.visitor_id) { toast("No Visitor ID", "error"); return; }
+  var reason = prompt("Block reason (optional):", "");
   if (reason === null) return;
   api("POST", "/blacklist", {ip: currentConvSecurity.visitor_id, kind: "visitor", reason: reason}).then(function() {
-    toast("Ziyaretçi ID engellendi");
-  }).catch(function(e) { toast("Hata", "error"); });
+    toast("Visitor ID blocked");
+  }).catch(function(e) { toast("Error", "error"); });
 }
 
 function openTransferModal() {
@@ -1798,7 +1798,7 @@ function doTransfer() {
   if (!toId || !currentConvId) return;
   api("POST", "/conversations/transfer", { conversation_id: currentConvId, to_agent_id: toId }).then(function() {
     closeModal("transfer-modal");
-    toast("Konuşma aktarıldı");
+    toast("Conversation transferred");
   });
 }
 
@@ -1857,7 +1857,7 @@ function openCannedModal() {
         '<div style="flex:1"><div class="cr-title">' + escHtml(c.title) + (c.shortcut ? ' <small>/' + escHtml(c.shortcut) + '</small>' : '') + '</div>' +
         '<div class="cr-content">' + escHtml(c.content.substring(0,100)) + '</div></div>' +
         '<button class="cr-del" onclick="deleteCanned(' + c.id + ')">🗑</button></div>';
-    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz hazır yanıt yok.</p>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">No canned responses yet.</p>';
   });
   document.getElementById("canned-modal").classList.add("open");
 }
@@ -1866,9 +1866,9 @@ function createCanned() {
   var title = document.getElementById("cr-title").value.trim();
   var content = document.getElementById("cr-content").value.trim();
   var shortcut = document.getElementById("cr-shortcut").value.trim();
-  if (!title || !content) { toast("Başlık ve içerik zorunlu", "error"); return; }
+  if (!title || !content) { toast("Title and content are required", "error"); return; }
   api("POST", "/canned", { title, content, shortcut }).then(function() {
-    toast("Hazır yanıt eklendi");
+    toast("Canned response added");
     openCannedModal();
     document.getElementById("cr-title").value="";
     document.getElementById("cr-content").value="";
@@ -1877,7 +1877,7 @@ function createCanned() {
 }
 
 function deleteCanned(id) {
-  if (!confirm("Silinsin mi?")) return;
+  if (!confirm("Delete this?")) return;
   api("DELETE", "/canned/" + id).then(function() { openCannedModal(); });
 }
 
@@ -1921,13 +1921,13 @@ function openAgentsModal() {
     allAgents = Array.isArray(data) ? data : [];
     document.getElementById("agents-list").innerHTML = data.map(function(a) {
       var permCount = (a.permissions || []).length;
-      var roleLabel = a.role === "admin" ? "Yönetici" : ("Temsilci" + (permCount ? " · " + permCount + " yetki" : ""));
+      var roleLabel = a.role === "admin" ? "Administrator" : ("Agent" + (permCount ? " · " + permCount + " permission(s)" : ""));
       return '<div class="agent-row">' +
         '<div class="agent-avatar">' + (a.display_name||a.username).charAt(0).toUpperCase() + '</div>' +
         '<div class="agent-info"><div class="an">' + escHtml(a.display_name||a.username) + '</div>' +
-        '<div class="ar">@' + escHtml(a.username) + ' · ' + roleLabel + (a.is_active ? '' : ' · Pasif') + '</div></div>' +
-        (a.is_online ? '<div class="online-dot" title="Çevrimiçi"></div>' : '<div class="offline-dot" title="Çevrimdışı"></div>') +
-        '<button class="btn-sm" onclick="editAgent(' + a.id + ')" style="margin-left:8px">Düzenle</button>' +
+        '<div class="ar">@' + escHtml(a.username) + ' · ' + roleLabel + (a.is_active ? '' : ' · Inactive') + '</div></div>' +
+        (a.is_online ? '<div class="online-dot" title="Online"></div>' : '<div class="offline-dot" title="Offline"></div>') +
+        '<button class="btn-sm" onclick="editAgent(' + a.id + ')" style="margin-left:8px">Edit</button>' +
         '</div>';
     }).join("");
   });
@@ -1939,11 +1939,11 @@ function resetAgentForm() {
   document.getElementById("new-username").value = "";
   document.getElementById("new-username").disabled = false;
   document.getElementById("new-password").value = "";
-  document.getElementById("new-password").placeholder = "Şifre";
+  document.getElementById("new-password").placeholder = "Password";
   document.getElementById("new-displayname").value = "";
   document.getElementById("new-role").value = "agent";
-  document.getElementById("agent-form-title").textContent = "Yeni Temsilci Ekle";
-  document.getElementById("agent-save-btn").textContent = "Ekle";
+  document.getElementById("agent-form-title").textContent = "Add New Agent";
+  document.getElementById("agent-save-btn").textContent = "Add";
   document.getElementById("agent-cancel-btn").style.display = "none";
   renderAgentPerms([]);
   onAgentRoleChange();
@@ -1956,11 +1956,11 @@ function editAgent(id) {
   document.getElementById("new-username").value = a.username;
   document.getElementById("new-username").disabled = true;
   document.getElementById("new-password").value = "";
-  document.getElementById("new-password").placeholder = "Yeni şifre (boş = değişmez)";
+  document.getElementById("new-password").placeholder = "New password (leave blank to keep)";
   document.getElementById("new-displayname").value = a.display_name || "";
   document.getElementById("new-role").value = a.role;
-  document.getElementById("agent-form-title").textContent = "Temsilciyi Düzenle: @" + a.username;
-  document.getElementById("agent-save-btn").textContent = "Kaydet";
+  document.getElementById("agent-form-title").textContent = "Edit Agent: @" + a.username;
+  document.getElementById("agent-save-btn").textContent = "Save";
   document.getElementById("agent-cancel-btn").style.display = "";
   renderAgentPerms(a.permissions || []);
   onAgentRoleChange();
@@ -1984,14 +1984,14 @@ function saveAgent() {
     var payload = { display_name: display_name, role: role, permissions: perms };
     if (password) payload.password = password;
     api("PATCH", "/agents/" + editId, payload).then(function() {
-      toast("Temsilci güncellendi");
+      toast("Agent updated");
       openAgentsModal();
       loadAgents();
     });
   } else {
-    if (!username || !password) { toast("Kullanıcı adı ve şifre zorunlu", "error"); return; }
+    if (!username || !password) { toast("Username and password are required", "error"); return; }
     api("POST", "/agents", { username: username, password: password, display_name: display_name, role: role, permissions: perms }).then(function() {
-      toast("Temsilci eklendi");
+      toast("Agent added");
       openAgentsModal();
       loadAgents();
     });
@@ -2018,10 +2018,10 @@ document.addEventListener("click", function(e) {
 // ── Stats ─────────────────────────────────────────────────────────────────────
 function loadStats() {
   api("GET", "/stats").then(function(s) {
-    document.getElementById("stat-open").textContent = s.open + " açık";
-    document.getElementById("stat-assigned").textContent = s.assigned + " atanmış";
-    document.getElementById("stat-agents").textContent = s.agents_online + " temsilci";
-    document.getElementById("stat-visitors").textContent = s.visitors_online + " ziyaretçi";
+    document.getElementById("stat-open").textContent = s.open + " open";
+    document.getElementById("stat-assigned").textContent = s.assigned + " assigned";
+    document.getElementById("stat-agents").textContent = s.agents_online + " agent(s)";
+    document.getElementById("stat-visitors").textContent = s.visitors_online + " visitor(s)";
     if (document.getElementById("sc-closed")) {
       document.getElementById("sc-closed").textContent = s.closed_today || 0;
     }
@@ -2041,17 +2041,17 @@ function setStatsRange(days) {
 function loadDetailedStats() {
   api("GET", "/stats/detailed?days=" + statsRange).then(function(s) {
     document.getElementById("sc-period").textContent = s.period_conversations || 0;
-    document.getElementById("sc-total-sub").textContent = "toplam: " + (s.total_conversations || 0);
+    document.getElementById("sc-total-sub").textContent = "total: " + (s.total_conversations || 0);
     document.getElementById("sc-resp").textContent = s.avg_response_minutes || 0;
-    document.getElementById("sc-median-sub").textContent = "medyan: " + (s.median_response_minutes || 0) + " dk";
+    document.getElementById("sc-median-sub").textContent = "median: " + (s.median_response_minutes || 0) + " min";
     document.getElementById("sc-resolution").textContent = (s.resolution_rate || 0) + "%";
     document.getElementById("sc-rating").textContent = s.avg_rating || 0;
-    document.getElementById("sc-rating-sub").textContent = "/ 5 · " + (s.rating_count || 0) + " oy";
+    document.getElementById("sc-rating-sub").textContent = "/ 5 · " + (s.rating_count || 0) + " votes";
     document.getElementById("sc-messages").textContent = s.total_messages || 0;
     var bd = s.busiest_day || {};
     document.getElementById("sc-busiest").textContent = bd.date ? bd.date.slice(5) : "-";
-    document.getElementById("sc-busiest-sub").textContent = bd.count ? bd.count + " konuşma" : "";
-    document.getElementById("daily-title").textContent = "Günlük Konuşmalar (" + s.days + " gün)";
+    document.getElementById("sc-busiest-sub").textContent = bd.count ? bd.count + " conversations" : "";
+    document.getElementById("daily-title").textContent = "Daily Conversations (" + s.days + " days)";
 
     // Daily chart
     var daily = s.daily_conversations || [];
@@ -2069,7 +2069,7 @@ function loadDetailedStats() {
     var maxH = Math.max.apply(null, hourly.map(function(h){ return h.count; }).concat([1]));
     document.getElementById("hourly-chart").innerHTML = hourly.map(function(h) {
       var ht = Math.max(2, Math.round((h.count / maxH) * 70));
-      return '<div class="h-bar" style="height:' + ht + 'px" title="' + h.hour + ':00 — ' + h.count + ' konuşma"></div>';
+      return '<div class="h-bar" style="height:' + ht + 'px" title="' + h.hour + ':00 — ' + h.count + ' conversations"></div>';
     }).join("");
 
     // Rating distribution
@@ -2080,15 +2080,15 @@ function loadDetailedStats() {
       return '<div class="rating-row"><span class="rr-label">' + r.score + ' ⭐</span>' +
         '<div class="rr-bar-wrap"><div class="rr-bar" style="width:' + pct + '%"></div></div>' +
         '<span class="rr-count">' + r.count + '</span></div>';
-    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz puan yok.</p>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">No ratings yet.</p>';
 
     // Status breakdown
     var sb = s.status_breakdown || {open:0, assigned:0, closed:0};
     var sbTotal = (sb.open + sb.assigned + sb.closed) || 1;
     var statusRows = [
-      {label: "🟢 Açık", count: sb.open, color: "#22c55e"},
-      {label: "🔵 Atanmış", count: sb.assigned, color: "#3b82f6"},
-      {label: "⚪ Kapatılmış", count: sb.closed, color: "#94a3b8"},
+      {label: "🟢 Open", count: sb.open, color: "#22c55e"},
+      {label: "🔵 Assigned", count: sb.assigned, color: "#3b82f6"},
+      {label: "⚪ Closed", count: sb.closed, color: "#94a3b8"},
     ];
     document.getElementById("status-chart").innerHTML = statusRows.map(function(r) {
       var pct = Math.round((r.count / sbTotal) * 100);
@@ -2105,7 +2105,7 @@ function loadDetailedStats() {
       return '<div class="ta-row"><span style="font-size:13px;font-weight:500;width:140px;flex-shrink:0">' + escHtml(a.agent_name) + '</span>' +
         '<div class="ta-bar-wrap"><div class="ta-bar" style="width:' + pct + '%"></div></div>' +
         '<span style="font-size:12px;color:#64748b;margin-left:8px">' + a.count + '</span></div>';
-    }).join("") : '<p style="color:#94a3b8;font-size:13px">Henüz veri yok.</p>';
+    }).join("") : '<p style="color:#94a3b8;font-size:13px">No data yet.</p>';
 
     // Department breakdown
     var db = s.department_breakdown || [];
@@ -2115,7 +2115,7 @@ function loadDetailedStats() {
       return '<div class="ta-row"><span style="font-size:13px;font-weight:500;width:140px;flex-shrink:0">' + escHtml(d.icon + " " + d.name) + '</span>' +
         '<div class="ta-bar-wrap"><div class="ta-bar" style="width:' + pct + '%;background:' + escHtml(d.color) + '"></div></div>' +
         '<span style="font-size:12px;color:#64748b;margin-left:8px">' + d.count + '</span></div>';
-    }).join("") : '<p style="color:#94a3b8;font-size:13px">Departman ataması yok.</p>';
+    }).join("") : '<p style="color:#94a3b8;font-size:13px">No department assignments.</p>';
   });
 }
 
@@ -2136,7 +2136,7 @@ function exportAllXlsx(days) {
   fetch("/api/admin/conversations/export-xlsx?days=" + days, {
     headers: { "Authorization": "Bearer " + TOKEN }
   }).then(function(r) {
-    if (!r.ok) { toast("Excel dışa aktarma için sunucuda openpyxl kurulu değil. CSV kullanın.", "error"); return null; }
+    if (!r.ok) { toast("openpyxl is not installed on the server. Use CSV instead.", "error"); return null; }
     return r.blob();
   }).then(function(blob) {
     if (!blob) return;
@@ -2159,24 +2159,24 @@ function loadTags() {
         escHtml(t.name) +
         ' <button class="tc-del" onclick="deleteTag(' + t.id + ')">✕</button>' +
         '</div>';
-    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz etiket yok.</p>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">No tags yet.</p>';
   });
 }
 
 function createTag() {
   var name = document.getElementById("new-tag-name").value.trim();
   var color = document.getElementById("new-tag-color").value;
-  if (!name) { toast("Etiket adı zorunlu", "error"); return; }
+  if (!name) { toast("Tag name is required", "error"); return; }
   api("POST", "/tags", { name, color }).then(function() {
     document.getElementById("new-tag-name").value = "";
-    toast("Etiket eklendi");
+    toast("Tag added");
     loadTags();
   });
 }
 
 function deleteTag(id) {
-  if (!confirm("Etiket silinsin mi?")) return;
-  api("DELETE", "/tags/" + id).then(function() { toast("Silindi"); loadTags(); });
+  if (!confirm("Delete this tag?")) return;
+  api("DELETE", "/tags/" + id).then(function() { toast("Deleted"); loadTags(); });
 }
 
 // ── Blacklist ─────────────────────────────────────────────────────────────────
@@ -2186,15 +2186,15 @@ function loadBlacklist() {
     var list = Array.isArray(data) ? data : [];
     tbody.innerHTML = list.map(function(b) {
       var d = b.created_at ? new Date(b.created_at).toLocaleDateString() : "";
-      var kindLabel = b.kind === "visitor" ? "🆔 Ziyaretçi ID" : "🌐 IP";
+      var kindLabel = b.kind === "visitor" ? "🆔 Visitor ID" : "🌐 IP";
       return '<tr>' +
         '<td>' + kindLabel + '</td>' +
         '<td style="font-weight:600;font-family:monospace;font-size:11px;word-break:break-all">' + escHtml(b.ip) + '</td>' +
         '<td>' + escHtml(b.reason || "-") + '</td>' +
         '<td>' + d + '</td>' +
-        '<td><button class="btn-sm danger" onclick="removeBlacklist(' + b.id + ')">Kaldır</button></td>' +
+        '<td><button class="btn-sm danger" onclick="removeBlacklist(' + b.id + ')">Remove</button></td>' +
         '</tr>';
-    }).join("") || '<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:20px">Liste boş.</td></tr>';
+    }).join("") || '<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:20px">List is empty.</td></tr>';
   });
 }
 
@@ -2202,18 +2202,18 @@ function addBlacklist() {
   var ip = document.getElementById("new-bl-ip").value.trim();
   var reason = document.getElementById("new-bl-reason").value.trim();
   var kind = document.getElementById("new-bl-kind").value;
-  if (!ip) { toast("Değer zorunlu", "error"); return; }
+  if (!ip) { toast("Value is required", "error"); return; }
   api("POST", "/blacklist", { ip, reason, kind }).then(function() {
     document.getElementById("new-bl-ip").value = "";
     document.getElementById("new-bl-reason").value = "";
-    toast(kind === "visitor" ? "Ziyaretçi ID engellendi" : "IP engellendi");
+    toast(kind === "visitor" ? "Visitor ID blocked" : "IP blocked");
     loadBlacklist();
   });
 }
 
 function removeBlacklist(id) {
-  if (!confirm("Kaldırılsın mı?")) return;
-  api("DELETE", "/blacklist/" + id).then(function() { toast("Kaldırıldı"); loadBlacklist(); });
+  if (!confirm("Remove this entry?")) return;
+  api("DELETE", "/blacklist/" + id).then(function() { toast("Removed"); loadBlacklist(); });
 }
 
 // ── Bot Flow ──────────────────────────────────────────────────────────────────
@@ -2226,16 +2226,16 @@ function loadBotflows() {
       return '<div class="flow-card">' +
         '<div class="fc-header">' +
         '<div class="fc-name">' + escHtml(f.name) + '</div>' +
-        (f.is_active ? '<span class="fc-active">AKTİF</span>' : '') +
+        (f.is_active ? '<span class="fc-active">ACTIVE</span>' : '') +
         '</div>' +
         '<div class="fc-greeting">' + escHtml(f.greeting) + '</div>' +
         '<div class="flow-options">' + opts.map(function(o){ return '<span class="flow-opt">' + escHtml(o.label||"") + '</span>'; }).join("") + '</div>' +
         '<div style="display:flex;gap:6px;margin-top:12px">' +
-        (!f.is_active ? '<button class="btn-sm success" onclick="activateBotflow(' + f.id + ')">Aktifleştir</button>' : '') +
+        (!f.is_active ? '<button class="btn-sm success" onclick="activateBotflow(' + f.id + ')">Activate</button>' : '') +
         '<button class="btn-sm danger" onclick="deleteBotflow(' + f.id + ')">Sil</button>' +
         '</div>' +
         '</div>';
-    }).join("") || '<p style="color:#94a3b8;font-size:13px">Henüz bot akışı yok.</p>';
+    }).join("") || '<p style="color:#94a3b8;font-size:13px">No bot flows yet.</p>';
   });
 }
 
@@ -2244,7 +2244,7 @@ var flowOptionsList = [];
 function renderFlowOptions() {
   var el = document.getElementById("flow-opts-list");
   if (!flowOptionsList.length) {
-    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">Henüz seçenek eklenmedi.</div>';
+    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">No options added yet.</div>';
     return;
   }
   el.innerHTML = flowOptionsList.map(function(o, i) {
@@ -2252,7 +2252,7 @@ function renderFlowOptions() {
       '<input type="text" value="' + escHtml(o.label) + '" placeholder="Buton metni" ' +
         'oninput="flowOptionsList['+i+'].label=this.value" ' +
         'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
-      '<input type="text" value="' + escHtml(o.reply) + '" placeholder="Bot yanıtı" ' +
+      '<input type="text" value="' + escHtml(o.reply) + '" placeholder="Bot reply" ' +
         'oninput="flowOptionsList['+i+'].reply=this.value" ' +
         'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
       '<button onclick="removeFlowOption('+i+')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>' +
@@ -2281,13 +2281,13 @@ function hideAddFlowForm() {
 }
 
 function createBotflow() {
-  var name = document.getElementById("flow-name").value.trim() || "Ana Akış";
+  var name = document.getElementById("flow-name").value.trim() || "Main Flow";
   var greeting = document.getElementById("flow-greeting").value.trim();
-  if (!greeting) { toast("Karşılama mesajı zorunlu", "error"); return; }
+  if (!greeting) { toast("Greeting message is required", "error"); return; }
   var validOpts = flowOptionsList.filter(function(o){ return o.label.trim(); });
   var options_json = JSON.stringify(validOpts.map(function(o){ return {label: o.label.trim(), reply: o.reply.trim()}; }));
   api("POST", "/botflow", { name: name, greeting: greeting, options_json: options_json }).then(function() {
-    toast("Bot akışı oluşturuldu");
+    toast("Bot flow created");
     hideAddFlowForm();
     document.getElementById("flow-name").value = "";
     document.getElementById("flow-greeting").value = "";
@@ -2298,32 +2298,32 @@ function createBotflow() {
 
 function activateBotflow(id) {
   api("POST", "/botflow/" + id + "/activate").then(function() {
-    toast("Akış aktifleştirildi");
+    toast("Flow activated");
     loadBotflows();
   });
 }
 
 function deleteBotflow(id) {
-  if (!confirm("Bot akışı silinsin mi?")) return;
-  api("DELETE", "/botflow/" + id).then(function() { toast("Silindi"); loadBotflows(); });
+  if (!confirm("Delete this bot flow?")) return;
+  api("DELETE", "/botflow/" + id).then(function() { toast("Deleted"); loadBotflows(); });
 }
 
 // ── Schedule ──────────────────────────────────────────────────────────────────
 var DAYS = [
-  {key:"mon",label:"Pazartesi"},
-  {key:"tue",label:"Salı"},
-  {key:"wed",label:"Çarşamba"},
-  {key:"thu",label:"Perşembe"},
-  {key:"fri",label:"Cuma"},
-  {key:"sat",label:"Cumartesi"},
-  {key:"sun",label:"Pazar"},
+  {key:"mon",label:"Monday"},
+  {key:"tue",label:"Tuesday"},
+  {key:"wed",label:"Wednesday"},
+  {key:"thu",label:"Thursday"},
+  {key:"fri",label:"Friday"},
+  {key:"sat",label:"Saturday"},
+  {key:"sun",label:"Sunday"},
 ];
 
 function loadScheduleAgents() {
   api("GET", "/agents").then(function(data) {
     allAgents = Array.isArray(data) ? data : [];
     var sel = document.getElementById("sched-agent-select");
-    sel.innerHTML = '<option value="">Temsilci seçin...</option>' +
+    sel.innerHTML = '<option value="">Select an agent...</option>' +
       allAgents.map(function(a) {
         return '<option value="' + a.id + '">' + escHtml(a.display_name || a.username) + '</option>';
       }).join("");
@@ -2377,7 +2377,7 @@ function saveSchedule() {
   api("PUT", "/schedule/" + agentId, {
     schedule_json: JSON.stringify(scheduleData),
     timezone: tz,
-  }).then(function() { toast("Mesai saatleri kaydedildi"); });
+  }).then(function() { toast("Work schedule saved"); });
 }
 
 // ── Browser notif ─────────────────────────────────────────────────────────────
@@ -2433,9 +2433,9 @@ document.getElementById("prof-displayname") && document.getElementById("prof-dis
 
 function saveProfile() {
   var displayName = document.getElementById("prof-displayname").value.trim();
-  if (!displayName) { toast("Görünen ad boş olamaz", "error"); return; }
+  if (!displayName) { toast("Display name cannot be empty", "error"); return; }
   api("PATCH", "/profile", { display_name: displayName, avatar_color: selectedAvatarColor }).then(function() {
-    toast("Profil güncellendi");
+    toast("Profile updated");
     AGENT.display_name = displayName;
     AGENT.avatar_color = selectedAvatarColor;
     localStorage.setItem("st_agent", JSON.stringify(AGENT));
@@ -2443,20 +2443,20 @@ function saveProfile() {
     var av = document.getElementById("topbar-avatar");
     av.textContent = displayName.charAt(0).toUpperCase();
     av.style.background = selectedAvatarColor;
-  }).catch(function() { toast("Hata oluştu", "error"); });
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 function changePassword() {
   var np = document.getElementById("prof-new-password").value;
   var cp = document.getElementById("prof-confirm-password").value;
-  if (!np) { toast("Şifre boş olamaz", "error"); return; }
-  if (np !== cp) { toast("Şifreler eşleşmiyor", "error"); return; }
-  if (np.length < 6) { toast("Şifre en az 6 karakter olmalı", "error"); return; }
+  if (!np) { toast("Password cannot be empty", "error"); return; }
+  if (np !== cp) { toast("Passwords do not match", "error"); return; }
+  if (np.length < 6) { toast("Password must be at least 6 characters", "error"); return; }
   api("PATCH", "/profile", { password: np }).then(function() {
-    toast("Şifre değiştirildi");
+    toast("Password changed");
     document.getElementById("prof-new-password").value = "";
     document.getElementById("prof-confirm-password").value = "";
-  }).catch(function() { toast("Hata oluştu", "error"); });
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 // ── Site Settings ─────────────────────────────────────────────────────────────
@@ -2473,9 +2473,9 @@ function loadSiteSettings() {
     if (data.proactive_delay_seconds) document.getElementById("set-proactive").value = data.proactive_delay_seconds;
     if (data.widget_width) document.getElementById("set-widget-width").value = data.widget_width;
     document.getElementById("set-notif-sound").checked = data.notification_sound !== "false";
-    // Görünüm & dil
+    // Appearance & language
     document.getElementById("set-widget-position").value = data.widget_position || "right";
-    document.getElementById("set-widget-lang").value = data.widget_lang || "tr";
+    document.getElementById("set-widget-lang").value = data.language || "en";
     document.getElementById("set-widget-icon").value = data.widget_icon || "";
     document.getElementById("set-widget-radius").value = data.widget_radius || 16;
     try { widgetTexts = JSON.parse(data.widget_texts || "{}"); } catch(e) { widgetTexts = {}; }
@@ -2495,26 +2495,26 @@ function loadSiteSettings() {
   }).catch(function() {});
 }
 
-// Düzenlenebilir widget metinleri (anahtar → {etiket, varsayılan TR/EN})
+// Editable widget texts (key → {label, TR/EN defaults})
 var WIDGET_TEXT_DEFS = [
-  {key: "info_title", label: "Karşılama Başlığı", tr: "Merhaba! 👋", en: "Hello! 👋"},
-  {key: "info_subtitle", label: "Karşılama Alt Metni", tr: "Sohbet başlatmak için bilgilerinizi girin.", en: "Enter your details to start chatting."},
-  {key: "field_name", label: "Ad Alanı", tr: "Adınız", en: "Your name"},
-  {key: "field_email_optional", label: "E-posta Alanı (ops.)", tr: "E-posta (isteğe bağlı)", en: "Email (optional)"},
-  {key: "start_chat", label: "Sohbet Başlat Butonu", tr: "Sohbeti Başlat", en: "Start Chat"},
-  {key: "input_placeholder", label: "Mesaj Kutusu", tr: "Mesajınızı yazın...", en: "Type your message..."},
-  {key: "send", label: "Gönder Butonu", tr: "Gönder", en: "Send"},
-  {key: "offline_title", label: "Çevrimdışı Başlığı", tr: "📬 Mesaj Bırakın", en: "📬 Leave a Message"},
-  {key: "offline_subtitle", label: "Çevrimdışı Alt Metni", tr: "Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.", en: "Our agents are currently offline. Leave a message and we'll get back to you by email."},
-  {key: "waiting_title", label: "Bekleme Başlığı", tr: "Temsilci bekleniyor...", en: "Waiting for an agent..."},
-  {key: "rating_prompt", label: "Değerlendirme Metni", tr: "Bu konuşmayı değerlendirin", en: "Rate this conversation"},
-  {key: "status_online", label: "Durum: Çevrimiçi", tr: "Çevrimiçi", en: "Online"},
-  {key: "status_waiting_reply", label: "Durum: Cevap Bekleniyor", tr: "Cevap bekleniyor", en: "Awaiting reply"},
-  {key: "conv_closed_msg", label: "Konuşma Kapatıldı Mesajı", tr: "Konuşma kapatıldı. İyi günler!", en: "Conversation closed. Have a great day!"},
+  {key: "info_title", label: "Greeting Title", tr: "Merhaba! 👋", en: "Hello! 👋"},
+  {key: "info_subtitle", label: "Greeting Subtitle", tr: "Sohbet başlatmak için bilgilerinizi girin.", en: "Enter your details to start chatting."},
+  {key: "field_name", label: "Name Field", tr: "Adınız", en: "Your name"},
+  {key: "field_email_optional", label: "Email Field (opt.)", tr: "E-posta (isteğe bağlı)", en: "Email (optional)"},
+  {key: "start_chat", label: "Start Chat Button", tr: "Sohbeti Başlat", en: "Start Chat"},
+  {key: "input_placeholder", label: "Message Input", tr: "Mesajınızı yazın...", en: "Type your message..."},
+  {key: "send", label: "Send Button", tr: "Gönder", en: "Send"},
+  {key: "offline_title", label: "Offline Title", tr: "📬 Mesaj Bırakın", en: "📬 Leave a Message"},
+  {key: "offline_subtitle", label: "Offline Subtitle", tr: "Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.", en: "Our agents are currently offline. Leave a message and we'll get back to you by email."},
+  {key: "waiting_title", label: "Waiting Title", tr: "Temsilci bekleniyor...", en: "Waiting for an agent..."},
+  {key: "rating_prompt", label: "Rating Prompt", tr: "Rate this conversation", en: "Rate this conversation"},
+  {key: "status_online", label: "Status: Online", tr: "Çevrimiçi", en: "Online"},
+  {key: "status_waiting_reply", label: "Status: Awaiting Reply", tr: "Cevap bekleniyor", en: "Awaiting reply"},
+  {key: "conv_closed_msg", label: "Conversation Closed Message", tr: "Konuşma kapatıldı. İyi günler!", en: "Conversation closed. Have a great day!"},
 ];
 
 function renderWidgetTexts() {
-  var lang = document.getElementById("set-widget-lang").value || "tr";
+  var lang = document.getElementById("set-widget-lang").value || "en";
   var grid = document.getElementById("widget-texts-grid");
   grid.innerHTML = WIDGET_TEXT_DEFS.map(function(d) {
     var def = lang === "en" ? d.en : d.tr;
@@ -2527,7 +2527,7 @@ function renderWidgetTexts() {
 }
 
 function onWidgetLangChange() {
-  // Dil değişince placeholder varsayılanlarını tazele
+  // Refresh default placeholders when language changes
   renderWidgetTexts();
 }
 
@@ -2540,21 +2540,21 @@ function saveWidgetTexts() {
   });
   widgetTexts = obj;
   api("PUT", "/settings", { widget_texts: JSON.stringify(obj) }).then(function() {
-    toast("Widget metinleri kaydedildi");
-  }).catch(function() { toast("Hata oluştu", "error"); });
+    toast("Widget texts saved");
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 function renderBubbles() {
   var el = document.getElementById("bubbles-list");
   if (!siteBubbles.length) {
-    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">Henüz baloncuk eklenmedi.</div>';
+    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">No bubbles added yet.</div>';
     return;
   }
   el.innerHTML = siteBubbles.map(function(item, i) {
     var text  = typeof item === "string" ? item : (item.text || "");
     var color = typeof item === "object" && item.color ? item.color : "#1e293b";
     var size  = typeof item === "object" && item.size  ? item.size  : "normal";
-    var sizeLabel = {small:"Küçük", normal:"Normal", large:"Büyük"}[size] || "Normal";
+    var sizeLabel = {small:"Small", normal:"Normal", large:"Large"}[size] || "Normal";
     return '<div style="display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px">' +
       '<span style="width:16px;height:16px;border-radius:3px;background:' + escHtml(color) + ';flex-shrink:0;display:inline-block"></span>' +
       '<span style="flex:1;font-size:13px">💬 ' + escHtml(text) + '</span>' +
@@ -2585,7 +2585,7 @@ function removeBubble(i) {
 function saveBubbleDismiss() {
   var days = parseInt(document.getElementById("set-bubble-dismiss").value) || 0;
   api("PUT", "/settings", { bubble_dismiss_days: days }).then(function() {
-    toast("Kaydedildi");
+    toast("Saved");
   });
 }
 
@@ -2602,15 +2602,15 @@ function saveSettings(silent) {
     widget_width: (width >= 280 && width <= 560) ? width : undefined,
     proactive_bubbles: JSON.stringify(siteBubbles),
     widget_position: document.getElementById("set-widget-position").value || undefined,
-    widget_lang: document.getElementById("set-widget-lang").value || undefined,
+    language: document.getElementById("set-widget-lang").value || undefined,
     widget_icon: document.getElementById("set-widget-icon").value.trim(),
     widget_radius: (!isNaN(radius) && radius >= 0 && radius <= 28) ? radius : undefined,
   };
   // Remove undefined keys
   Object.keys(payload).forEach(function(k) { if (payload[k] === undefined) delete payload[k]; });
   api("PUT", "/settings", payload).then(function() {
-    if (!silent) toast("Ayarlar kaydedildi");
-  }).catch(function() { toast("Hata oluştu", "error"); });
+    if (!silent) toast("Settings saved");
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────────
@@ -2632,7 +2632,7 @@ function loadNotes(convId) {
       return '<div class="note-item">' + escHtml(n.content) +
         '<div class="note-meta">' + escHtml(n.agent_name) + ' · ' + t +
         ' <button onclick="deleteNote(' + convId + ',' + n.id + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:10px">✕</button></div></div>';
-    }).join("") || '<p style="font-size:11px;color:#92400e;margin:0">Not yok.</p>';
+    }).join("") || '<p style="font-size:11px;color:#92400e;margin:0">No notes.</p>';
   });
 }
 
@@ -2643,14 +2643,14 @@ function addNote() {
   api("POST", "/conversations/" + currentConvId + "/notes", { content: content }).then(function() {
     document.getElementById("note-input").value = "";
     loadNotes(currentConvId);
-    toast("Not eklendi");
+    toast("Note added");
   });
 }
 
 function deleteNote(convId, noteId) {
   api("DELETE", "/conversations/" + convId + "/notes/" + noteId).then(function() {
     loadNotes(convId);
-    toast("Not silindi");
+    toast("Note deleted");
   });
 }
 
@@ -2682,7 +2682,7 @@ function loadVisitorInfo(visitorId, name, email, vid, convData) {
     document.getElementById("vip-fields-list").innerHTML = list.map(function(f) {
       return '<div class="vip-field"><span class="vf-key">' + escHtml(f.key) + ':</span><span>' + escHtml(f.value) +
         ' <button onclick="deleteVisitorField(\'' + escHtml(f.key) + '\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:10px">✕</button></span></div>';
-    }).join("") || '<p style="font-size:11px;color:#94a3b8">Özel alan yok.</p>';
+    }).join("") || '<p style="font-size:11px;color:#94a3b8">No custom fields.</p>';
   });
 
   // Load page history
@@ -2691,7 +2691,7 @@ function loadVisitorInfo(visitorId, name, email, vid, convData) {
     document.getElementById("vip-pages-list").innerHTML = list.slice(0, 10).map(function(p) {
       var t = p.created_at ? new Date(p.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
       return '<div class="page-hist-item">' + t + ' <a href="' + escHtml(p.url) + '" target="_blank" style="color:#2563eb">' + escHtml(p.title || p.url) + '</a></div>';
-    }).join("") || '<p style="font-size:11px;color:#94a3b8">Sayfa geçmişi yok.</p>';
+    }).join("") || '<p style="font-size:11px;color:#94a3b8">No page history.</p>';
   });
 
   // Load conversation history
@@ -2701,7 +2701,7 @@ function loadVisitorInfo(visitorId, name, email, vid, convData) {
       var t = c.created_at ? new Date(c.created_at).toLocaleDateString() : "";
       return '<div class="prev-conv-item" onclick="openConv(' + c.id + ')">' +
         t + ' · ' + escHtml(c.status) + (c.last_message ? ' — ' + escHtml((c.last_message.content||"").substring(0,40)) : '') + '</div>';
-    }).join("") || '<p style="font-size:11px;color:#94a3b8">Geçmiş konuşma yok.</p>';
+    }).join("") || '<p style="font-size:11px;color:#94a3b8">No previous conversations.</p>';
   });
 }
 
@@ -2717,7 +2717,7 @@ function addVisitorField() {
       document.getElementById("vip-name").textContent,
       document.getElementById("vip-email").textContent,
       currentVisitorId);
-    toast("Alan eklendi");
+    toast("Field added");
   });
 }
 
@@ -2728,7 +2728,7 @@ function deleteVisitorField(key) {
       document.getElementById("vip-name").textContent,
       document.getElementById("vip-email").textContent,
       currentVisitorId);
-    toast("Alan silindi");
+    toast("Field deleted");
   });
 }
 
@@ -2741,9 +2741,9 @@ function loadLiveVisitors() {
         '<td><strong>' + escHtml(v.visitor_name) + '</strong><br><small style="color:#94a3b8;font-size:10px">' + escHtml(v.visitor_id) + '</small></td>' +
         '<td style="max-width:200px;word-break:break-all"><a href="' + escHtml(v.current_url) + '" target="_blank" style="color:#2563eb;font-size:12px">' + escHtml(v.current_title || v.current_url || "-") + '</a></td>' +
         '<td><span style="color:' + (v.status==="open"?"#f59e0b":v.status==="assigned"?"#22c55e":"#94a3b8") + '">' + escHtml(v.status) + '</span></td>' +
-        '<td>' + (v.conversation_id ? '<button class="btn-sm primary" onclick="openConvFromVisitors(' + v.conversation_id + ')">Aç</button>' : '-') + '</td>' +
+        '<td>' + (v.conversation_id ? '<button class="btn-sm primary" onclick="openConvFromVisitors(' + v.conversation_id + ')">Open</button>' : '-') + '</td>' +
         '</tr>';
-    }).join("") || '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px">Şu an aktif ziyaretçi yok.</td></tr>';
+    }).join("") || '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px">No active visitors right now.</td></tr>';
   });
 }
 
@@ -2761,16 +2761,16 @@ function loadWebhooks() {
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
         '<strong>' + escHtml(w.name) + '</strong>' +
         '<span style="background:#e2e8f0;padding:2px 8px;border-radius:10px;font-size:11px">' + escHtml(w.type) + '</span>' +
-        (w.is_enabled ? '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:11px">Aktif</span>' :
-          '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:11px">Pasif</span>') +
+        (w.is_enabled ? '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:11px">Active</span>' :
+          '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:11px">Inactive</span>') +
         '<div style="margin-left:auto;display:flex;gap:6px">' +
         '<button class="btn-sm" onclick="testWebhook(' + w.id + ')">Test</button>' +
-        '<button class="btn-sm" onclick="toggleWebhook(' + w.id + ',' + !w.is_enabled + ')">' + (w.is_enabled ? 'Devre Dışı' : 'Aktifleştir') + '</button>' +
+        '<button class="btn-sm" onclick="toggleWebhook(' + w.id + ',' + !w.is_enabled + ')">' + (w.is_enabled ? 'Disable' : 'Enable') + '</button>' +
         '<button class="btn-sm danger" onclick="deleteWebhook(' + w.id + ')">Sil</button>' +
         '</div></div>' +
         '<div style="font-size:12px;color:#64748b;word-break:break-all">' + escHtml(w.url) + '</div>' +
         '</div>';
-    }).join("") || '<p style="color:#94a3b8">Henüz webhook yok.</p>';
+    }).join("") || '<p style="color:#94a3b8">No webhooks yet.</p>';
   });
 }
 
@@ -2780,9 +2780,9 @@ function createWebhook() {
   var url = document.getElementById("wh-url").value.trim();
   var tgChat = document.getElementById("wh-tg-chat").value.trim();
   var events = document.getElementById("wh-events").value.trim();
-  if (!url) { toast("URL zorunlu", "error"); return; }
+  if (!url) { toast("URL is required", "error"); return; }
   api("POST", "/webhooks", { name: name||"Webhook", type: type, url: url, telegram_chat_id: tgChat, events_json: events }).then(function() {
-    toast("Webhook eklendi");
+    toast("Webhook added");
     document.getElementById("wh-url").value = "";
     document.getElementById("wh-tg-chat").value = "";
     loadWebhooks();
@@ -2790,7 +2790,7 @@ function createWebhook() {
 }
 
 function testWebhook(id) {
-  api("POST", "/webhooks/" + id + "/test").then(function() { toast("Test gönderildi"); });
+  api("POST", "/webhooks/" + id + "/test").then(function() { toast("Test sent"); });
 }
 
 function toggleWebhook(id, enabled) {
@@ -2798,8 +2798,8 @@ function toggleWebhook(id, enabled) {
 }
 
 function deleteWebhook(id) {
-  if (!confirm("Webhook silinsin mi?")) return;
-  api("DELETE", "/webhooks/" + id).then(function() { toast("Silindi"); loadWebhooks(); });
+  if (!confirm("Delete this webhook?")) return;
+  api("DELETE", "/webhooks/" + id).then(function() { toast("Deleted"); loadWebhooks(); });
 }
 
 // ── Offline Messages ──────────────────────────────────────────────────────────
@@ -2814,9 +2814,9 @@ function loadOfflineMsgs() {
         '<td style="max-width:300px">' + escHtml(m.message) + '</td>' +
         '<td style="font-size:11px;max-width:150px;word-break:break-all"><a href="' + escHtml(m.page_url) + '" target="_blank">' + escHtml(m.page_url) + '</a></td>' +
         '<td style="font-size:11px">' + t + '</td>' +
-        '<td>' + (!m.is_read ? '<button class="btn-sm success" onclick="markOfflineRead(' + m.id + ')">Okundu</button>' : '<span style="color:#94a3b8;font-size:11px">✓ Okundu</span>') + '</td>' +
+        '<td>' + (!m.is_read ? '<button class="btn-sm success" onclick="markOfflineRead(' + m.id + ')">Mark Read</button>' : '<span style="color:#94a3b8;font-size:11px">✓ Read</span>') + '</td>' +
         '</tr>';
-    }).join("") || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Çevrimdışı mesaj yok.</td></tr>';
+    }).join("") || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">No offline messages.</td></tr>';
   });
 }
 
@@ -2837,7 +2837,7 @@ function loadAuditLog() {
         '<td style="max-width:200px">' + escHtml(l.details || "-") + '</td>' +
         '<td style="font-size:11px">' + t + '</td>' +
         '</tr>';
-    }).join("") || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">Log kaydı yok.</td></tr>';
+    }).join("") || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">No log entries.</td></tr>';
   });
 }
 
@@ -2858,7 +2858,7 @@ function renderDeptList() {
   var el = document.getElementById("dept-list");
   if (!el) return;
   if (!allDepartments.length) {
-    el.innerHTML = '<div style="color:#94a3b8;font-size:13px">Henüz departman yok. "+ Yeni Departman" ile ekleyin.</div>';
+    el.innerHTML = '<div style="color:#94a3b8;font-size:13px">No departments yet. Use "+ New Department" to add one.</div>';
     return;
   }
   el.innerHTML = allDepartments.map(function(d) {
@@ -2870,22 +2870,22 @@ function renderDeptList() {
           '<div style="font-size:12px;color:#64748b">' + escHtml(d.description || "") + '</div>' +
         '</div>' +
         '<div style="margin-left:auto;display:flex;gap:6px">' +
-          '<button class="btn-sm danger" onclick="deleteDept(' + d.id + ')">Sil</button>' +
+          '<button class="btn-sm danger" onclick="deleteDept(' + d.id + ')">Delete</button>' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;gap:16px;font-size:12px;color:#64748b;margin-bottom:10px">' +
-        '<span>👤 ' + d.member_count + ' üye</span>' +
-        '<span>💬 ' + d.open_conversations + ' açık konuşma</span>' +
+        '<span>👤 ' + d.member_count + ' member(s)</span>' +
+        '<span>💬 ' + d.open_conversations + ' open conversations</span>' +
       '</div>' +
       '<div id="dept-members-' + d.id + '" style="margin-bottom:8px"></div>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
         '<select id="dept-add-agent-' + d.id + '" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;outline:none;flex:1">' +
-          '<option value="">Temsilci ekle...</option>' +
+          '<option value="">Add agent...</option>' +
           allAgents.filter(function(a){ return a.department_id !== d.id; }).map(function(a) {
             return '<option value="' + a.id + '">' + escHtml(a.display_name || a.username) + '</option>';
           }).join("") +
         '</select>' +
-        '<button class="btn-sm primary" onclick="addAgentToDept(' + d.id + ')">Ekle</button>' +
+        '<button class="btn-sm primary" onclick="addAgentToDept(' + d.id + ')">Add</button>' +
       '</div>' +
     '</div>';
   }).join("");
@@ -2904,7 +2904,7 @@ function loadDeptMembers(deptId) {
         dot + escHtml(a.display_name || a.username) +
         ' <button onclick="removeAgentFromDept(' + deptId + ',' + a.id + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:0 0 0 6px;font-size:11px;line-height:1">✕</button>' +
       '</span>';
-    }).join("") || '<span style="font-size:11px;color:#94a3b8">Henüz üye yok</span>';
+    }).join("") || '<span style="font-size:11px;color:#94a3b8">No members yet</span>';
   });
 }
 
@@ -2918,20 +2918,20 @@ function createDepartment() {
   var icon = document.getElementById("dept-icon").value.trim() || "💼";
   var color = document.getElementById("dept-color").value;
   var desc = document.getElementById("dept-desc").value.trim();
-  if (!name) { toast("Departman adı zorunlu", "error"); return; }
+  if (!name) { toast("Department name is required", "error"); return; }
   api("POST", "/departments", {name: name, icon: icon, color: color, description: desc}).then(function() {
     document.getElementById("dept-name").value = "";
     document.getElementById("dept-desc").value = "";
     document.getElementById("add-dept-form").style.display = "none";
-    toast("Departman oluşturuldu");
+    toast("Department created");
     loadDepartments();
-  }).catch(function() { toast("Hata oluştu", "error"); });
+  }).catch(function() { toast("An error occurred", "error"); });
 }
 
 function deleteDept(id) {
-  if (!confirm("Departman silinsin mi? Üyeler ve konuşmalar departmansız kalır.")) return;
+  if (!confirm("Delete this department? Members and conversations will be unassigned.")) return;
   api("DELETE", "/departments/" + id).then(function() {
-    toast("Departman silindi");
+    toast("Department deleted");
     loadDepartments();
   });
 }
@@ -2941,14 +2941,14 @@ function addAgentToDept(deptId) {
   var agentId = parseInt(sel.value);
   if (!agentId) return;
   api("POST", "/departments/" + deptId + "/agents/" + agentId).then(function() {
-    toast("Temsilci eklendi");
+    toast("Agent added");
     loadDepartments();
   });
 }
 
 function removeAgentFromDept(deptId, agentId) {
   api("DELETE", "/departments/" + deptId + "/agents/" + agentId).then(function() {
-    toast("Temsilci çıkarıldı");
+    toast("Agent removed");
     loadDepartments();
   });
 }
@@ -2957,7 +2957,7 @@ function populateDeptSelects() {
   // Filter dropdown
   var filterDept = document.getElementById("filter-dept");
   var cur = filterDept.value;
-  filterDept.innerHTML = '<option value="">Tüm Dept.</option>' +
+  filterDept.innerHTML = '<option value="">All Depts.</option>' +
     allDepartments.map(function(d) {
       return '<option value="' + d.id + '">' + escHtml(d.icon + ' ' + d.name) + '</option>';
     }).join("");
@@ -2965,7 +2965,7 @@ function populateDeptSelects() {
 
   // Chat header dept select
   var deptSel = document.getElementById("dept-select");
-  deptSel.innerHTML = '<option value="">🏢 Departman</option>' +
+  deptSel.innerHTML = '<option value="">🏢 Department</option>' +
     allDepartments.map(function(d) {
       return '<option value="' + d.id + '">' + escHtml(d.icon + ' ' + d.name) + '</option>';
     }).join("");
@@ -2977,7 +2977,7 @@ function setConvDept() {
   api("PATCH", "/conversations/" + currentConvId + "/department", {department_id: deptId}).then(function(res) {
     var conv = convs.find(function(c){ return c.id === currentConvId; });
     if (conv) conv.department = res.department;
-    toast(deptId ? "Departman atandı" : "Departman kaldırıldı");
+    toast(deptId ? "Department assigned" : "Department removed");
     renderConvList();
   });
 }
@@ -2988,25 +2988,25 @@ var currentFormFields = [];
 var fieldOptions = []; // options for the field being edited
 
 var FIELD_TYPE_LABELS = {
-  text: "Metin", email: "E-posta", phone: "Telefon", number: "Sayı",
-  textarea: "Uzun Metin", select: "Çoktan Seç", rating: "Puan (⭐)",
+  text: "Text", email: "Email", phone: "Phone", number: "Number",
+  textarea: "Long Text", select: "Multiple Choice", rating: "Rating (⭐)",
 };
 
 function loadForms() {
   api("GET", "/forms").then(function(forms) {
     var list = document.getElementById("forms-list");
     if (!forms.length) {
-      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;padding:16px 0">Henüz form oluşturulmadı.</p>';
+      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;padding:16px 0">No forms created yet.</p>';
       return;
     }
     list.innerHTML = forms.map(function(f) {
       return '<div style="background:#fff;border:1px solid ' + (f.is_active ? '#22c55e' : '#e2e8f0') + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
         '<div style="flex:1">' +
-          '<div style="font-size:14px;font-weight:700;color:#1e293b">' + escHtml(f.name) + (f.is_active ? ' <span style="background:#dcfce7;color:#16a34a;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px">Aktif</span>' : '') + '</div>' +
-          '<div style="font-size:12px;color:#94a3b8;margin-top:3px">' + f.field_count + ' alan · ' + f.submission_count + ' yanıt</div>' +
+          '<div style="font-size:14px;font-weight:700;color:#1e293b">' + escHtml(f.name) + (f.is_active ? ' <span style="background:#dcfce7;color:#16a34a;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px">Active</span>' : '') + '</div>' +
+          '<div style="font-size:12px;color:#94a3b8;margin-top:3px">' + f.field_count + ' field(s) · ' + f.submission_count + ' response(s)</div>' +
         '</div>' +
-        '<button class="btn-sm" onclick="openFormDetail(' + f.id + ', ' + JSON.stringify(escHtml(f.name)) + ')">Düzenle</button>' +
-        '<button class="btn-sm" style="' + (f.is_active ? 'background:#fef2f2;color:#dc2626' : '') + '" onclick="setFormActive(' + f.id + ',' + !f.is_active + ')">' + (f.is_active ? 'Deaktif Et' : 'Aktif Yap') + '</button>' +
+        '<button class="btn-sm" onclick="openFormDetail(' + f.id + ', ' + JSON.stringify(escHtml(f.name)) + ')">Edit</button>' +
+        '<button class="btn-sm" style="' + (f.is_active ? 'background:#fef2f2;color:#dc2626' : '') + '" onclick="setFormActive(' + f.id + ',' + !f.is_active + ')">' + (f.is_active ? 'Deactivate' : 'Activate') + '</button>' +
         '<button class="btn-sm" style="background:#fef2f2;color:#dc2626" onclick="deleteForm(' + f.id + ')">Sil</button>' +
       '</div>';
     }).join("");
@@ -3021,13 +3021,13 @@ function showCreateFormPanel() {
 function saveNewForm() {
   var name = document.getElementById("nf-name").value.trim();
   if (!name) { document.getElementById("nf-name").focus(); return; }
-  var welcome = document.getElementById("nf-welcome").value.trim() || "Lütfen aşağıdaki formu doldurun.";
-  var submitText = document.getElementById("nf-submit-text").value.trim() || "Gönder";
+  var welcome = document.getElementById("nf-welcome").value.trim() || "Please fill out the form below.";
+  var submitText = document.getElementById("nf-submit-text").value.trim() || "Submit";
   api("POST", "/forms", { name: name, welcome_text: welcome, submit_text: submitText }).then(function(res) {
     document.getElementById("create-form-panel").style.display = "none";
     document.getElementById("nf-name").value = "";
     document.getElementById("nf-welcome").value = "";
-    document.getElementById("nf-submit-text").value = "Gönder";
+    document.getElementById("nf-submit-text").value = "Submit";
     openFormDetail(res.id, res.name);
   });
 }
@@ -3045,7 +3045,7 @@ function openFormDetail(formId, formName) {
   api("GET", "/forms").then(function(forms) {
     var f = forms.find(function(x) { return x.id === formId; });
     if (f) {
-      document.getElementById("fd-activate-btn").textContent = f.is_active ? "Deaktif Et" : "Aktif Yap";
+      document.getElementById("fd-activate-btn").textContent = f.is_active ? "Deactivate" : "Activate";
       document.getElementById("fd-activate-btn").style.background = f.is_active ? "#fee2e2" : "";
       document.getElementById("fd-activate-btn").style.color = f.is_active ? "#dc2626" : "";
       document.getElementById("fd-form-name").textContent = f.name + (f.is_active ? " ✅" : "");
@@ -3071,9 +3071,9 @@ function toggleFormActive() {
 
 function setFormActive(formId, active) {
   api("PATCH", "/forms/" + formId, { is_active: active }).then(function() {
-    toast(active ? "Form aktifleştirildi" : "Form deaktifleştirildi");
+    toast(active ? "Form activated" : "Form deactivated");
     if (currentFormId === formId) {
-      document.getElementById("fd-activate-btn").textContent = active ? "Deaktif Et" : "Aktif Yap";
+      document.getElementById("fd-activate-btn").textContent = active ? "Deactivate" : "Activate";
       document.getElementById("fd-activate-btn").style.background = active ? "#fee2e2" : "";
       document.getElementById("fd-activate-btn").style.color = active ? "#dc2626" : "";
       document.getElementById("fd-form-name").textContent = document.getElementById("fd-form-name").textContent.replace(" ✅", "") + (active ? " ✅" : "");
@@ -3083,9 +3083,9 @@ function setFormActive(formId, active) {
 }
 
 function deleteForm(formId) {
-  if (!confirm("Bu formu silmek istediğinizden emin misiniz?")) return;
+  if (!confirm("Are you sure you want to delete this form?")) return;
   api("DELETE", "/forms/" + formId).then(function() {
-    toast("Form silindi");
+    toast("Form deleted");
     if (currentFormId === formId) backToFormsList();
     else loadForms();
   });
@@ -3112,7 +3112,7 @@ function renderFieldsList(fields) {
     var typeLabel = FIELD_TYPE_LABELS[f.field_type] || f.field_type;
     var optCount = "";
     if (f.field_type === "select") {
-      try { var opts = JSON.parse(f.options_json); optCount = " · " + opts.length + " seçenek"; } catch(e){}
+      try { var opts = JSON.parse(f.options_json); optCount = " · " + opts.length + " option(s)"; } catch(e){}
     }
     return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:10px 14px;display:flex;align-items:center;gap:10px">' +
       '<div style="width:24px;height:24px;background:#e2e8f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#64748b;flex-shrink:0">' + (idx+1) + '</div>' +
@@ -3122,7 +3122,7 @@ function renderFieldsList(fields) {
       '</div>' +
       '<button class="btn-sm" onclick="moveField(' + f.id + ',-1)" ' + (idx===0?'disabled':'') + '>↑</button>' +
       '<button class="btn-sm" onclick="moveField(' + f.id + ',1)" ' + (idx===fields.length-1?'disabled':'') + '>↓</button>' +
-      '<button class="btn-sm" onclick="editFieldInline(' + f.id + ')">Düzenle</button>' +
+      '<button class="btn-sm" onclick="editFieldInline(' + f.id + ')">Edit</button>' +
       '<button class="btn-sm" style="background:#fef2f2;color:#dc2626" onclick="deleteField(' + f.id + ')">Sil</button>' +
     '</div>';
   }).join("");
@@ -3167,8 +3167,8 @@ function renderFieldOptions() {
   var list = document.getElementById("ff-options-list");
   list.innerHTML = fieldOptions.map(function(opt, i) {
     return '<div style="display:flex;gap:6px;align-items:center">' +
-      '<input placeholder="Seçenek metni" value="' + escHtml(opt.label) + '" oninput="fieldOptions['+i+'].label=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
-      '<input placeholder="Cevap (isteğe bağlı)" value="' + escHtml(opt.reply) + '" oninput="fieldOptions['+i+'].reply=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
+      '<input placeholder="Option text" value="' + escHtml(opt.label) + '" oninput="fieldOptions['+i+'].label=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
+      '<input placeholder="Reply (optional)" value="' + escHtml(opt.reply) + '" oninput="fieldOptions['+i+'].reply=this.value" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;outline:none">' +
       '<button class="btn-sm" style="background:#fef2f2;color:#dc2626;padding:5px 8px" onclick="fieldOptions.splice('+i+',1);renderFieldOptions()">✕</button>' +
     '</div>';
   }).join("");
@@ -3183,7 +3183,7 @@ function saveField() {
   var optionsJson = type === "select" ? JSON.stringify(fieldOptions.filter(function(o){return o.label;})) : "[]";
   var payload = { label: label, field_type: type, placeholder: placeholder, required: required, options_json: optionsJson };
   api("POST", "/forms/" + currentFormId + "/fields", payload).then(function() {
-    toast("Alan eklendi");
+    toast("Field added");
     document.getElementById("add-field-panel").style.display = "none";
     fieldOptions = [];
     loadFormFields();
@@ -3203,7 +3203,7 @@ function editFieldInline(fieldId) {
   document.getElementById("add-field-panel").style.display = "";
   // Swap save button to update
   var saveBtn = document.querySelector("#add-field-panel .form-submit");
-  saveBtn.textContent = "Güncelle";
+  saveBtn.textContent = "Update";
   saveBtn.onclick = function() {
     var label = document.getElementById("ff-label").value.trim();
     if (!label) return;
@@ -3215,9 +3215,9 @@ function editFieldInline(fieldId) {
       required: document.getElementById("ff-required").checked,
       options_json: optionsJson,
     }).then(function() {
-      toast("Alan güncellendi");
+      toast("Field updated");
       document.getElementById("add-field-panel").style.display = "none";
-      saveBtn.textContent = "Ekle";
+      saveBtn.textContent = "Add";
       saveBtn.onclick = saveField;
       fieldOptions = [];
       loadFormFields();
@@ -3226,9 +3226,9 @@ function editFieldInline(fieldId) {
 }
 
 function deleteField(fieldId) {
-  if (!confirm("Bu alanı silmek istediğinizden emin misiniz?")) return;
+  if (!confirm("Are you sure you want to delete this field?")) return;
   api("DELETE", "/forms/" + currentFormId + "/fields/" + fieldId).then(function() {
-    toast("Alan silindi");
+    toast("Field deleted");
     loadFormFields();
   });
 }
@@ -3238,15 +3238,15 @@ function loadCurrentFormSubmissions() {
   api("GET", "/forms/" + currentFormId + "/submissions").then(function(subs) {
     var list = document.getElementById("submissions-list");
     if (!subs.length) {
-      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:16px 0">Henüz yanıt yok.</p>';
+      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:16px 0">No responses yet.</p>';
       return;
     }
     var labels = subs.length ? subs[0].field_labels : {};
-    list.innerHTML = '<table class="gen-table"><thead><tr><th>Tarih</th><th>Ziyaretçi</th>' +
+    list.innerHTML = '<table class="gen-table"><thead><tr><th>Date</th><th>Visitor</th>' +
       Object.keys(labels).map(function(k) { return '<th>' + escHtml(labels[k]) + '</th>'; }).join("") +
-      '<th>Konuşma</th></tr></thead><tbody>' +
+      '<th>Conversation</th></tr></thead><tbody>' +
       subs.map(function(s) {
-        return '<tr><td>' + new Date(s.submitted_at).toLocaleString("tr-TR") + '</td>' +
+        return '<tr><td>' + new Date(s.submitted_at).toLocaleString() + '</td>' +
           '<td style="font-size:11px;color:#64748b">' + escHtml(s.visitor_id.slice(0,12)) + '...</td>' +
           Object.keys(labels).map(function(k) { return '<td>' + escHtml(s.answers[k] || "—") + '</td>'; }).join("") +
           '<td>' + (s.conversation_id ? '<a href="#" style="color:#2563eb;font-size:12px" onclick="openConvById(' + s.conversation_id + ');return false">#' + s.conversation_id + '</a>' : '—') + '</td>' +
