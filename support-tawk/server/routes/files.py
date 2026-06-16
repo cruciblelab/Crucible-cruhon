@@ -13,10 +13,16 @@ from datetime import datetime
 
 router = APIRouter(prefix="/api/files")
 
-UPLOAD_DIR = Path("uploads")
+# Absolute path so it never depends on CWD
+UPLOAD_DIR = (Path(__file__).parent.parent.parent / "uploads").resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 _IMAGE_EXTS = {"jpg", "jpeg", "png", "gif", "webp"}
+# All allowed extensions (union of image + file lists from config is checked at
+# upload time; at serve time we re-derive from config to stay in sync)
+_SAFE_FILENAME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+)
 
 
 def _ext(filename: str) -> str:
@@ -27,6 +33,22 @@ def _size_limit(ext: str) -> int:
     if ext in _IMAGE_EXTS:
         return config.limits.max_image_size_mb * 1024 * 1024
     return config.limits.max_file_size_mb * 1024 * 1024
+
+
+def _safe_serve_path(filename: str) -> Path:
+    """Resolve filename to an absolute path that must be inside UPLOAD_DIR.
+    Raises HTTPException 400 on obviously bad input, 403 on traversal attempt."""
+    # Reject any filename that contains separators or non-safe chars upfront
+    # (uploaded files are always uuid4.ext so this also rejects legacy junk)
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Invalid filename")
+    if not all(c in _SAFE_FILENAME_CHARS for c in filename):
+        raise HTTPException(400, "Invalid filename")
+    resolved = (UPLOAD_DIR / filename).resolve()
+    # Must be strictly inside UPLOAD_DIR (trailing sep prevents prefix collision)
+    if not str(resolved).startswith(str(UPLOAD_DIR) + os.sep):
+        raise HTTPException(403, "Access denied")
+    return resolved
 
 
 @router.post("/upload/visitor/{visitor_id}")
@@ -138,11 +160,16 @@ async def agent_upload(
 
 @router.get("/serve/{filename}")
 def serve_file(filename: str):
-    path = UPLOAD_DIR / filename
-    if not path.exists() or not path.is_file():
-        raise HTTPException(404, "Dosya bulunamadı")
-    # Path traversal guard
-    if not str(path.resolve()).startswith(str(UPLOAD_DIR.resolve())):
-        raise HTTPException(403, "Erişim reddedildi")
+    path = _safe_serve_path(filename)
+    ext = _ext(filename)
+    allowed = set(config.limits.allowed_file_types) | _IMAGE_EXTS
+    if ext not in allowed:
+        raise HTTPException(403, "Access denied")
+    if not path.is_file():
+        raise HTTPException(404, "File not found")
     mime, _ = mimetypes.guess_type(str(path))
-    return FileResponse(str(path), media_type=mime or "application/octet-stream")
+    return FileResponse(
+        str(path),
+        media_type=mime or "application/octet-stream",
+        filename=filename,
+    )

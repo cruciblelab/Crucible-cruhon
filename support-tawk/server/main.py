@@ -115,13 +115,19 @@ def serve_widget():
     return FileResponse(str(_static / "widget.js"), media_type="application/javascript")
 
 
+_ADMIN_DIR = (_static / "admin").resolve()
+
+
 @app.get("/admin", include_in_schema=False)
 @app.get("/admin/{path:path}", include_in_schema=False)
 def serve_admin(path: str = ""):
     if path:
-        admin_dir = (_static / "admin").resolve()
-        candidate = (admin_dir / path).resolve()
-        if str(candidate).startswith(str(admin_dir) + os.sep) and candidate.is_file():
+        # Reject traversal attempts before resolving
+        if ".." in path or path.startswith("/"):
+            return FileResponse(str(_static / "admin" / "index.html"))
+        candidate = (_ADMIN_DIR / path).resolve()
+        # Must be strictly inside admin dir (trailing sep prevents prefix collision)
+        if str(candidate).startswith(str(_ADMIN_DIR) + os.sep) and candidate.is_file():
             return FileResponse(str(candidate))
     return FileResponse(str(_static / "admin" / "index.html"))
 
