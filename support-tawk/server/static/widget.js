@@ -78,6 +78,14 @@
       file_failed: "Dosya yüklenemedi: ",
       notif_new_msg: "Yeni mesaj",
       notif_file: "Dosya gönderildi",
+      banned_title: "Erişiminiz engellendi",
+      banned_reason_label: "Neden: ",
+      appeal_button: "İtiraz Et",
+      appeal_placeholder: "Neden engelinizin kaldırılması gerektiğini açıklayın...",
+      appeal_submit: "İtiraz Gönder",
+      appeal_sent: "İtirazınız alındı. Bir yönetici inceleyecektir.",
+      appeal_already: "Beklemede olan bir itirazınız zaten var.",
+      ban_lifted: "Engeliniz kaldırıldı! Sayfayı yenileyerek sohbet edebilirsiniz.",
     },
     en: {
       aria_chat: "Support Chat",
@@ -116,6 +124,14 @@
       file_failed: "File upload failed: ",
       notif_new_msg: "New message",
       notif_file: "File sent",
+      banned_title: "You have been blocked",
+      banned_reason_label: "Reason: ",
+      appeal_button: "Submit an Appeal",
+      appeal_placeholder: "Explain why your block should be removed...",
+      appeal_submit: "Submit Appeal",
+      appeal_sent: "Your appeal has been submitted. An admin will review it.",
+      appeal_already: "You already have a pending appeal.",
+      ban_lifted: "Your block has been lifted! Refresh the page to start chatting.",
     },
   };
 
@@ -157,6 +173,9 @@
     form_answers: {},
     form_shown: false,
     form_active: false,
+    banned: false,
+    ban_reason: "",
+    appeal_sent: false,
   };
 
   // ── Markdown renderer ─────────────────────────────────────────────────────
@@ -848,6 +867,7 @@
     };
 
     state.ws.onclose = function () {
+      if (state.banned) return;
       statusEl.textContent = t("status_disconnected");
       scheduleReconnect();
     };
@@ -868,7 +888,72 @@
     }
   });
 
+  function showBanUI() {
+    statusEl.textContent = t("banned_title");
+    inputEl.disabled = true;
+    inputEl.placeholder = t("banned_title");
+    var banDiv = document.createElement("div");
+    banDiv.className = "st-ban-notice";
+    banDiv.style.cssText = "margin:16px;padding:16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;font-size:13px;color:#991b1b;text-align:center";
+    var reasonHtml = state.ban_reason
+      ? "<div style='margin:6px 0 12px;font-size:12px;color:#7f1d1d'>" + t("banned_reason_label") + String(state.ban_reason).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</div>"
+      : "<div style='margin:6px 0 12px'></div>";
+    banDiv.innerHTML = "<div style='font-size:18px;margin-bottom:6px'>🚫</div><strong>" + t("banned_title") + "</strong>" + reasonHtml;
+    if (!state.appeal_sent) {
+      var appealBtn = document.createElement("button");
+      appealBtn.className = "st-bot-btn";
+      appealBtn.textContent = t("appeal_button");
+      appealBtn.style.cssText = "margin-top:4px;background:#3b82f6;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px";
+      appealBtn.addEventListener("click", function() {
+        appealBtn.remove();
+        var ta = document.createElement("textarea");
+        ta.placeholder = t("appeal_placeholder");
+        ta.style.cssText = "width:100%;box-sizing:border-box;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;margin-top:8px;resize:none;height:80px;color:#1e293b";
+        var sendBtn = document.createElement("button");
+        sendBtn.textContent = t("appeal_submit");
+        sendBtn.style.cssText = "margin-top:8px;background:#3b82f6;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;width:100%";
+        sendBtn.addEventListener("click", function() {
+          sendBtn.disabled = true;
+          sendBtn.textContent = "...";
+          fetch(SERVER + "/api/ban-appeal", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({visitor_id: VISITOR_ID, message: ta.value}),
+          }).then(function(r) {
+            if (r.ok) {
+              state.appeal_sent = true;
+              ta.remove();
+              sendBtn.remove();
+              var ok = document.createElement("div");
+              ok.style.cssText = "margin-top:10px;font-size:12px;color:#166534;background:#dcfce7;padding:8px;border-radius:8px";
+              ok.textContent = t("appeal_sent");
+              banDiv.appendChild(ok);
+            } else {
+              return r.json().then(function(e) {
+                sendBtn.disabled = false;
+                sendBtn.textContent = t("appeal_submit");
+                var errDiv = document.createElement("div");
+                errDiv.style.cssText = "margin-top:6px;font-size:12px;color:#991b1b";
+                errDiv.textContent = e.detail || t("send_failed");
+                banDiv.appendChild(errDiv);
+              });
+            }
+          }).catch(function() {
+            sendBtn.disabled = false;
+            sendBtn.textContent = t("appeal_submit");
+          });
+        });
+        banDiv.appendChild(ta);
+        banDiv.appendChild(sendBtn);
+      });
+      banDiv.appendChild(appealBtn);
+    }
+    messagesEl.appendChild(banDiv);
+    scrollBottom();
+  }
+
   function scheduleReconnect() {
+    if (state.banned) return;
     if (state.reconnect_attempts >= 8) return;
     var delay = Math.min(1000 * Math.pow(2, state.reconnect_attempts), 30000);
     state.reconnect_attempts++;
@@ -1018,21 +1103,21 @@
       // text / email / phone / number / textarea
       // Intercept the next user send via state.form_active
       inputEl.placeholder = field.placeholder ||
-        (field.field_type === "email" ? "E-posta adresinizi yazın…" :
-         field.field_type === "phone" ? "Telefon numaranızı yazın…" :
-         field.field_type === "number" ? "Sayı girin…" : "Yanıtınızı yazın…");
+        (field.field_type === "email" ? "Enter your email address..." :
+         field.field_type === "phone" ? "Enter your phone number..." :
+         field.field_type === "number" ? "Enter a number..." : "Type your answer...");
       if (window.innerWidth > 480) inputEl.focus();
     }
   }
 
   function finishFormInChat() {
     state.form_active = false;
-    inputEl.placeholder = "Mesajınızı yazın...";
+    inputEl.placeholder = t("input_placeholder");
 
     appendMsg({
       sender_type: "bot",
       sender_name: state.form_data.name,
-      content: "✅ Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede yardımcı olacak.",
+      content: "✅ Thank you! Your information has been received. Our support team will assist you shortly.",
     });
     scrollBottom();
 
@@ -1050,6 +1135,23 @@
 
   // ── Handle incoming messages ───────────────────────────────────────────────
   function handleMessage(data) {
+    if (data.type === "banned") {
+      state.banned = true;
+      state.ban_reason = data.reason || "";
+      showBanUI();
+      return;
+    }
+    if (data.type === "ban_lifted") {
+      state.banned = false;
+      inputEl.disabled = false;
+      inputEl.placeholder = t("input_placeholder");
+      var liftDiv = document.createElement("div");
+      liftDiv.style.cssText = "margin:12px 16px;padding:12px;background:#dcfce7;border:1px solid #86efac;border-radius:10px;font-size:13px;color:#166534;text-align:center";
+      liftDiv.textContent = t("ban_lifted");
+      messagesEl.appendChild(liftDiv);
+      scrollBottom();
+      return;
+    }
     if (data.type === "history") {
       state.convId = data.conversation_id;
       if (data.config) {

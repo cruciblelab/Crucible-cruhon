@@ -15,7 +15,7 @@ except ImportError:
     _HAS_OPENPYXL = False
 from ..database import (
     Department, Agent, Conversation, Message, CannedResponse,
-    Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
+    Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, BotFlow, Setting,
     Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
     Form, FormField, FormSubmission,
 )
@@ -1095,12 +1095,20 @@ def list_blacklist(agent: Agent = Depends(get_current_agent)):
 
 
 @router.post("/blacklist")
-def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(require_permission("manage_blacklist"))):
+async def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(require_permission("manage_blacklist"))):
     kind = req.kind if req.kind in ("ip", "visitor") else "ip"
     if BlacklistedIP.get_or_none(BlacklistedIP.ip == req.ip):
-        raise HTTPException(400, "Bu değer zaten yasaklı")
+        raise HTTPException(400, "Already blocked")
     b = BlacklistedIP.create(ip=req.ip, reason=req.reason, blocked_by=agent, kind=kind)
     _audit(agent.display_name or agent.username, "blacklist_add", kind, b.id, req.ip)
+    # Push ban event to currently connected visitor
+    ban_msg = {"type": "banned", "reason": req.reason or ""}
+    if kind == "visitor":
+        await manager.send_to_visitor(req.ip, ban_msg)
+    elif kind == "ip":
+        vid = manager.find_visitor_by_ip(req.ip)
+        if vid:
+            await manager.send_to_visitor(vid, ban_msg)
     return {"id": b.id, "ip": b.ip, "kind": kind}
 
 
@@ -1108,6 +1116,67 @@ def add_blacklist(req: BlacklistCreate, agent: Agent = Depends(require_permissio
 def remove_blacklist(bl_id: int, agent: Agent = Depends(require_permission("manage_blacklist"))):
     _audit(agent.display_name or agent.username, "blacklist_remove", "ip", bl_id)
     BlacklistedIP.delete().where(BlacklistedIP.id == bl_id).execute()
+    return {"ok": True}
+
+
+# ── Ban Appeals ───────────────────────────────────────────────────────────────
+
+@router.get("/appeals")
+def list_appeals(agent: Agent = Depends(require_permission("manage_blacklist"))):
+    return [
+        {
+            "id": a.id,
+            "ip": a.ip,
+            "visitor_id": a.visitor_id,
+            "message": a.message,
+            "status": a.status,
+            "created_at": a.created_at.isoformat(),
+            "reviewed_by": a.reviewed_by_id,
+            "reviewed_at": a.reviewed_at.isoformat() if a.reviewed_at else None,
+        }
+        for a in BanAppeal.select().order_by(BanAppeal.created_at.desc())
+    ]
+
+
+@router.get("/appeals/pending-count")
+def appeals_pending_count(agent: Agent = Depends(get_current_agent)):
+    count = BanAppeal.select().where(BanAppeal.status == "pending").count()
+    return {"count": count}
+
+
+@router.post("/appeals/{appeal_id}/accept")
+async def accept_appeal(appeal_id: int, agent: Agent = Depends(require_permission("manage_blacklist"))):
+    appeal = BanAppeal.get_or_none(BanAppeal.id == appeal_id)
+    if not appeal:
+        raise HTTPException(404, "Appeal not found")
+    # Remove all matching bans for this visitor
+    if appeal.ip:
+        BlacklistedIP.delete().where(BlacklistedIP.ip == appeal.ip, BlacklistedIP.kind == "ip").execute()
+    if appeal.visitor_id:
+        BlacklistedIP.delete().where(BlacklistedIP.ip == appeal.visitor_id, BlacklistedIP.kind == "visitor").execute()
+    BanAppeal.update(
+        status="accepted",
+        reviewed_by=agent,
+        reviewed_at=datetime.utcnow(),
+    ).where(BanAppeal.id == appeal_id).execute()
+    _audit(agent.display_name or agent.username, "appeal_accept", "ban_appeal", appeal_id)
+    # Notify the visitor if still connected
+    if appeal.visitor_id:
+        await manager.send_to_visitor(appeal.visitor_id, {"type": "ban_lifted"})
+    return {"ok": True}
+
+
+@router.post("/appeals/{appeal_id}/reject")
+def reject_appeal(appeal_id: int, agent: Agent = Depends(require_permission("manage_blacklist"))):
+    appeal = BanAppeal.get_or_none(BanAppeal.id == appeal_id)
+    if not appeal:
+        raise HTTPException(404, "Appeal not found")
+    BanAppeal.update(
+        status="rejected",
+        reviewed_by=agent,
+        reviewed_at=datetime.utcnow(),
+    ).where(BanAppeal.id == appeal_id).execute()
+    _audit(agent.display_name or agent.username, "appeal_reject", "ban_appeal", appeal_id)
     return {"ok": True}
 
 

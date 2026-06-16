@@ -6,7 +6,7 @@ Self-hosted live chat widget for any website. Built with FastAPI + WebSockets â€
 
 ```bash
 sudo apt update && sudo apt install -y git && \
-git clone https://github.com/cruciblelab/support-tawk.git /opt/support-tawk && \
+git clone https://github.com/cruciblelab/supporttawk.git /opt/support-tawk && \
 sudo bash /opt/support-tawk/install.sh
 ```
 
@@ -22,7 +22,7 @@ DOMAIN=chat.yoursite.com SITE_NAME="My Company" ADMIN_PASS="StrongPass" \
 ## Manual / Local Setup
 
 ```bash
-git clone https://github.com/cruciblelab/support-tawk.git
+git clone https://github.com/cruciblelab/supporttawk.git
 cd support-tawk
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt

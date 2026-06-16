@@ -2,9 +2,9 @@ from __future__ import annotations
 import json
 import asyncio
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
 from pydantic import BaseModel
-from ..database import Department, Conversation, Message, Agent, BlacklistedIP, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
+from ..database import Department, Conversation, Message, Agent, BlacklistedIP, BanAppeal, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
 from ..webhook_sender import fire_event
 from ..ws_manager import manager
 from ..config import config
@@ -134,6 +134,38 @@ def schedule_status():
     return {"available": agents_online}
 
 
+class BanAppealRequest(BaseModel):
+    visitor_id: str
+    message: str = ""
+
+
+@router.post("/api/ban-appeal")
+async def submit_ban_appeal(req: BanAppealRequest, request: Request):
+    xff = request.headers.get("x-forwarded-for", "")
+    client_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "unknown")
+
+    ban = BlacklistedIP.get_or_none(
+        ((BlacklistedIP.ip == client_ip) & (BlacklistedIP.kind == "ip")) |
+        ((BlacklistedIP.ip == req.visitor_id) & (BlacklistedIP.kind == "visitor"))
+    )
+    if not ban:
+        raise HTTPException(400, "No active ban found for this visitor.")
+
+    existing = BanAppeal.get_or_none(
+        (BanAppeal.ip == client_ip) | (BanAppeal.visitor_id == req.visitor_id),
+        BanAppeal.status == "pending",
+    )
+    if existing:
+        raise HTTPException(400, "An appeal is already pending review.")
+
+    BanAppeal.create(
+        ip=client_ip,
+        visitor_id=req.visitor_id,
+        message=req.message[:1000],
+    )
+    return {"ok": True}
+
+
 @router.websocket("/ws/visitor/{visitor_id}")
 async def visitor_ws(ws: WebSocket, visitor_id: str):
     # IP blacklist check
@@ -145,11 +177,13 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
     if forwarded_for:
         client_ip = forwarded_for.split(",")[0].strip()
 
-    # IP veya visitor ID kara liste kontrolü
-    if BlacklistedIP.get_or_none(
+    ban = BlacklistedIP.get_or_none(
         ((BlacklistedIP.ip == client_ip) & (BlacklistedIP.kind == "ip")) |
         ((BlacklistedIP.ip == visitor_id) & (BlacklistedIP.kind == "visitor"))
-    ):
+    )
+    if ban:
+        await ws.accept()
+        await ws.send_json({"type": "banned", "reason": ban.reason or ""})
         await ws.close(code=4403)
         return
 
@@ -157,7 +191,7 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
     accept_lang = ws.headers.get("accept-language", "")
     language = accept_lang.split(",")[0].split(";")[0].strip()[:16] if accept_lang else ""
 
-    await manager.connect_visitor(visitor_id, ws)
+    await manager.connect_visitor(visitor_id, ws, ip=client_ip)
     conv = Conversation.get_or_none(
         Conversation.visitor_id == visitor_id,
         Conversation.status != "closed"

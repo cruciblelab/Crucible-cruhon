@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from server.config import config
 from server.database import database, Agent, Conversation, Message, Setting, init_db
 from server.auth import hash_password
+from server.ws_manager import manager
 from server.routes.chat import router as chat_router
 from server.routes.admin import router as admin_router
 from server.routes.files import router as files_router
@@ -147,6 +148,23 @@ def root():
         "widget": "/widget.js",
         "docs": "/api/docs",
     }
+
+
+@app.get("/health", include_in_schema=False)
+def health():
+    """Lightweight liveness/readiness probe for monitoring and uptime tools.
+    Returns 200 when the database is reachable, 503 otherwise."""
+    db_ok = True
+    try:
+        database.execute_sql("SELECT 1")
+    except Exception:
+        db_ok = False
+    payload = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "error",
+        "agents_online": manager.agent_count(),
+    }
+    return JSONResponse(payload, status_code=200 if db_ok else 503)
 
 
 @app.get("/api/config")

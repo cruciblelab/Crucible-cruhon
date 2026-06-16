@@ -398,6 +398,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="nav-item" data-page="tags" id="nav-tags" style="display:none" onclick="showPage('tags')">
       <span class="nav-icon">🏷️</span> Tags
     </div>
+    <div class="nav-item" data-page="appeals" id="nav-appeals" style="display:none" onclick="showPage('appeals')">
+      <span class="nav-icon">⚖️</span> Ban Appeals <span id="appeals-badge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span>
+    </div>
     <div class="nav-item" data-page="blacklist" id="nav-blacklist" style="display:none" onclick="showPage('blacklist')">
       <span class="nav-icon">🚫</span> Blocklist
     </div>
@@ -636,6 +639,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <!-- Blacklist page -->
+    <!-- Ban Appeals page -->
+    <div class="page" id="page-appeals">
+      <div class="page-header">
+        <h2>⚖️ Ban Appeals</h2>
+      </div>
+      <div id="appeals-list" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+
     <div class="page" id="page-blacklist">
       <div class="page-header">
         <h2>🚫 Blocklist</h2>
@@ -1135,6 +1146,7 @@ function applyNavVisibility() {
     "nav-audit": "view_audit",
     "nav-departments": "manage_departments",
     "nav-forms": "manage_forms",
+    "nav-appeals": "manage_blacklist",
     "nav-blacklist": "manage_blacklist",
     "nav-botflow": "manage_botflow",
     "nav-tags": "manage_tags",
@@ -1166,6 +1178,14 @@ api("GET", "/me").then(function(me) {
     applyPermVisibility();
   }
 }).catch(function(){});
+
+// Poll for pending ban appeals badge every 60 seconds
+setTimeout(function() {
+  if (can("manage_blacklist")) {
+    refreshAppealsBadge();
+    setInterval(refreshAppealsBadge, 60000);
+  }
+}, 500);
 
 var allDepartments = [];
 
@@ -1244,6 +1264,7 @@ function showPage(name) {
   if (name === "stats") loadDetailedStats();
   if (name === "tags") loadTags();
   if (name === "blacklist") loadBlacklist();
+  if (name === "appeals") loadAppeals();
   if (name === "botflow") loadBotflows();
   if (name === "schedule") loadScheduleAgents();
   if (name === "profile") loadProfile();
@@ -2177,6 +2198,59 @@ function createTag() {
 function deleteTag(id) {
   if (!confirm("Delete this tag?")) return;
   api("DELETE", "/tags/" + id).then(function() { toast("Deleted"); loadTags(); });
+}
+
+// ── Ban Appeals ───────────────────────────────────────────────────────────────
+function loadAppeals() {
+  api("GET", "/appeals").then(function(data) {
+    var list = Array.isArray(data) ? data : [];
+    var el = document.getElementById("appeals-list");
+    if (!list.length) {
+      el.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:40px 0">No appeals yet.</div>';
+      return;
+    }
+    el.innerHTML = list.map(function(a) {
+      var d = a.created_at ? new Date(a.created_at).toLocaleString() : "";
+      var statusColor = a.status === "accepted" ? "#166534" : a.status === "rejected" ? "#991b1b" : "#92400e";
+      var statusBg = a.status === "accepted" ? "#dcfce7" : a.status === "rejected" ? "#fef2f2" : "#fefce8";
+      var btns = a.status === "pending"
+        ? '<button class="btn-sm" style="background:#22c55e;color:#fff;border:none" onclick="resolveAppeal(' + a.id + ',\'accept\')">Accept (Unban)</button> ' +
+          '<button class="btn-sm danger" onclick="resolveAppeal(' + a.id + ',\'reject\')">Reject</button>'
+        : "";
+      return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div style="font-size:12px;color:#64748b">' + escHtml(d) + '</div>' +
+        '<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:' + statusBg + ';color:' + statusColor + '">' + a.status.toUpperCase() + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#64748b;margin-bottom:4px">IP: <code>' + escHtml(a.ip || "-") + '</code> &nbsp; Visitor ID: <code>' + escHtml(a.visitor_id || "-") + '</code></div>' +
+        '<div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:13px;color:#1e293b;margin:8px 0;min-height:36px">' + escHtml(a.message || "(no message)") + '</div>' +
+        (btns ? '<div style="margin-top:8px">' + btns + '</div>' : '') +
+        '</div>';
+    }).join("");
+  });
+}
+
+function resolveAppeal(id, action) {
+  var label = action === "accept" ? "Accept this appeal and unban the visitor?" : "Reject this appeal?";
+  if (!confirm(label)) return;
+  api("POST", "/appeals/" + id + "/" + action).then(function() {
+    toast(action === "accept" ? "Appeal accepted, visitor unbanned" : "Appeal rejected");
+    loadAppeals();
+    refreshAppealsBadge();
+  }).catch(function(e) { toast("Error", "error"); });
+}
+
+function refreshAppealsBadge() {
+  api("GET", "/appeals/pending-count").then(function(d) {
+    var badge = document.getElementById("appeals-badge");
+    if (!badge) return;
+    if (d.count > 0) {
+      badge.textContent = d.count;
+      badge.style.display = "";
+    } else {
+      badge.style.display = "none";
+    }
+  }).catch(function(){});
 }
 
 // ── Blacklist ─────────────────────────────────────────────────────────────────

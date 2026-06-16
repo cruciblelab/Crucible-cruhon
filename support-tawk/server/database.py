@@ -187,6 +187,19 @@ class BlacklistedIP(BaseModel):
         table_name = "blacklisted_ips"
 
 
+class BanAppeal(BaseModel):
+    id = AutoField()
+    ip = CharField(max_length=64, default="")
+    visitor_id = CharField(max_length=64, default="")
+    message = TextField(default="")
+    status = CharField(max_length=16, default="pending")  # pending | accepted | rejected
+    created_at = DateTimeField(default=datetime.utcnow)
+    reviewed_by = ForeignKeyField(Agent, null=True, on_delete="SET NULL")
+    reviewed_at = DateTimeField(null=True)
+    class Meta:
+        table_name = "ban_appeals"
+
+
 class Rating(BaseModel):
     id = AutoField()
     conversation = ForeignKeyField(Conversation, unique=True, backref="rating", on_delete="CASCADE")
@@ -333,7 +346,7 @@ def init_db():
     with database:
         database.create_tables([
             Department, Agent, Conversation, Message, CannedResponse,
-            Tag, ConversationTag, BlacklistedIP, Rating, WorkSchedule, BotFlow, Setting,
+            Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, BotFlow, Setting,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
             Form, FormField, FormSubmission,
         ], safe=True)

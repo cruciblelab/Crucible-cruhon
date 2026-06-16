@@ -4,7 +4,7 @@
 # ------------------------------------------
 # Usage (as root on your server):
 #
-#   bash <(curl -fsSL https://raw.githubusercontent.com/cruciblelab/support-tawk/main/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/cruciblelab/supporttawk/main/install.sh)
 #
 # Or if you already cloned the repo:
 #
@@ -32,7 +32,7 @@ step() { echo; echo "${W}${B}── $* ${X}"; }
 trap 'err "Installation failed at line $LINENO. Check the output above."' ERR
 
 # ── Settings ──────────────────────────────────────────────────────────────────
-REPO_URL="https://github.com/cruciblelab/support-tawk.git"
+REPO_URL="https://github.com/cruciblelab/supporttawk.git"
 APP_DIR="/opt/support-tawk"
 SERVICE="support-tawk"
 

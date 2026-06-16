@@ -15,17 +15,28 @@ class ConnectionManager:
         # conversation_id → set of agent_ids watching it
         self._watching: Dict[int, Set[int]] = {}
         self._visitor_connected_at: Dict[str, str] = {}
+        # visitor_id → IP address
+        self._visitor_ips: Dict[str, str] = {}
 
     # ── Visitor ──────────────────────────────────────────────────────────────
 
-    async def connect_visitor(self, visitor_id: str, ws: WebSocket):
+    async def connect_visitor(self, visitor_id: str, ws: WebSocket, ip: str = ""):
         await ws.accept()
         self._visitors[visitor_id] = ws
         self._visitor_connected_at[visitor_id] = datetime.utcnow().isoformat()
+        if ip:
+            self._visitor_ips[visitor_id] = ip
 
     def disconnect_visitor(self, visitor_id: str):
         self._visitors.pop(visitor_id, None)
         self._visitor_connected_at.pop(visitor_id, None)
+        self._visitor_ips.pop(visitor_id, None)
+
+    def find_visitor_by_ip(self, ip: str) -> str | None:
+        for vid, vip in self._visitor_ips.items():
+            if vip == ip:
+                return vid
+        return None
 
     async def send_to_visitor(self, visitor_id: str, data: dict):
         ws = self._visitors.get(visitor_id)
