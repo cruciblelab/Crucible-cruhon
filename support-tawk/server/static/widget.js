@@ -722,8 +722,8 @@
     }
   }).catch(function () {});
 
-  // Fetch bot flow
-  fetch(SERVER + "/api/botflow/active").then(function(r) { return r.json(); }).then(function(data) {
+  // Fetch default bot greeting
+  fetch(SERVER + "/api/bot/greeting").then(function(r) { return r.json(); }).then(function(data) {
     if (data && data.id) {
       state.bot_flow = data;
     }

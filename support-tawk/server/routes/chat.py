@@ -4,11 +4,12 @@ import asyncio
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
 from pydantic import BaseModel
-from ..database import Department, Conversation, Message, Agent, BlacklistedIP, BanAppeal, BotFlow, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
+from ..database import Department, Conversation, Message, Agent, BlacklistedIP, BanAppeal, Bot, Rating, WorkSchedule, Note, WebhookConfig, VisitorPageView, VisitorField, OfflineMessage
 from ..webhook_sender import fire_event
 from ..ws_manager import manager
 from ..config import config
 from ..ai_handler import handle_ai_reply
+from .. import bot_matcher
 from ..auth import verify_ws_token
 from ..geoip import lookup as geo_lookup
 
@@ -100,9 +101,9 @@ async def submit_rating(conv_id: int, req: RatingRequest):
     return {"ok": True}
 
 
-@router.get("/api/botflow/active")
-def get_active_botflow():
-    b = BotFlow.get_or_none(BotFlow.is_active == True)
+@router.get("/api/bot/greeting")
+def get_bot_greeting():
+    b = Bot.get_or_none(Bot.is_default == True, Bot.is_enabled == True)
     if not b:
         return None
     return {
@@ -278,9 +279,14 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                     "visitor_name": visitor_name,
                 }))
 
-                # AI auto-reply if no agent assigned and AI enabled
-                if conv.status == "open" and config.ai.enabled and config.ai.auto_reply:
-                    asyncio.create_task(_ai_reply(conv, msg))
+                # Bot keyword rules take priority; AI auto-reply only fires
+                # when no rule matched, so the two never double-reply.
+                if conv.status == "open":
+                    match = bot_matcher.find_best_match(content)
+                    if match:
+                        asyncio.create_task(_bot_rule_reply(conv, match))
+                    elif config.ai.enabled and config.ai.auto_reply:
+                        asyncio.create_task(_ai_reply(conv, msg))
 
             elif msg_type == "typing":
                 await manager.broadcast_to_watchers(conv.id, {
@@ -412,6 +418,33 @@ async def agent_ws(ws: WebSocket, token: str):
         manager.disconnect_agent(agent.id)
         Agent.update(is_online=False).where(Agent.id == agent.id).execute()
         await manager.broadcast_to_agents({"type": "agent_offline", "agent_id": agent.id})
+
+
+async def _bot_rule_reply(conv: Conversation, match: dict):
+    await asyncio.sleep(0.6)
+    fresh = Conversation.get_by_id(conv.id)
+    if fresh.status == "assigned":
+        return
+    updates = {"updated_at": datetime.utcnow()}
+    if match.get("department_id"):
+        updates["department_id"] = match["department_id"]
+    Conversation.update(**updates).where(Conversation.id == conv.id).execute()
+
+    msg = Message.create(
+        conversation=conv,
+        sender_type="bot",
+        sender_id="bot",
+        sender_name=match.get("bot_name") or "Bot",
+        content=match["reply"],
+    )
+    payload = {
+        "type": "message",
+        "conversation_id": conv.id,
+        "message": _msg_dict(msg),
+    }
+    await manager.send_to_visitor(conv.visitor_id, payload)
+    await manager.broadcast_to_watchers(conv.id, payload)
+    await manager.broadcast_to_agents({**payload, "visitor_name": conv.visitor_name})
 
 
 async def _ai_reply(conv: Conversation, trigger_msg: Message):

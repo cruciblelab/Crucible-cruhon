@@ -165,17 +165,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .add-bl-row input{padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;flex:1;min-width:140px}
 .add-bl-row input:focus{border-color:#2563eb}
 
-/* ── Bot Flow page ── */
-#page-botflow{flex-direction:column;overflow-y:auto;padding:24px}
-.flow-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px}
-.flow-card .fc-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.flow-card .fc-name{font-weight:600;font-size:15px;flex:1}
-.flow-card .fc-active{background:#d1fae5;color:#065f46;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
-.flow-card .fc-greeting{font-size:13px;color:#64748b;margin-bottom:10px}
-.flow-options{display:flex;flex-wrap:wrap;gap:6px}
-.flow-opt{padding:5px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;color:#374151}
-.add-flow-form{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
-.add-flow-form h3{font-size:14px;font-weight:600;margin-bottom:14px}
 .form-field{margin-bottom:12px}
 .form-field label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:5px}
 .form-field input,.form-field textarea{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none}
@@ -390,7 +379,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <span class="nav-icon">🏢</span> Departments
     </div>
     <div class="nav-item" data-page="botflow" id="nav-botflow" style="display:none" onclick="showPage('botflow')">
-      <span class="nav-icon">🤖</span> Bot Flows
+      <span class="nav-icon">🤖</span> Bots
     </div>
     <div class="nav-item" data-page="forms" id="nav-forms" style="display:none" onclick="showPage('forms')">
       <span class="nav-icon">📋</span> Forms
@@ -666,33 +655,97 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </table>
     </div>
 
-    <!-- Bot Flow page -->
-    <div class="page" id="page-botflow">
-      <div class="page-header">
-        <h2>🤖 Bot Flows</h2>
-        <button class="form-submit" onclick="showAddFlowForm()">+ New Flow</button>
+    <!-- Bots page -->
+    <div class="page" id="page-botflow" style="flex-direction:column;overflow-y:auto;padding:24px">
+      <!-- Bot list view -->
+      <div id="bots-list-view">
+        <div class="page-header">
+          <h2>🤖 Bots</h2>
+          <button class="form-submit" onclick="showCreateBotPanel()">+ New Bot</button>
+        </div>
+        <div id="create-bot-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;max-width:680px">
+          <h3 style="margin:0 0 14px;font-size:14px;font-weight:700">Create New Bot</h3>
+          <div class="form-field">
+            <label>Bot Name</label>
+            <input id="nb-name" placeholder="e.g. Support Bot">
+          </div>
+          <div class="form-field">
+            <label>Greeting Message</label>
+            <textarea id="nb-greeting" rows="2" placeholder="Hello! How can I help you?"></textarea>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="form-submit" onclick="saveNewBot()">Create</button>
+            <button class="btn-sm" onclick="document.getElementById('create-bot-panel').style.display='none'">Cancel</button>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:16px;max-width:680px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:#1e293b">Default match threshold</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">Used by bots that don't set their own threshold (0–100)</div>
+          </div>
+          <input id="bot-default-threshold" type="number" min="0" max="100" style="width:70px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+          <button class="btn-sm" onclick="saveBotDefaultThreshold()">Save</button>
+        </div>
+        <div id="bots-list" style="display:flex;flex-direction:column;gap:10px;max-width:680px"></div>
       </div>
-      <div class="add-flow-form" id="add-flow-form" style="display:none">
-        <h3>New Bot Flow</h3>
-        <div class="form-field">
-          <label>Flow Name</label>
-          <input id="flow-name" placeholder="Main Flow">
+      <!-- Bot detail view -->
+      <div id="bots-detail-view" style="display:none;max-width:780px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button class="btn-sm" onclick="backToBotsList()">← Back</button>
+          <h3 id="bd-bot-name" style="font-size:16px;font-weight:700;flex:1"></h3>
+          <button class="btn-sm" id="bd-enabled-btn" onclick="toggleBotEnabled()"></button>
+          <button class="form-submit" id="bd-default-btn" onclick="toggleBotDefault()"></button>
         </div>
-        <div class="form-field">
-          <label>Greeting Message</label>
-          <textarea id="flow-greeting" rows="2" placeholder="Hello! How can I help you?"></textarea>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div class="form-field">
+            <label>Greeting Message</label>
+            <textarea id="bd-greeting" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-field" style="flex:1;margin-bottom:0">
+              <label>Similarity Threshold (blank = use default)</label>
+              <input id="bd-threshold" type="number" min="0" max="100" placeholder="default">
+            </div>
+            <div class="form-field" style="flex:1;margin-bottom:0">
+              <label>Priority (tie-break across bots)</label>
+              <input id="bd-priority" type="number" value="0">
+            </div>
+          </div>
+          <div class="form-field" style="margin-top:12px">
+            <label>Greeting Options (shown on first contact — only the default bot's greeting is used)</label>
+            <div id="bd-opts-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+            <button class="btn-sm" type="button" onclick="addBotOption()">+ Add Option</button>
+          </div>
+          <button class="form-submit" onclick="saveBotDetails()" style="margin-top:10px">Save</button>
         </div>
-        <div class="form-field">
-          <label>Options</label>
-          <div id="flow-opts-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
-          <button class="btn-sm" type="button" onclick="addFlowOption()" style="margin-top:2px">+ Add Option</button>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="form-submit" onclick="createBotflow()">Save</button>
-          <button class="btn-sm" onclick="hideAddFlowForm()">Cancel</button>
+        <!-- Rules -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+          <div class="page-header" style="margin-bottom:14px">
+            <h4 style="font-size:14px;font-weight:700">Keyword Rules</h4>
+            <button class="form-submit" onclick="showAddRulePanel()">+ Add Rule</button>
+          </div>
+          <div id="add-rule-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px">
+            <div class="form-field">
+              <label>Trigger phrases (one per line)</label>
+              <textarea id="br-triggers" rows="3" placeholder="iade nasıl yapılır&#10;kargo ne zaman gelir"></textarea>
+            </div>
+            <div class="form-field">
+              <label>Reply</label>
+              <textarea id="br-reply" rows="2" placeholder="Bot's reply when this rule matches"></textarea>
+            </div>
+            <div class="form-row">
+              <select id="br-department"></select>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex:1"><input type="checkbox" id="br-enabled" checked> Enabled</label>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="form-submit" onclick="saveRule()">Add</button>
+              <button class="btn-sm" onclick="document.getElementById('add-rule-panel').style.display='none'">Cancel</button>
+            </div>
+          </div>
+          <div id="rules-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          <p id="rules-empty" style="font-size:13px;color:#94a3b8;text-align:center;padding:20px 0;display:none">No keyword rules yet.</p>
         </div>
       </div>
-      <div id="flows-list"></div>
     </div>
 
     <!-- Schedule page -->
@@ -1272,7 +1325,7 @@ function showPage(name) {
   if (name === "tags") loadTags();
   if (name === "blacklist") loadBlacklist();
   if (name === "appeals") loadAppeals();
-  if (name === "botflow") loadBotflows();
+  if (name === "botflow") loadBots();
   if (name === "schedule") loadScheduleAgents();
   if (name === "profile") loadProfile();
   if (name === "settings") loadSiteSettings();
@@ -2297,96 +2350,301 @@ function removeBlacklist(id) {
   api("DELETE", "/blacklist/" + id).then(function() { toast("Removed"); loadBlacklist(); });
 }
 
-// ── Bot Flow ──────────────────────────────────────────────────────────────────
-function loadBotflows() {
-  api("GET", "/botflow").then(function(data) {
-    var list = Array.isArray(data) ? data : [];
-    document.getElementById("flows-list").innerHTML = list.map(function(f) {
-      var opts = [];
-      try { opts = JSON.parse(f.options_json || "[]"); } catch(e){}
-      return '<div class="flow-card">' +
-        '<div class="fc-header">' +
-        '<div class="fc-name">' + escHtml(f.name) + '</div>' +
-        (f.is_active ? '<span class="fc-active">ACTIVE</span>' : '') +
+// ── Bots ──────────────────────────────────────────────────────────────────────
+var currentBotId = null;
+var currentBotRules = [];
+var botOptionsList = []; // greeting options for the bot being created/edited
+var allBots = [];
+
+function loadBots() {
+  api("GET", "/bots").then(function(bots) {
+    allBots = bots;
+    var list = document.getElementById("bots-list");
+    if (!bots.length) {
+      list.innerHTML = '<p style="font-size:13px;color:#94a3b8;padding:16px 0">No bots created yet.</p>';
+      return;
+    }
+    list.innerHTML = bots.map(function(b) {
+      var badges = "";
+      if (b.is_default) badges += ' <span style="background:#dcfce7;color:#16a34a;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px">Default</span>';
+      if (!b.is_enabled) badges += ' <span style="background:#fee2e2;color:#dc2626;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px">Disabled</span>';
+      return '<div style="background:#fff;border:1px solid ' + (b.is_default ? '#22c55e' : '#e2e8f0') + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1">' +
+          '<div style="font-size:14px;font-weight:700;color:#1e293b">' + escHtml(b.name) + badges + '</div>' +
+          '<div style="font-size:12px;color:#94a3b8;margin-top:3px">' + b.rule_count + ' rule(s) · threshold ' + (b.similarity_threshold != null ? b.similarity_threshold : "default") + ' · priority ' + b.priority + '</div>' +
         '</div>' +
-        '<div class="fc-greeting">' + escHtml(f.greeting) + '</div>' +
-        '<div class="flow-options">' + opts.map(function(o){ return '<span class="flow-opt">' + escHtml(o.label||"") + '</span>'; }).join("") + '</div>' +
-        '<div style="display:flex;gap:6px;margin-top:12px">' +
-        (!f.is_active ? '<button class="btn-sm success" onclick="activateBotflow(' + f.id + ')">Activate</button>' : '') +
-        '<button class="btn-sm danger" onclick="deleteBotflow(' + f.id + ')">Sil</button>' +
-        '</div>' +
-        '</div>';
-    }).join("") || '<p style="color:#94a3b8;font-size:13px">No bot flows yet.</p>';
+        '<button class="btn-sm" onclick="openBotDetail(' + b.id + ', ' + JSON.stringify(escHtml(b.name)) + ')">Edit</button>' +
+        (!b.is_default ? '<button class="btn-sm success" onclick="setBotDefault(' + b.id + ')">Make Default</button>' : '') +
+        '<button class="btn-sm" onclick="setBotEnabled(' + b.id + ',' + !b.is_enabled + ')">' + (b.is_enabled ? "Disable" : "Enable") + '</button>' +
+        '<button class="btn-sm danger" onclick="deleteBot(' + b.id + ')">Sil</button>' +
+      '</div>';
+    }).join("");
+  });
+  loadBotDefaultThreshold();
+}
+
+function loadBotDefaultThreshold() {
+  api("GET", "/bot-settings").then(function(s) {
+    document.getElementById("bot-default-threshold").value = s.default_threshold;
   });
 }
 
-var flowOptionsList = [];
+function saveBotDefaultThreshold() {
+  var value = parseInt(document.getElementById("bot-default-threshold").value, 10);
+  if (isNaN(value)) return;
+  api("PUT", "/bot-settings", { default_threshold: value }).then(function() {
+    toast("Default threshold saved");
+  });
+}
 
-function renderFlowOptions() {
-  var el = document.getElementById("flow-opts-list");
-  if (!flowOptionsList.length) {
+function showCreateBotPanel() {
+  document.getElementById("create-bot-panel").style.display = "";
+  document.getElementById("nb-name").focus();
+}
+
+function saveNewBot() {
+  var name = document.getElementById("nb-name").value.trim();
+  if (!name) { document.getElementById("nb-name").focus(); return; }
+  var greeting = document.getElementById("nb-greeting").value.trim();
+  api("POST", "/bots", { name: name, greeting: greeting }).then(function(res) {
+    document.getElementById("create-bot-panel").style.display = "none";
+    document.getElementById("nb-name").value = "";
+    document.getElementById("nb-greeting").value = "";
+    loadBots();
+    openBotDetail(res.id, res.name);
+  });
+}
+
+function setBotDefault(id) {
+  api("PATCH", "/bots/" + id, { is_default: true }).then(function() {
+    toast("Default bot updated");
+    loadBots();
+    if (currentBotId === id) refreshBotDetailHeader();
+  });
+}
+
+function setBotEnabled(id, enabled) {
+  api("PATCH", "/bots/" + id, { is_enabled: enabled }).then(function() {
+    toast(enabled ? "Bot enabled" : "Bot disabled");
+    loadBots();
+    if (currentBotId === id) refreshBotDetailHeader();
+  });
+}
+
+function deleteBot(id) {
+  if (!confirm("Are you sure you want to delete this bot?")) return;
+  api("DELETE", "/bots/" + id).then(function() {
+    toast("Bot deleted");
+    if (currentBotId === id) backToBotsList();
+    else loadBots();
+  });
+}
+
+function openBotDetail(botId, botName) {
+  currentBotId = botId;
+  document.getElementById("bots-list-view").style.display = "none";
+  document.getElementById("bots-detail-view").style.display = "";
+  document.getElementById("bd-bot-name").textContent = botName;
+  document.getElementById("add-rule-panel").style.display = "none";
+  api("GET", "/bots").then(function(bots) {
+    allBots = bots;
+    var b = bots.find(function(x) { return x.id === botId; });
+    if (!b) return;
+    document.getElementById("bd-greeting").value = b.greeting || "";
+    document.getElementById("bd-threshold").value = b.similarity_threshold != null ? b.similarity_threshold : "";
+    document.getElementById("bd-priority").value = b.priority;
+    try { botOptionsList = JSON.parse(b.options_json || "[]"); } catch(e) { botOptionsList = []; }
+    renderBotOptions();
+    refreshBotDetailHeader();
+  });
+  loadBotRules();
+}
+
+function refreshBotDetailHeader() {
+  var b = allBots.find(function(x) { return x.id === currentBotId; });
+  if (!b) return;
+  document.getElementById("bd-bot-name").textContent = b.name + (b.is_default ? " ✅" : "");
+  var defBtn = document.getElementById("bd-default-btn");
+  defBtn.textContent = b.is_default ? "Default Bot" : "Make Default";
+  defBtn.disabled = b.is_default;
+  defBtn.style.opacity = b.is_default ? "0.6" : "1";
+  var enBtn = document.getElementById("bd-enabled-btn");
+  enBtn.textContent = b.is_enabled ? "Disable" : "Enable";
+}
+
+function toggleBotDefault() {
+  if (!currentBotId) return;
+  setBotDefault(currentBotId);
+}
+
+function toggleBotEnabled() {
+  if (!currentBotId) return;
+  var b = allBots.find(function(x) { return x.id === currentBotId; });
+  if (!b) return;
+  setBotEnabled(currentBotId, !b.is_enabled);
+}
+
+function backToBotsList() {
+  currentBotId = null;
+  document.getElementById("bots-list-view").style.display = "";
+  document.getElementById("bots-detail-view").style.display = "none";
+  loadBots();
+}
+
+function renderBotOptions() {
+  var el = document.getElementById("bd-opts-list");
+  if (!botOptionsList.length) {
     el.innerHTML = '<div style="font-size:12px;color:#94a3b8">No options added yet.</div>';
     return;
   }
-  el.innerHTML = flowOptionsList.map(function(o, i) {
+  el.innerHTML = botOptionsList.map(function(o, i) {
     return '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center">' +
-      '<input type="text" value="' + escHtml(o.label) + '" placeholder="Buton metni" ' +
-        'oninput="flowOptionsList['+i+'].label=this.value" ' +
+      '<input type="text" value="' + escHtml(o.label) + '" placeholder="Button text" ' +
+        'oninput="botOptionsList['+i+'].label=this.value" ' +
         'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
       '<input type="text" value="' + escHtml(o.reply) + '" placeholder="Bot reply" ' +
-        'oninput="flowOptionsList['+i+'].reply=this.value" ' +
+        'oninput="botOptionsList['+i+'].reply=this.value" ' +
         'style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">' +
-      '<button onclick="removeFlowOption('+i+')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>' +
+      '<button onclick="botOptionsList.splice('+i+',1);renderBotOptions()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>' +
       '</div>';
   }).join("");
 }
 
-function addFlowOption() {
-  flowOptionsList.push({ label: "", reply: "" });
-  renderFlowOptions();
+function addBotOption() {
+  botOptionsList.push({ label: "", reply: "" });
+  renderBotOptions();
 }
 
-function removeFlowOption(i) {
-  flowOptionsList.splice(i, 1);
-  renderFlowOptions();
-}
-
-function showAddFlowForm() {
-  flowOptionsList = [];
-  renderFlowOptions();
-  document.getElementById("add-flow-form").style.display = "block";
-}
-
-function hideAddFlowForm() {
-  document.getElementById("add-flow-form").style.display = "none";
-}
-
-function createBotflow() {
-  var name = document.getElementById("flow-name").value.trim() || "Main Flow";
-  var greeting = document.getElementById("flow-greeting").value.trim();
-  if (!greeting) { toast("Greeting message is required", "error"); return; }
-  var validOpts = flowOptionsList.filter(function(o){ return o.label.trim(); });
-  var options_json = JSON.stringify(validOpts.map(function(o){ return {label: o.label.trim(), reply: o.reply.trim()}; }));
-  api("POST", "/botflow", { name: name, greeting: greeting, options_json: options_json }).then(function() {
-    toast("Bot flow created");
-    hideAddFlowForm();
-    document.getElementById("flow-name").value = "";
-    document.getElementById("flow-greeting").value = "";
-    flowOptionsList = [];
-    loadBotflows();
+function saveBotDetails() {
+  if (!currentBotId) return;
+  var greeting = document.getElementById("bd-greeting").value.trim();
+  var thresholdRaw = document.getElementById("bd-threshold").value.trim();
+  var priority = parseInt(document.getElementById("bd-priority").value, 10) || 0;
+  var validOpts = botOptionsList.filter(function(o) { return o.label.trim(); });
+  var options_json = JSON.stringify(validOpts.map(function(o) { return { label: o.label.trim(), reply: o.reply.trim() }; }));
+  var payload = {
+    greeting: greeting,
+    options_json: options_json,
+    similarity_threshold: thresholdRaw === "" ? null : parseInt(thresholdRaw, 10),
+    priority: priority,
+  };
+  api("PATCH", "/bots/" + currentBotId, payload).then(function() {
+    toast("Bot saved");
+    loadBots();
   });
 }
 
-function activateBotflow(id) {
-  api("POST", "/botflow/" + id + "/activate").then(function() {
-    toast("Flow activated");
-    loadBotflows();
+function loadBotRules() {
+  if (!currentBotId) return;
+  api("GET", "/bots/" + currentBotId + "/rules").then(function(rules) {
+    currentBotRules = rules;
+    renderRulesList(rules);
   });
 }
 
-function deleteBotflow(id) {
-  if (!confirm("Delete this bot flow?")) return;
-  api("DELETE", "/botflow/" + id).then(function() { toast("Deleted"); loadBotflows(); });
+function populateRuleDeptSelect(selectedId) {
+  var sel = document.getElementById("br-department");
+  sel.innerHTML = '<option value="">No department</option>' +
+    allDepartments.map(function(d) {
+      return '<option value="' + d.id + '">' + escHtml(d.icon + " " + d.name) + '</option>';
+    }).join("");
+  sel.value = selectedId || "";
+}
+
+function renderRulesList(rules) {
+  var list = document.getElementById("rules-list");
+  var empty = document.getElementById("rules-empty");
+  if (!rules.length) {
+    list.innerHTML = "";
+    empty.style.display = "";
+    return;
+  }
+  empty.style.display = "none";
+  list.innerHTML = rules.map(function(r) {
+    var triggers = [];
+    try { triggers = JSON.parse(r.triggers_json || "[]"); } catch (e) {}
+    var dept = allDepartments.find(function(d) { return d.id === r.department_id; });
+    return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:10px 14px;display:flex;align-items:center;gap:10px">' +
+      '<div style="flex:1">' +
+        '<div style="font-size:13px;font-weight:600;color:#1e293b">' + triggers.map(function(t) { return escHtml(t); }).join(", ") + (!r.is_enabled ? ' <span style="color:#dc2626;font-size:11px">(disabled)</span>' : "") + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + escHtml(r.reply.slice(0, 80)) + (dept ? " · " + escHtml(dept.icon + " " + dept.name) : "") + '</div>' +
+      '</div>' +
+      '<button class="btn-sm" onclick="editRuleInline(' + r.id + ')">Edit</button>' +
+      '<button class="btn-sm danger" onclick="deleteRule(' + r.id + ')">Sil</button>' +
+    '</div>';
+  }).join("");
+}
+
+function showAddRulePanel() {
+  document.getElementById("br-triggers").value = "";
+  document.getElementById("br-reply").value = "";
+  document.getElementById("br-enabled").checked = true;
+  populateRuleDeptSelect();
+  var panel = document.getElementById("add-rule-panel");
+  panel.style.display = "";
+  var saveBtn = panel.querySelector(".form-submit");
+  saveBtn.textContent = "Add";
+  saveBtn.onclick = saveRule;
+  document.getElementById("br-triggers").focus();
+}
+
+function saveRule() {
+  var triggers = document.getElementById("br-triggers").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean);
+  if (!triggers.length) { document.getElementById("br-triggers").focus(); return; }
+  var reply = document.getElementById("br-reply").value.trim();
+  if (!reply) { document.getElementById("br-reply").focus(); return; }
+  var deptId = parseInt(document.getElementById("br-department").value, 10) || null;
+  var payload = {
+    triggers_json: JSON.stringify(triggers),
+    reply: reply,
+    department_id: deptId,
+    is_enabled: document.getElementById("br-enabled").checked,
+  };
+  api("POST", "/bots/" + currentBotId + "/rules", payload).then(function() {
+    toast("Rule added");
+    document.getElementById("add-rule-panel").style.display = "none";
+    loadBotRules();
+  });
+}
+
+function editRuleInline(ruleId) {
+  var r = currentBotRules.find(function(x) { return x.id === ruleId; });
+  if (!r) return;
+  var triggers = [];
+  try { triggers = JSON.parse(r.triggers_json || "[]"); } catch (e) {}
+  document.getElementById("br-triggers").value = triggers.join("\n");
+  document.getElementById("br-reply").value = r.reply;
+  document.getElementById("br-enabled").checked = r.is_enabled;
+  populateRuleDeptSelect(r.department_id);
+  var panel = document.getElementById("add-rule-panel");
+  panel.style.display = "";
+  var saveBtn = panel.querySelector(".form-submit");
+  saveBtn.textContent = "Update";
+  saveBtn.onclick = function() {
+    var newTriggers = document.getElementById("br-triggers").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean);
+    if (!newTriggers.length) return;
+    var newReply = document.getElementById("br-reply").value.trim();
+    if (!newReply) return;
+    var deptId = parseInt(document.getElementById("br-department").value, 10) || null;
+    api("PATCH", "/bots/" + currentBotId + "/rules/" + ruleId, {
+      triggers_json: JSON.stringify(newTriggers),
+      reply: newReply,
+      department_id: deptId,
+      is_enabled: document.getElementById("br-enabled").checked,
+    }).then(function() {
+      toast("Rule updated");
+      document.getElementById("add-rule-panel").style.display = "none";
+      loadBotRules();
+    });
+  };
+}
+
+function deleteRule(ruleId) {
+  if (!confirm("Are you sure you want to delete this rule?")) return;
+  api("DELETE", "/bots/" + currentBotId + "/rules/" + ruleId).then(function() {
+    toast("Rule deleted");
+    loadBotRules();
+  });
 }
 
 // ── Schedule ──────────────────────────────────────────────────────────────────

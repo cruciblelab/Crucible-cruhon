@@ -221,15 +221,43 @@ class WorkSchedule(BaseModel):
 
 
 class BotFlow(BaseModel):
+    """Deprecated — superseded by Bot/BotRule. Kept only so init_db() can
+    migrate any existing row into the new schema on upgrade."""
     id = AutoField()
     name = CharField(max_length=128, default="Ana Akış")
     greeting = TextField(default="Merhaba! Size nasıl yardımcı olabilirim?")
-    # JSON: [{"label": "Teknik Destek", "reply": "Teknik destek ekibine bağlanıyorum..."}, ...]
     options_json = TextField(default="[]")
     is_active = BooleanField(default=False)
     created_at = DateTimeField(default=datetime.utcnow)
     class Meta:
         table_name = "bot_flows"
+
+
+class Bot(BaseModel):
+    id = AutoField()
+    name = CharField(max_length=128, default="Bot")
+    is_enabled = BooleanField(default=True)
+    is_default = BooleanField(default=False)  # greets every new conversation
+    greeting = TextField(default="")
+    # First-contact menu, shown alongside the greeting: [{"label":"...", "reply":"...", "department_id":...}]
+    options_json = TextField(default="[]")
+    similarity_threshold = IntegerField(null=True)  # 0-100; null = use global Setting default
+    priority = IntegerField(default=0)  # tie-break across bots when match scores are equal
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "bots"
+
+
+class BotRule(BaseModel):
+    id = AutoField()
+    bot = ForeignKeyField(Bot, backref="rules", on_delete="CASCADE")
+    triggers_json = TextField(default="[]")  # JSON list of trigger phrases
+    reply = TextField(default="")
+    department = ForeignKeyField(Department, null=True, on_delete="SET NULL")
+    is_enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "bot_rules"
 
 
 class Setting(BaseModel):
@@ -342,14 +370,32 @@ class FormSubmission(BaseModel):
         table_name = "form_submissions"
 
 
+def _migrate_botflow_to_bot():
+    """One-time, best-effort copy of the old single BotFlow row into the new
+    Bot model as the default bot. Never overwrites bots a user already made."""
+    if Bot.select().count() > 0:
+        return
+    try:
+        old = BotFlow.get_or_none(BotFlow.is_active == True) or BotFlow.select().order_by(BotFlow.created_at).first()
+    except Exception:
+        old = None
+    if old:
+        Bot.create(
+            name=old.name, is_enabled=True, is_default=True,
+            greeting=old.greeting, options_json=old.options_json,
+        )
+
+
 def init_db():
     with database:
         database.create_tables([
             Department, Agent, Conversation, Message, CannedResponse,
-            Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, BotFlow, Setting,
+            Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, Setting,
+            Bot, BotRule,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
             Form, FormField, FormSubmission,
         ], safe=True)
+        _migrate_botflow_to_bot()
         _safe_migrations = [
             "ALTER TABLE agents ADD COLUMN avatar_color VARCHAR(20) DEFAULT '#6366f1'",
             "ALTER TABLE agents ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL",

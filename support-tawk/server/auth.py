@@ -20,7 +20,7 @@ PERMISSIONS = [
     {"key": "manage_departments", "label": "Department Management",     "desc": "Create and assign departments"},
     {"key": "manage_settings",    "label": "Site Settings",             "desc": "Widget, language, appearance"},
     {"key": "manage_forms",       "label": "Form Management",           "desc": "Create and edit forms"},
-    {"key": "manage_botflow",     "label": "Bot Flows",                 "desc": "Manage automated bot flows"},
+    {"key": "manage_botflow",     "label": "Bots",                      "desc": "Manage automated bots and keyword rules"},
     {"key": "manage_tags",        "label": "Tag Management",            "desc": "Create and delete tags"},
     {"key": "manage_webhooks",    "label": "Webhook Management",        "desc": "Webhook and integration settings"},
     {"key": "manage_schedule",    "label": "Work Hours",                "desc": "Set agent work schedules"},
