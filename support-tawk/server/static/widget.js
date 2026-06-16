@@ -34,6 +34,7 @@
   var state = {
     open: false,
     ws: null,
+    pending: [],
     convId: null,
     unread: 0,
     typing_timer: null,
@@ -85,7 +86,7 @@
     "#st-info-form input { padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; outline:none; transition:border-color .2s; }",
     "#st-info-form input:focus { border-color:var(--st-color); }",
     "#st-info-form button { padding:11px; border:none; border-radius:8px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }",
-    "#st-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }",
+    "#st-messages { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; padding:14px; display:flex; flex-direction:column; gap:10px; }",
     "#st-messages::-webkit-scrollbar { width:4px; }",
     "#st-messages::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:2px; }",
     "#st-scroll-btn { display:none; position:absolute; bottom:70px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; border:none; border-radius:20px; padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); gap:5px; align-items:center; }",
@@ -132,7 +133,7 @@
     "#st-emoji-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }",
     ".st-emoji-btn { background:none; border:none; cursor:pointer; font-size:18px; padding:4px; border-radius:6px; text-align:center; }",
     ".st-emoji-btn:hover { background:#f1f5f9; }",
-    "@media (max-width: 420px) { #st-window { width:calc(100vw - 16px); right:8px; bottom:80px; } }",
+    "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-window { width:100vw; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } }",
   ].join("\n");
   document.head.appendChild(style);
 
@@ -154,7 +155,7 @@
     '    <div style="flex:1"><div class="st-title">Destek</div><div class="st-status">Yükleniyor...</div></div>',
     '    <button class="st-close" aria-label="Kapat">✕</button>',
     '  </div>',
-    '  <div id="st-body" style="position:relative;flex:1;display:flex;flex-direction:column;overflow:hidden">',
+    '  <div id="st-body" style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">',
     '    <div id="st-offline-form" style="display:none">',
     '      <h3>📬 Mesaj Bırakın</h3>',
     '      <p>Temsilcilerimiz şu an çevrimdışı. Mesajınızı bırakın, size e-posta ile dönelim.</p>',
@@ -177,7 +178,7 @@
     '      <input id="st-email-input" type="email" placeholder="E-posta (isteğe bağlı)" maxlength="128" />',
     '      <button id="st-start-btn">Sohbeti Başlat</button>',
     '    </div>',
-    '    <div id="st-chat-area" style="display:none; flex-direction:column; height:100%; overflow:hidden; display:flex; flex:1; position:relative;">',
+    '    <div id="st-chat-area" style="display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden; position:relative;">',
     '      <button id="st-scroll-btn"><span>↓ Yeni mesaj</span><span id="st-scroll-badge" class="hidden">0</span></button>',
     '      <div id="st-messages"></div>',
     '      <div id="st-typing"></div>',
@@ -358,23 +359,10 @@
     state.open = true;
     win.classList.add("open");
     clearUnread();
+    // Herkes anında sohbet edebilir — form/bekleme zorunlu değil.
+    showChat();
     if (!state.ws || state.ws.readyState > 1) {
-      if (state.info_given) {
-        // Check if agents are online
-        fetch(SERVER + "/api/schedule/status").then(function(r) { return r.json(); }).then(function(d) {
-          if (!d.available) {
-            showOfflineForm();
-          } else {
-            showChat();
-            connectWS();
-          }
-        }).catch(function() {
-          showChat();
-          connectWS();
-        });
-      } else {
-        showInfoForm();
-      }
+      connectWS();
     }
     setTimeout(function () { inputEl.focus(); }, 300);
   }
@@ -489,6 +477,7 @@
         url: window.location.href,
         title: document.title,
       }));
+      flushPending();
     };
 
     state.ws.onmessage = function (evt) {
@@ -732,9 +721,9 @@
   // ── Send ──────────────────────────────────────────────────────────────────
   function sendMessage() {
     var content = inputEl.value.trim();
-    if (!content || !state.ws || state.ws.readyState !== 1) return;
+    if (!content) return;
 
-    // Immediately show visitor's own message (optimistic)
+    // Kendi mesajını anında göster (optimistic)
     appendMsg({
       sender_type: "visitor",
       content: content,
@@ -742,16 +731,32 @@
     });
     scrollBottom();
 
-    state.ws.send(JSON.stringify({
+    var payload = {
       type: "message",
       content: content,
       visitor_name: state.name,
       visitor_email: state.email,
       page_url: window.location.href,
-    }));
+    };
+
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify(payload));
+    } else {
+      // WS hazır değil → kuyruğa al, bağlantıyı tetikle
+      state.pending.push(payload);
+      connectWS();
+    }
+
     inputEl.value = "";
     inputEl.style.height = "";
     sendBtn.disabled = false;
+  }
+
+  function flushPending() {
+    if (!state.ws || state.ws.readyState !== 1) return;
+    while (state.pending.length) {
+      state.ws.send(JSON.stringify(state.pending.shift()));
+    }
   }
 
   sendBtn.addEventListener("click", sendMessage);

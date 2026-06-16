@@ -9,6 +9,7 @@ from ..webhook_sender import fire_event
 from ..ws_manager import manager
 from ..config import config
 from ..ai_handler import handle_ai_reply
+from ..auth import verify_ws_token
 
 router = APIRouter()
 
@@ -275,6 +276,52 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
             "conversation_id": conv.id if conv else None,
             "visitor_id": visitor_id,
         })
+
+
+@router.websocket("/ws/agent/{token}")
+async def agent_ws(ws: WebSocket, token: str):
+    """Agent WebSocket served under /ws/ so existing nginx upgrade rules apply."""
+    agent = verify_ws_token(token)
+    if not agent:
+        await ws.close(code=4001)
+        return
+
+    await manager.connect_agent(agent.id, ws)
+    Agent.update(is_online=True).where(Agent.id == agent.id).execute()
+    await manager.broadcast_to_agents({"type": "agent_online", "agent_id": agent.id})
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            data = json.loads(raw)
+            action = data.get("action")
+
+            if action == "watch":
+                manager.watch(agent.id, int(data["conversation_id"]))
+                conv_obj = Conversation.get_or_none(Conversation.id == int(data["conversation_id"]))
+                if conv_obj:
+                    updated = (Message.update(is_read=True)
+                               .where(Message.conversation == conv_obj,
+                                      Message.sender_type == "visitor",
+                                      Message.is_read == False)
+                               .execute())
+                    if updated > 0:
+                        await manager.send_to_visitor(conv_obj.visitor_id, {"type": "messages_read"})
+            elif action == "unwatch":
+                manager.unwatch(agent.id, int(data["conversation_id"]))
+            elif action == "typing":
+                conv_id = int(data.get("conversation_id", 0))
+                conv = Conversation.get_or_none(Conversation.id == conv_id)
+                if conv:
+                    await manager.send_to_visitor(conv.visitor_id, {
+                        "type": "agent_typing",
+                        "agent_name": agent.display_name or agent.username,
+                    })
+
+    except WebSocketDisconnect:
+        manager.disconnect_agent(agent.id)
+        Agent.update(is_online=False).where(Agent.id == agent.id).execute()
+        await manager.broadcast_to_agents({"type": "agent_offline", "agent_id": agent.id})
 
 
 async def _ai_reply(conv: Conversation, trigger_msg: Message):

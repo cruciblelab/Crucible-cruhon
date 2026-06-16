@@ -292,11 +292,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Topbar avatar */
 #topbar-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;cursor:pointer}
+
+/* Mobile-only controls (hidden on desktop) */
+#nav-toggle{display:none;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:0 6px;line-height:1}
+#mobile-back{display:none;background:none;border:none;color:#334155;font-size:22px;cursor:pointer;padding:0 8px 0 0;line-height:1}
+
+/* ── Mobile responsive ── */
+@media (max-width:768px){
+  #statsbar{flex-wrap:wrap;gap:8px 14px;padding:8px 12px}
+  #statsbar .stat-item{font-size:12px}
+  #statsbar > div[style*="margin-left"]{margin-left:0 !important;width:100%;justify-content:flex-start}
+  #nav-toggle{display:block}
+  #left-nav{position:fixed;top:52px;left:-220px;bottom:0;width:200px;z-index:60;transition:left .25s;box-shadow:2px 0 12px rgba(0,0,0,.2)}
+  #left-nav.open{left:0}
+  #nav-backdrop{display:none;position:fixed;inset:52px 0 0 0;background:rgba(0,0,0,.4);z-index:55}
+  #nav-backdrop.show{display:block}
+  #sidebar{width:100%}
+  #chat-panel{position:absolute;inset:0;background:#fff;z-index:30;transform:translateX(100%);transition:transform .25s}
+  #page-convs.chat-open #chat-panel{transform:translateX(0)}
+  #mobile-back{display:block}
+  #chat-header{flex-wrap:wrap}
+  .ch-actions{margin-left:0 !important;width:100%;margin-top:6px}
+  #visitor-info-panel{position:absolute;inset:0;width:100%;z-index:50}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .page-header{flex-wrap:wrap;gap:10px}
+  .gen-table{display:block;overflow-x:auto;white-space:nowrap}
+  #page-stats,#page-tags,#page-blacklist,#page-botflow,#page-schedule,#page-webhooks,#page-offline-msgs,#page-audit,#page-visitors{padding:14px}
+}
 </style>
 </head>
 <body>
 
 <div id="topbar">
+  <button id="nav-toggle" onclick="toggleNav()" title="Menü">☰</button>
   <div class="logo">💬 Support Tawk</div>
   <div class="spacer"></div>
   <div class="agent-name" id="agent-name-display">Yükleniyor...</div>
@@ -316,6 +344,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div id="main">
+  <div id="nav-backdrop" onclick="toggleNav()"></div>
   <!-- Left nav -->
   <div id="left-nav">
     <div class="nav-item active" data-page="convs" onclick="showPage('convs')">
@@ -377,6 +406,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div id="active-chat" style="display:none;flex-direction:column;height:100%">
           <div id="chat-header">
+            <button id="mobile-back" onclick="closeChatMobile()" title="Geri">←</button>
             <div>
               <div class="ch-name" id="ch-name">-</div>
               <div class="ch-meta" id="ch-meta">-</div>
@@ -816,8 +846,22 @@ function toast(msg, type) {
   setTimeout(function() { t.style.display = "none"; }, 2500);
 }
 
+// ── Mobile nav helpers ────────────────────────────────────────────────────────
+function toggleNav() {
+  document.getElementById("left-nav").classList.toggle("open");
+  document.getElementById("nav-backdrop").classList.toggle("show");
+}
+function closeNav() {
+  document.getElementById("left-nav").classList.remove("open");
+  document.getElementById("nav-backdrop").classList.remove("show");
+}
+function closeChatMobile() {
+  document.getElementById("page-convs").classList.remove("chat-open");
+}
+
 // ── Page navigation ───────────────────────────────────────────────────────────
 function showPage(name) {
+  closeNav();
   document.querySelectorAll(".page").forEach(function(p) { p.classList.remove("active"); });
   document.querySelectorAll(".nav-item").forEach(function(n) { n.classList.remove("active"); });
   var page = document.getElementById("page-" + name);
@@ -841,7 +885,7 @@ function showPage(name) {
 // ── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
   var proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(proto + "//" + location.host + "/api/admin/ws/" + TOKEN);
+  ws = new WebSocket(proto + "//" + location.host + "/ws/agent/" + TOKEN);
   ws.onopen = function() {};
   ws.onmessage = function(e) { handleWS(JSON.parse(e.data)); };
   ws.onclose = function() { setTimeout(connectWS, 3000); };
@@ -951,6 +995,7 @@ function renderConvList() {
 
 function openConv(id) {
   currentConvId = id;
+  document.getElementById("page-convs").classList.add("chat-open");
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify({ action: "watch", conversation_id: id }));
   }
@@ -1952,6 +1997,10 @@ loadAgents();
 loadTags();
 setInterval(loadStats, 15000);
 setInterval(function() { if (currentTab !== "mine") loadConvs(); }, 10000);
+setInterval(function() {
+  var p = document.getElementById("page-visitors");
+  if (p && p.classList.contains("active")) loadLiveVisitors();
+}, 8000);
 </script>
 </body>
 </html>
