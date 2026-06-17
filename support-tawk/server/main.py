@@ -113,10 +113,16 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 @app.get("/widget.js")
 def serve_widget():
-    return FileResponse(str(_static / "widget.js"), media_type="application/javascript")
+    return FileResponse(str(_static / "widget.js"), media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache"})
 
 
 _ADMIN_DIR = (_static / "admin").resolve()
+
+# Admin panel assets revalidate on every load (cheap etag check) so an updated
+# index.html / app.*.js never gets silently served from a stale browser cache —
+# a stale cached file would leave handlers undefined and make buttons do nothing.
+_NO_CACHE = {"Cache-Control": "no-cache"}
 
 
 @app.get("/admin", include_in_schema=False)
@@ -125,12 +131,12 @@ def serve_admin(path: str = ""):
     if path:
         # Reject traversal attempts before resolving
         if ".." in path or path.startswith("/"):
-            return FileResponse(str(_static / "admin" / "index.html"))
+            return FileResponse(str(_static / "admin" / "index.html"), headers=_NO_CACHE)
         candidate = (_ADMIN_DIR / path).resolve()
         # Must be strictly inside admin dir (trailing sep prevents prefix collision)
         if str(candidate).startswith(str(_ADMIN_DIR) + os.sep) and candidate.is_file():
-            return FileResponse(str(candidate))
-    return FileResponse(str(_static / "admin" / "index.html"))
+            return FileResponse(str(candidate), headers=_NO_CACHE)
+    return FileResponse(str(_static / "admin" / "index.html"), headers=_NO_CACHE)
 
 
 @app.get("/api/locale/{lang}")
