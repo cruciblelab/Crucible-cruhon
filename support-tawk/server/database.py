@@ -370,6 +370,23 @@ class FormSubmission(BaseModel):
         table_name = "form_submissions"
 
 
+class DeletedVisitorArchive(BaseModel):
+    """Soft-delete bin: when an admin wipes a visitor's data we snapshot it
+    here as JSON for a short recovery window (see ARCHIVE_RETENTION_DAYS) so an
+    accidental deletion can be restored, then it's purged for good."""
+    id = AutoField()
+    visitor_id = CharField(max_length=64, index=True)
+    payload_json = EncryptedTextField(default="{}")  # full snapshot of the wiped rows
+    item_count = IntegerField(default=0)              # how many rows were archived (for the UI)
+    deleted_by = CharField(max_length=128, default="")
+    deleted_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "deleted_visitor_archives"
+
+
+ARCHIVE_RETENTION_DAYS = 14
+
+
 def _migrate_botflow_to_bot():
     """One-time, best-effort copy of the old single BotFlow row into the new
     Bot model as the default bot. Never overwrites bots a user already made."""
@@ -393,7 +410,7 @@ def init_db():
             Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, Setting,
             Bot, BotRule,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
-            Form, FormField, FormSubmission,
+            Form, FormField, FormSubmission, DeletedVisitorArchive,
         ], safe=True)
         _migrate_botflow_to_bot()
         _safe_migrations = [

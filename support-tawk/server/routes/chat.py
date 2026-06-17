@@ -197,7 +197,19 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
         Conversation.visitor_id == visitor_id,
         Conversation.status != "closed"
     )
-    if not conv:
+
+    # A conversation row is NOT created on connect. An idle or proactively
+    # auto-opened widget must never show up as a real conversation — the row is
+    # born only when the visitor actually sends their first message (see
+    # _ensure_conversation). Bot greetings / form prompts that auto-fire before
+    # that message are buffered here and flushed into history the moment the
+    # conversation starts, so nothing is lost from the transcript.
+    pending_bot_texts: list[dict] = []
+
+    async def _ensure_conversation():
+        nonlocal conv
+        if conv is not None:
+            return conv
         geo = await asyncio.get_event_loop().run_in_executor(None, geo_lookup, client_ip)
         conv = Conversation.create(
             visitor_id=visitor_id,
@@ -209,6 +221,14 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
             city=geo.get("city", ""),
             language=language,
         )
+        for bt in pending_bot_texts:
+            Message.create(
+                conversation=conv, sender_type="bot", sender_id="bot",
+                sender_name=bt["sender_name"], content=bt["content"],
+            )
+        pending_bot_texts.clear()
+        # Tell the widget its real conversation id (history carried null until now).
+        await ws.send_json({"type": "conversation_started", "conversation_id": conv.id})
         await manager.broadcast_to_agents({
             "type": "new_conversation",
             "conversation": _conv_dict(conv),
@@ -216,13 +236,14 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
         asyncio.create_task(fire_event("new_conversation", {
             "conversation": _conv_dict(conv),
         }))
+        return conv
 
-    # Send history
-    history = list(conv.messages.order_by(Message.created_at))
+    # Send history (empty when the conversation hasn't started yet)
+    history = list(conv.messages.order_by(Message.created_at)) if conv else []
     await ws.send_text(json.dumps({
         "type": "history",
         "messages": [_msg_dict(m) for m in history],
-        "conversation_id": conv.id,
+        "conversation_id": conv.id if conv else None,
         "config": {
             "color": config.chat.widget_color,
             "welcome_message": config.chat.welcome_message,
@@ -243,6 +264,10 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                     continue
                 if len(content) > config.limits.max_message_length:
                     content = content[:config.limits.max_message_length]
+
+                # First real visitor message — this is what creates the
+                # conversation (and flushes any buffered bot greeting).
+                await _ensure_conversation()
 
                 visitor_name = data.get("visitor_name", conv.visitor_name) or "Visitor"
                 visitor_email = data.get("visitor_email", conv.visitor_email) or ""
@@ -289,12 +314,16 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                         asyncio.create_task(_ai_reply(conv, msg))
 
             elif msg_type == "typing":
+                if conv is None:
+                    continue
                 await manager.broadcast_to_watchers(conv.id, {
                     "type": "visitor_typing",
                     "conversation_id": conv.id,
                 })
 
             elif msg_type == "read":
+                if conv is None:
+                    continue
                 Message.update(is_read=True).where(
                     Message.conversation == conv,
                     Message.sender_type != "visitor"
@@ -316,6 +345,8 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                         })
 
             elif msg_type == "set_department":
+                if conv is None:
+                    continue
                 dept_id = int(data.get("department_id", 0) or 0)
                 if dept_id and Department.get_or_none(Department.id == dept_id):
                     Conversation.update(
@@ -347,6 +378,12 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
                     continue
                 content = content[:config.limits.max_message_length]
                 sender_name = str(data.get("sender_name", "Bot")).strip()[:64] or "Bot"
+
+                if conv is None:
+                    # Greeting/form text fired before the visitor said anything —
+                    # hold it; it'll be written once the conversation starts.
+                    pending_bot_texts.append({"sender_name": sender_name, "content": content})
+                    continue
 
                 msg = Message.create(
                     conversation=conv,

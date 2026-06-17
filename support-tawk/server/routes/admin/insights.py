@@ -14,10 +14,11 @@ try:
 except ImportError:
     _HAS_OPENPYXL = False
 from ...database import (
+    database,
     Department, Agent, Conversation, Message, CannedResponse,
     Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, Bot, BotRule, Setting,
     Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
-    Form, FormField, FormSubmission,
+    Form, FormField, FormSubmission, DeletedVisitorArchive, ARCHIVE_RETENTION_DAYS,
 )
 from ... import bot_matcher
 from ...webhook_sender import fire_event
@@ -178,6 +179,59 @@ def visitor_pages(visitor_id: str, agent: Agent = Depends(get_current_agent)):
              .limit(50))
     return [{"url": p.url, "title": p.title, "created_at": p.created_at.isoformat()} for p in pages]
 
+@router.get("/visitors/{visitor_id}/forms")
+def visitor_form_submissions(visitor_id: str, agent: Agent = Depends(get_current_agent)):
+    """Every form this visitor submitted, with answers mapped to field labels."""
+    subs = (FormSubmission.select()
+            .where(FormSubmission.visitor_id == visitor_id)
+            .order_by(FormSubmission.submitted_at.desc())
+            .limit(50))
+    out = []
+    for s in subs:
+        form = Form.get_or_none(Form.id == s.form_id)
+        labels = {}
+        if form:
+            for ff in form.fields:
+                labels[str(ff.id)] = ff.label
+        try:
+            answers = json.loads(s.answers_json or "{}")
+        except Exception:
+            answers = {}
+        out.append({
+            "id": s.id,
+            "form_name": form.name if form else "Form",
+            "submitted_at": s.submitted_at.isoformat(),
+            "answers": [{"label": labels.get(str(k), str(k)), "value": v} for k, v in answers.items()],
+        })
+    return out
+
+
+@router.get("/visitors/search")
+def search_visitors(q: str = "", admin: Agent = Depends(get_current_agent)):
+    """Find visitors by id, name or email. Name/email are encrypted at rest, so
+    we decrypt-and-match in Python over the most recent conversations."""
+    needle = (q or "").strip().lower()
+    results: dict[str, dict] = {}
+    convs = Conversation.select().order_by(Conversation.updated_at.desc()).limit(500)
+    for c in convs:
+        vid = c.visitor_id or ""
+        hay = " ".join([vid, c.visitor_name or "", c.visitor_email or ""]).lower()
+        if needle and needle not in hay:
+            continue
+        r = results.get(vid)
+        if not r:
+            r = results[vid] = {
+                "visitor_id": vid,
+                "visitor_name": c.visitor_name,
+                "visitor_email": c.visitor_email,
+                "last_seen": c.updated_at.isoformat(),
+                "conversation_count": 0,
+            }
+        r["conversation_count"] += 1
+    out = sorted(results.values(), key=lambda x: x["last_seen"], reverse=True)
+    return out[:100]
+
+
 @router.get("/visitors/{visitor_id}/fields")
 def get_visitor_fields(visitor_id: str, agent: Agent = Depends(get_current_agent)):
     return [{"key": f.key, "value": f.value} for f in VisitorField.select().where(VisitorField.visitor_id == visitor_id)]
@@ -196,8 +250,197 @@ def delete_visitor_field(visitor_id: str, key: str, agent: Agent = Depends(get_c
     return {"ok": True}
 
 
+# ── Visitor data deletion with a recoverable archive window ────────────────────
+
+def _dt(s):
+    """Parse an isoformat string back to datetime, falling back to 'now'."""
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return datetime.utcnow()
+
+
+def _purge_expired_archives():
+    cutoff = datetime.utcnow() - timedelta(days=ARCHIVE_RETENTION_DAYS)
+    DeletedVisitorArchive.delete().where(DeletedVisitorArchive.deleted_at < cutoff).execute()
+
+
+def _snapshot_visitor(visitor_id: str):
+    """Serialize every row tied to a visitor into a plain dict + a row count."""
+    count = 0
+    conv_snaps = []
+    for c in Conversation.select().where(Conversation.visitor_id == visitor_id):
+        count += 1
+        msgs = []
+        for m in Message.select().where(Message.conversation == c):
+            count += 1
+            msgs.append({
+                "sender_type": m.sender_type, "sender_id": m.sender_id,
+                "sender_name": m.sender_name, "content": m.content,
+                "file_url": m.file_url, "file_name": m.file_name,
+                "file_size": m.file_size, "is_read": m.is_read,
+                "created_at": m.created_at.isoformat(),
+            })
+        notes = []
+        for n in Note.select().where(Note.conversation == c):
+            count += 1
+            notes.append({
+                "agent_id": n.agent_id, "agent_name": n.agent_name,
+                "content": n.content, "created_at": n.created_at.isoformat(),
+            })
+        rating = None
+        r = Rating.get_or_none(Rating.conversation == c)
+        if r:
+            count += 1
+            rating = {"score": r.score, "comment": r.comment, "created_at": r.created_at.isoformat()}
+        tag_ids = [ct.tag_id for ct in ConversationTag.select().where(ConversationTag.conversation == c)]
+        count += len(tag_ids)
+        fsubs = []
+        for s in FormSubmission.select().where(FormSubmission.conversation == c):
+            count += 1
+            fsubs.append({"form_id": s.form_id, "answers_json": s.answers_json,
+                          "submitted_at": s.submitted_at.isoformat()})
+        conv_snaps.append({
+            "visitor_name": c.visitor_name, "visitor_email": c.visitor_email,
+            "status": c.status, "site_name": c.site_name, "page_url": c.page_url,
+            "created_at": c.created_at.isoformat(), "updated_at": c.updated_at.isoformat(),
+            "closed_at": c.closed_at.isoformat() if c.closed_at else None,
+            "ip_address": c.ip_address, "user_agent": c.user_agent,
+            "country": c.country, "city": c.city, "language": c.language,
+            "priority": c.priority, "department_id": c.department_id,
+            "assigned_to_id": c.assigned_to_id,
+            "messages": msgs, "notes": notes, "rating": rating,
+            "tag_ids": tag_ids, "form_submissions": fsubs,
+        })
+
+    fields = []
+    for f in VisitorField.select().where(VisitorField.visitor_id == visitor_id):
+        count += 1
+        fields.append({"key": f.key, "value": f.value})
+
+    pages = []
+    for p in VisitorPageView.select().where(VisitorPageView.visitor_id == visitor_id):
+        count += 1
+        pages.append({"url": p.url, "title": p.title, "created_at": p.created_at.isoformat()})
+
+    offline = []
+    for o in OfflineMessage.select().where(OfflineMessage.visitor_id == visitor_id):
+        count += 1
+        offline.append({
+            "visitor_name": o.visitor_name, "visitor_email": o.visitor_email,
+            "message": o.message, "page_url": o.page_url, "is_read": o.is_read,
+            "created_at": o.created_at.isoformat(),
+        })
+
+    loose_subs = []
+    for s in FormSubmission.select().where(
+            FormSubmission.visitor_id == visitor_id,
+            FormSubmission.conversation.is_null(True)):
+        count += 1
+        loose_subs.append({"form_id": s.form_id, "answers_json": s.answers_json,
+                           "submitted_at": s.submitted_at.isoformat()})
+
+    return {
+        "conversations": conv_snaps, "fields": fields, "pages": pages,
+        "offline_messages": offline, "form_submissions": loose_subs,
+    }, count
+
+
+def _restore_visitor(visitor_id: str, payload: dict):
+    """Re-create rows from a snapshot. FKs to entities that no longer exist
+    (deleted departments/agents/tags/forms) are dropped or skipped gracefully."""
+    for cs in payload.get("conversations", []):
+        dept_id = cs.get("department_id")
+        if dept_id and not Department.get_or_none(Department.id == dept_id):
+            dept_id = None
+        agent_id = cs.get("assigned_to_id")
+        if agent_id and not Agent.get_or_none(Agent.id == agent_id):
+            agent_id = None
+        conv = Conversation.create(
+            visitor_id=visitor_id, visitor_name=cs.get("visitor_name", ""),
+            visitor_email=cs.get("visitor_email", ""), status=cs.get("status", "closed"),
+            site_name=cs.get("site_name", ""), page_url=cs.get("page_url", ""),
+            created_at=_dt(cs.get("created_at")) or datetime.utcnow(),
+            updated_at=_dt(cs.get("updated_at")) or datetime.utcnow(),
+            closed_at=_dt(cs.get("closed_at")),
+            ip_address=cs.get("ip_address", ""), user_agent=cs.get("user_agent", ""),
+            country=cs.get("country", ""), city=cs.get("city", ""),
+            language=cs.get("language", ""), priority=cs.get("priority", "normal"),
+            department=dept_id, assigned_to=agent_id,
+        )
+        for m in cs.get("messages", []):
+            Message.create(
+                conversation=conv, sender_type=m.get("sender_type", "visitor"),
+                sender_id=m.get("sender_id", ""), sender_name=m.get("sender_name", ""),
+                content=m.get("content", ""), file_url=m.get("file_url", ""),
+                file_name=m.get("file_name", ""), file_size=m.get("file_size", 0),
+                is_read=m.get("is_read", False),
+                created_at=_dt(m.get("created_at")) or datetime.utcnow(),
+            )
+        for n in cs.get("notes", []):
+            aid = n.get("agent_id")
+            if aid and not Agent.get_or_none(Agent.id == aid):
+                aid = None
+            Note.create(conversation=conv, agent=aid, agent_name=n.get("agent_name", ""),
+                        content=n.get("content", ""),
+                        created_at=_dt(n.get("created_at")) or datetime.utcnow())
+        if cs.get("rating"):
+            rr = cs["rating"]
+            Rating.create(conversation=conv, score=rr.get("score", 0),
+                          comment=rr.get("comment", ""),
+                          created_at=_dt(rr.get("created_at")) or datetime.utcnow())
+        for tid in cs.get("tag_ids", []):
+            if Tag.get_or_none(Tag.id == tid):
+                try:
+                    ConversationTag.create(conversation=conv, tag=tid)
+                except Exception:
+                    pass
+        for s in cs.get("form_submissions", []):
+            if Form.get_or_none(Form.id == s.get("form_id")):
+                FormSubmission.create(form=s["form_id"], conversation=conv,
+                                      visitor_id=visitor_id,
+                                      answers_json=s.get("answers_json", "{}"),
+                                      submitted_at=_dt(s.get("submitted_at")) or datetime.utcnow())
+
+    for f in payload.get("fields", []):
+        (VisitorField.insert(visitor_id=visitor_id, key=f.get("key", ""), value=f.get("value", ""))
+         .on_conflict(conflict_target=[VisitorField.visitor_id, VisitorField.key],
+                      update={VisitorField.value: f.get("value", "")})
+         .execute())
+
+    for p in payload.get("pages", []):
+        VisitorPageView.create(visitor_id=visitor_id, url=p.get("url", ""),
+                               title=p.get("title", ""),
+                               created_at=_dt(p.get("created_at")) or datetime.utcnow())
+
+    for o in payload.get("offline_messages", []):
+        OfflineMessage.create(visitor_id=visitor_id, visitor_name=o.get("visitor_name", ""),
+                              visitor_email=o.get("visitor_email", ""),
+                              message=o.get("message", ""), page_url=o.get("page_url", ""),
+                              is_read=o.get("is_read", False),
+                              created_at=_dt(o.get("created_at")) or datetime.utcnow())
+
+    for s in payload.get("form_submissions", []):
+        if Form.get_or_none(Form.id == s.get("form_id")):
+            FormSubmission.create(form=s["form_id"], conversation=None,
+                                  visitor_id=visitor_id,
+                                  answers_json=s.get("answers_json", "{}"),
+                                  submitted_at=_dt(s.get("submitted_at")) or datetime.utcnow())
+
+
 @router.delete("/visitors/{visitor_id}/data")
 def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permission("delete_data"))):
+    # Snapshot first so an accidental wipe can be undone within the retention window.
+    snapshot, count = _snapshot_visitor(visitor_id)
+    if count > 0:
+        DeletedVisitorArchive.create(
+            visitor_id=visitor_id,
+            payload_json=json.dumps(snapshot, ensure_ascii=False),
+            item_count=count,
+            deleted_by=admin.display_name or admin.username,
+        )
     conv_ids = [c.id for c in Conversation.select(Conversation.id).where(Conversation.visitor_id == visitor_id)]
     if conv_ids:
         Message.delete().where(Message.conversation_id.in_(conv_ids)).execute()
@@ -210,7 +453,50 @@ def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permissi
     VisitorField.delete().where(VisitorField.visitor_id == visitor_id).execute()
     VisitorPageView.delete().where(VisitorPageView.visitor_id == visitor_id).execute()
     OfflineMessage.delete().where(OfflineMessage.visitor_id == visitor_id).execute()
-    _audit(admin.display_name or admin.username, "delete_visitor_data", "visitor", None, visitor_id)
+    _purge_expired_archives()
+    _audit(admin.display_name or admin.username, "delete_visitor_data", "visitor", None,
+           f"{visitor_id} ({count} satır arşivlendi)")
+    return {"ok": True, "archived_items": count}
+
+
+@router.get("/deleted-visitors")
+def list_deleted_visitors(admin: Agent = Depends(require_permission("delete_data"))):
+    _purge_expired_archives()
+    out = []
+    for a in DeletedVisitorArchive.select().order_by(DeletedVisitorArchive.deleted_at.desc()):
+        out.append({
+            "id": a.id, "visitor_id": a.visitor_id, "item_count": a.item_count,
+            "deleted_by": a.deleted_by, "deleted_at": a.deleted_at.isoformat(),
+            "expires_at": (a.deleted_at + timedelta(days=ARCHIVE_RETENTION_DAYS)).isoformat(),
+        })
+    return out
+
+
+@router.post("/deleted-visitors/{archive_id}/restore")
+def restore_deleted_visitor(archive_id: int, admin: Agent = Depends(require_permission("delete_data"))):
+    a = DeletedVisitorArchive.get_or_none(DeletedVisitorArchive.id == archive_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Arşiv kaydı bulunamadı")
+    try:
+        payload = json.loads(a.payload_json or "{}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Arşiv verisi okunamadı")
+    with database.atomic():
+        _restore_visitor(a.visitor_id, payload)
+    vid = a.visitor_id
+    a.delete_instance()
+    _audit(admin.display_name or admin.username, "restore_visitor_data", "visitor", None, vid)
+    return {"ok": True}
+
+
+@router.delete("/deleted-visitors/{archive_id}")
+def purge_deleted_visitor(archive_id: int, admin: Agent = Depends(require_permission("delete_data"))):
+    a = DeletedVisitorArchive.get_or_none(DeletedVisitorArchive.id == archive_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Arşiv kaydı bulunamadı")
+    vid = a.visitor_id
+    a.delete_instance()
+    _audit(admin.display_name or admin.username, "purge_visitor_archive", "visitor", None, vid)
     return {"ok": True}
 
 

@@ -324,6 +324,41 @@ function loadVisitorInfo(visitorId, name, email, vid, convData) {
         t + ' · ' + escHtml(c.status) + (c.last_message ? ' — ' + escHtml((c.last_message.content||"").substring(0,40)) : '') + '</div>';
     }).join("") || '<p style="font-size:11px;color:#94a3b8">No previous conversations.</p>';
   });
+
+  // Load form responses
+  api("GET", "/visitors/" + visitorId + "/forms").then(function(data) {
+    document.getElementById("vip-forms-list").innerHTML = renderVisitorForms(data);
+  });
+
+  // Reveal the destructive "delete all data" action only to permitted agents.
+  var danger = document.getElementById("vip-danger-section");
+  if (danger) danger.style.display = can("delete_data") ? "" : "none";
+}
+
+// Shared renderer for a visitor's form submissions (used by panel + lookup page).
+function renderVisitorForms(data) {
+  var list = Array.isArray(data) ? data : [];
+  if (!list.length) return '<p style="font-size:11px;color:#94a3b8">No form responses.</p>';
+  return list.map(function(s) {
+    var when = s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "";
+    var rows = (s.answers || []).map(function(a) {
+      return '<div class="vip-field"><span class="vf-key">' + escHtml(a.label) + ':</span><span>' + escHtml(String(a.value)) + '</span></div>';
+    }).join("");
+    return '<div style="margin-bottom:10px">' +
+      '<div style="font-size:11px;font-weight:600;color:#475569">' + escHtml(s.form_name) +
+      ' <span style="color:#94a3b8;font-weight:400">· ' + when + '</span></div>' + rows + '</div>';
+  }).join("");
+}
+
+// Delete-all-data button inside the visitor info panel.
+function deleteVisitorDataFromPanel() {
+  if (!currentVisitorId) { toast("Visitor ID not found", "error"); return; }
+  if (!confirm("All data for this visitor will be deleted. It will be recoverable for 14 days. Continue?")) return;
+  api("DELETE", "/visitors/" + currentVisitorId + "/data").then(function(res) {
+    toast("Visitor data deleted (" + ((res && res.archived_items) || 0) + " items archived)");
+    toggleVisitorInfo();
+    loadConvs();
+  }).catch(function() { toast("Deletion failed", "error"); });
 }
 
 function addVisitorField() {
@@ -351,6 +386,125 @@ function deleteVisitorField(key) {
       currentVisitorId);
     toast("Field deleted");
   });
+}
+
+// ── Visitor Lookup page (search · profile · delete · restore) ──────────────────
+function loadVisitorLookup() {
+  document.getElementById("vl-results").innerHTML = "";
+  document.getElementById("vl-profile").style.display = "none";
+  document.getElementById("vl-profile").innerHTML = "";
+  loadVisitorArchives();
+}
+
+var vlResults = [];      // last search results, referenced by index from the DOM
+var vlCurrentVid = null; // visitor whose profile is currently shown
+
+function runVisitorSearch() {
+  var q = document.getElementById("vl-search").value.trim();
+  var box = document.getElementById("vl-results");
+  box.innerHTML = '<p style="font-size:12px;color:#94a3b8">Searching…</p>';
+  api("GET", "/visitors/search?q=" + encodeURIComponent(q)).then(function(data) {
+    vlResults = Array.isArray(data) ? data : [];
+    if (!vlResults.length) { box.innerHTML = '<p style="font-size:13px;color:#94a3b8">No visitors found.</p>'; return; }
+    box.innerHTML = vlResults.map(function(v, i) {
+      var seen = v.last_seen ? new Date(v.last_seen).toLocaleString() : "";
+      return '<div class="prev-conv-item" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px" ' +
+        'onclick="viewVisitorProfileByIdx(' + i + ')">' +
+        '<strong>' + escHtml(v.visitor_name || "Visitor") + '</strong>' +
+        (v.visitor_email ? ' · ' + escHtml(v.visitor_email) : '') +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + escHtml(v.visitor_id) +
+        ' · ' + v.conversation_count + ' conversation(s) · ' + seen + '</div></div>';
+    }).join("");
+  }).catch(function() { box.innerHTML = '<p style="font-size:13px;color:#dc2626">Search failed.</p>'; });
+}
+
+function viewVisitorProfileByIdx(i) {
+  var v = vlResults[i];
+  if (v) viewVisitorProfile(v.visitor_id, v.visitor_name || "", v.visitor_email || "");
+}
+
+function viewVisitorProfile(vid, name, email) {
+  vlCurrentVid = vid;
+  var el = document.getElementById("vl-profile");
+  el.style.display = "block";
+  el.innerHTML = '<p style="font-size:12px;color:#94a3b8">Loading…</p>';
+  Promise.all([
+    api("GET", "/visitors/" + vid + "/fields").catch(function(){return [];}),
+    api("GET", "/visitors/" + vid + "/forms").catch(function(){return [];}),
+    api("GET", "/visitors/" + vid + "/history").catch(function(){return [];}),
+    api("GET", "/visitors/" + vid + "/pages").catch(function(){return [];}),
+  ]).then(function(r) {
+    var fields = r[0], forms = r[1], history = r[2], pages = r[3];
+    var fieldsHtml = (Array.isArray(fields) && fields.length)
+      ? fields.map(function(f){ return '<div class="vip-field"><span class="vf-key">' + escHtml(f.key) + ':</span><span>' + escHtml(f.value) + '</span></div>'; }).join("")
+      : '<p style="font-size:11px;color:#94a3b8">No custom fields.</p>';
+    var histHtml = (Array.isArray(history) && history.length)
+      ? history.map(function(c){ var t = c.created_at ? new Date(c.created_at).toLocaleDateString() : ""; return '<div class="prev-conv-item" onclick="openConv(' + c.id + ')">' + t + ' · ' + escHtml(c.status) + (c.last_message ? ' — ' + escHtml((c.last_message.content||"").substring(0,50)) : '') + '</div>'; }).join("")
+      : '<p style="font-size:11px;color:#94a3b8">No conversations.</p>';
+    var pagesHtml = (Array.isArray(pages) && pages.length)
+      ? pages.slice(0,15).map(function(p){ var t = p.created_at ? new Date(p.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : ""; return '<div class="page-hist-item">' + t + ' ' + escHtml(p.title || p.url) + '</div>'; }).join("")
+      : '<p style="font-size:11px;color:#94a3b8">No page history.</p>';
+    var del = can("delete_data")
+      ? '<button class="btn-sm danger" style="margin-top:14px" onclick="deleteVisitorFromLookup()">🗑️ Delete all data (recoverable 14 days)</button>'
+      : '';
+    el.innerHTML =
+      '<h3 style="font-size:16px;font-weight:700;margin-bottom:2px">' + escHtml(name || "Visitor") + '</h3>' +
+      '<div style="font-size:12px;color:#64748b;margin-bottom:14px">' + (email ? escHtml(email) + ' · ' : '') + '<span style="word-break:break-all">' + escHtml(vid) + '</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px">' +
+        '<div><h4 style="font-size:12px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Custom Fields</h4>' + fieldsHtml + '</div>' +
+        '<div><h4 style="font-size:12px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Form Responses</h4>' + renderVisitorForms(forms) + '</div>' +
+        '<div><h4 style="font-size:12px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Conversations</h4>' + histHtml + '</div>' +
+        '<div><h4 style="font-size:12px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Page History</h4>' + pagesHtml + '</div>' +
+      '</div>' + del;
+  });
+}
+
+function deleteVisitorFromLookup() {
+  var vid = vlCurrentVid;
+  if (!vid) return;
+  if (!confirm("All data for this visitor will be deleted. It will be recoverable for 14 days. Continue?")) return;
+  api("DELETE", "/visitors/" + vid + "/data").then(function(res) {
+    toast("Deleted (" + ((res && res.archived_items) || 0) + " items archived)");
+    document.getElementById("vl-profile").style.display = "none";
+    runVisitorSearch();
+    loadVisitorArchives();
+  }).catch(function() { toast("Deletion failed", "error"); });
+}
+
+function loadVisitorArchives() {
+  var box = document.getElementById("vl-archive-list");
+  api("GET", "/deleted-visitors").then(function(data) {
+    var list = Array.isArray(data) ? data : [];
+    if (!list.length) { box.innerHTML = '<p style="font-size:12px;color:#94a3b8">No archived deletions.</p>'; return; }
+    box.innerHTML = list.map(function(a) {
+      var del = a.deleted_at ? new Date(a.deleted_at).toLocaleString() : "";
+      var exp = a.expires_at ? new Date(a.expires_at).toLocaleDateString() : "";
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;flex-wrap:wrap">' +
+        '<div style="font-size:12px"><span style="word-break:break-all">' + escHtml(a.visitor_id) + '</span>' +
+        '<div style="font-size:11px;color:#94a3b8">' + a.item_count + ' items · by ' + escHtml(a.deleted_by || "—") + ' · ' + del + ' · expires ' + exp + '</div></div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button class="btn-sm" style="background:#16a34a;color:#fff" onclick="restoreArchive(' + a.id + ')">↩ Restore</button>' +
+          '<button class="btn-sm danger" onclick="purgeArchive(' + a.id + ')">Delete now</button>' +
+        '</div></div>';
+    }).join("");
+  }).catch(function() { box.innerHTML = '<p style="font-size:12px;color:#dc2626">Failed to load archive.</p>'; });
+}
+
+function restoreArchive(id) {
+  if (!confirm("Restore this visitor's archived data back into the system?")) return;
+  api("POST", "/deleted-visitors/" + id + "/restore").then(function() {
+    toast("Data restored");
+    loadVisitorArchives();
+    loadConvs();
+  }).catch(function() { toast("Restore failed", "error"); });
+}
+
+function purgeArchive(id) {
+  if (!confirm("Permanently delete this archived data? This cannot be undone.")) return;
+  api("DELETE", "/deleted-visitors/" + id).then(function() {
+    toast("Archive purged");
+    loadVisitorArchives();
+  }).catch(function() { toast("Purge failed", "error"); });
 }
 
 // ── Live Visitors ─────────────────────────────────────────────────────────────

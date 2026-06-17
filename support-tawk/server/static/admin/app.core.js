@@ -39,6 +39,7 @@ function applyNavVisibility() {
     "nav-forms": "manage_forms",
     "nav-appeals": "manage_blacklist",
     "nav-blacklist": "manage_blacklist",
+    "nav-visitor-lookup": "delete_data",
     "nav-botflow": "manage_botflow",
     "nav-tags": "manage_tags",
     "nav-schedule": "manage_schedule",
@@ -162,6 +163,7 @@ function showPage(name) {
   if (name === "stats") loadDetailedStats();
   if (name === "tags") loadTags();
   if (name === "blacklist") loadBlacklist();
+  if (name === "visitor-lookup") loadVisitorLookup();
   if (name === "appeals") loadAppeals();
   if (name === "botflow") loadBots();
   if (name === "schedule") loadScheduleAgents();

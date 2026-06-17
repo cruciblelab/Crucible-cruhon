@@ -1236,6 +1236,11 @@
       }
       scrollBottom();
 
+    } else if (data.type === "conversation_started") {
+      // Server created the conversation on our first message; remember its id
+      // so rating / form submission can reference it within this same session.
+      state.convId = data.conversation_id;
+
     } else if (data.type === "message") {
       appendMsg(data.message);
       maybeScrollBottom();
