@@ -1127,7 +1127,8 @@
     forgetBtn.addEventListener("click", function () {
       if (!confirm(t("forget_confirm"))) return;
       ["st_visitor_id", "st_visitor_name", "st_visitor_email",
-       "st_widget_width", "st_bubble_dismiss_until"].forEach(function(k) {
+       "st_widget_width", "st_bubble_dismiss_until",
+       "st_cookie_consent", "st_cookie_ack"].forEach(function(k) {
         localStorage.removeItem(k);
       });
       sessionStorage.removeItem("st_bubbles_dismissed");
