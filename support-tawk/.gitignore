@@ -1,0 +1,18 @@
+# Runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Env / secrets
+.env
