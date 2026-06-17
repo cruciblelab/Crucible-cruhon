@@ -733,14 +733,19 @@
   ratingSubmit.addEventListener("click", function() {
     if (!selectedScore) { return; }
     if (!state.convId) return;
+    ratingSubmit.disabled = true;
     fetch(SERVER + "/api/rating/" + state.convId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ score: selectedScore, comment: ratingComment.value.trim() }),
-    }).then(function() {
+    }).then(function(r) {
+      if (!r.ok) throw new Error("rating failed");
       ratingForm.innerHTML = '<p style="color:#22c55e;font-weight:500">' + t("rating_thanks") + '</p>';
       state.rating_submitted = true;
-    }).catch(function() {});
+    }).catch(function() {
+      ratingSubmit.disabled = false;
+      appendSystemMsg(t("send_failed"));
+    });
   });
 
   // ── Apply color ───────────────────────────────────────────────────────────
@@ -1088,7 +1093,8 @@
         message: msg,
         page_url: window.location.href,
       }),
-    }).then(function() {
+    }).then(function(r) {
+      if (!r.ok) throw new Error("offline-message failed");
       offlineForm.innerHTML = '<div style="padding:20px;text-align:center"><p style="color:#22c55e;font-weight:500;font-size:14px">' + t("offline_sent") + '</p></div>';
     }).catch(function() {
       olSubmitBtn.disabled = false;
