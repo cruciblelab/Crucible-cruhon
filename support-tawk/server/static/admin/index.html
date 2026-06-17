@@ -955,11 +955,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Cookies page -->
     <div class="page" id="page-cookies" style="flex-direction:column;overflow-y:auto;padding:24px">
       <div class="page-header">
-        <h2>🍪 Cookies</h2>
+        <h2>🍪 Cookie Consent</h2>
       </div>
 
       <div class="settings-section">
-        <h3>🔔 Cookie Notice Bar</h3>
+        <h3>🔔 Notice &amp; Consent</h3>
         <div class="settings-row">
           <label>Show Notice</label>
           <div class="toggle-wrap">
@@ -971,16 +971,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
         </div>
         <div class="settings-row">
-          <label>Notice Text</label>
-          <textarea id="ck-text" placeholder="Leave empty to use the default text for the widget language"></textarea>
+          <label>Mode</label>
+          <select id="ck-mode" style="width:240px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+            <option value="notice">Notice only (informational)</option>
+            <option value="consent">Require consent (Accept / Reject)</option>
+          </select>
+          <small style="color:#94a3b8;margin-left:8px">Consent mode shows Accept all / Reject optional / Customize</small>
         </div>
         <div class="settings-row">
-          <label>Policy Link URL</label>
-          <input type="text" id="ck-policy-url" placeholder="https://example.com/cookie-policy">
+          <label>Banner Position</label>
+          <select id="ck-position" style="width:240px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;outline:none">
+            <option value="bottom">Bottom bar (inside widget)</option>
+            <option value="corner">Corner card (floating)</option>
+          </select>
         </div>
         <div class="settings-row">
-          <label>Policy Link Label</label>
-          <input type="text" id="ck-policy-label" placeholder="Cookie Policy">
+          <label>Notice Text (TR)</label>
+          <textarea id="ck-text-tr" placeholder="Boş bırakılırsa varsayılan Türkçe metin kullanılır"></textarea>
+        </div>
+        <div class="settings-row">
+          <label>Notice Text (EN)</label>
+          <textarea id="ck-text-en" placeholder="Leave empty to use the default English text"></textarea>
         </div>
         <div style="margin-top:16px">
           <button class="form-submit" onclick="saveCookieSettings()">Save</button>
@@ -988,19 +999,87 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
 
       <div class="settings-section" style="margin-top:16px">
-        <h3>📋 Cookie / Storage Definitions</h3>
-        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Shown to visitors in the notice's expandable details. Mark each one as mandatory or optional.</p>
+        <h3>🔘 Button Labels</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Leave empty to use the default label for the widget language.</p>
+        <div class="settings-row">
+          <label>Accept All</label>
+          <input type="text" id="ck-accept-label" placeholder="Accept all">
+        </div>
+        <div class="settings-row">
+          <label>Reject Optional</label>
+          <input type="text" id="ck-reject-label" placeholder="Reject optional">
+        </div>
+        <div class="settings-row">
+          <label>Customize</label>
+          <input type="text" id="ck-customize-label" placeholder="Customize">
+        </div>
+        <div class="settings-row">
+          <label>Save Preferences</label>
+          <input type="text" id="ck-save-label" placeholder="Save preferences">
+        </div>
+        <div style="margin-top:16px">
+          <button class="form-submit" onclick="saveCookieSettings()">Save</button>
+        </div>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>🔗 Links</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Add as many links as you like (Cookie Policy, Privacy Policy, etc.). Shown in the notice.</p>
         <div class="add-bl-row">
-          <input id="new-ck-name" placeholder="Cookie name">
-          <input id="new-ck-desc" placeholder="Purpose (optional)">
+          <input id="new-ck-link-label" placeholder="Link label (e.g. Cookie Policy)">
+          <input id="new-ck-link-url" placeholder="https://example.com/cookies">
+          <button class="form-submit" onclick="addCookieLink()">Add Link</button>
+        </div>
+        <div id="ck-links-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>🗂️ Categories</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Consent groups. Required categories are always on; optional ones can be accepted or rejected by visitors.</p>
+        <div class="add-bl-row">
+          <input id="new-cat-name" placeholder="Category name (e.g. Analytics)">
+          <input id="new-cat-desc" placeholder="Description (optional)">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#475569;white-space:nowrap">
+            <input type="checkbox" id="new-cat-required"> Required
+          </label>
+          <button class="form-submit" onclick="addCookieCategory()">Add</button>
+        </div>
+        <table class="bl-table" id="cat-table">
+          <thead><tr><th>Name</th><th>Key</th><th>Description</th><th>Required</th><th></th></tr></thead>
+          <tbody id="cat-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>📋 Cookie / Storage Definitions</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Documented for visitors in the consent details. Assign each to a category.</p>
+        <div class="add-bl-row" style="flex-wrap:wrap">
+          <input id="new-ck-name" placeholder="Cookie name" style="max-width:160px">
+          <select id="new-ck-category" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none"></select>
+          <input id="new-ck-desc" placeholder="Purpose" style="max-width:180px">
+          <input id="new-ck-provider" placeholder="Provider" style="max-width:120px">
+          <input id="new-ck-duration" placeholder="Duration" style="max-width:110px">
           <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#475569;white-space:nowrap">
             <input type="checkbox" id="new-ck-mandatory"> Mandatory
           </label>
           <button class="form-submit" onclick="addCookieDef()">Add</button>
         </div>
         <table class="bl-table" id="ck-table">
-          <thead><tr><th>Name</th><th>Description</th><th>Mandatory</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Category</th><th>Provider</th><th>Duration</th><th>Description</th><th>Mandatory</th><th></th></tr></thead>
           <tbody id="ck-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="settings-section" style="margin-top:16px">
+        <h3>📜 Consent Log</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">Recent visitor consent choices (most recent first, last 200).</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-sm" onclick="loadCookieConsents()">Refresh</button>
+          <button class="btn-sm danger" onclick="clearCookieConsents()">Clear Log</button>
+        </div>
+        <table class="bl-table" id="ck-consent-table">
+          <thead><tr><th>Visitor</th><th>Accepted</th><th>Date</th></tr></thead>
+          <tbody id="ck-consent-tbody"></tbody>
         </table>
       </div>
     </div>

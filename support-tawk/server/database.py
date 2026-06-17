@@ -387,6 +387,20 @@ class DeletedVisitorArchive(BaseModel):
 ARCHIVE_RETENTION_DAYS = 14
 
 
+class CookieCategory(BaseModel):
+    """A consent group (e.g. Necessary, Analytics, Marketing). Visitors can
+    accept/reject optional categories; required ones are always on."""
+    id = AutoField()
+    key = CharField(unique=True, max_length=64)
+    name = CharField(max_length=128)
+    description = TextField(default="")
+    is_required = BooleanField(default=False)
+    order = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "cookie_categories"
+
+
 class CookieDefinition(BaseModel):
     """A single cookie/storage item the admin documents for the visitor-facing
     cookie notice (e.g. "session_id" — mandatory, "analytics" — optional)."""
@@ -394,10 +408,43 @@ class CookieDefinition(BaseModel):
     name = CharField(max_length=128)
     description = TextField(default="")
     is_mandatory = BooleanField(default=False)
+    category_key = CharField(max_length=64, default="necessary")
+    provider = CharField(max_length=128, default="")
+    duration = CharField(max_length=64, default="")
     order = IntegerField(default=0)
     created_at = DateTimeField(default=datetime.utcnow)
     class Meta:
         table_name = "cookie_definitions"
+
+
+class CookieConsentLog(BaseModel):
+    """Record of a visitor's cookie consent choices, kept for compliance."""
+    id = AutoField()
+    visitor_id = CharField(max_length=64, index=True)
+    choices_json = EncryptedTextField(default="{}")
+    accepted_categories = CharField(max_length=512, default="")
+    ip_address = CharField(max_length=64, default="")
+    user_agent = CharField(max_length=512, default="")
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "cookie_consent_logs"
+
+
+_DEFAULT_COOKIE_CATEGORIES = [
+    {"key": "necessary",  "name": "Necessary",  "description": "Required for the chat to work. Always on.", "is_required": True,  "order": 0},
+    {"key": "functional", "name": "Functional", "description": "Remembers your preferences (language, name).",  "is_required": False, "order": 1},
+    {"key": "analytics",  "name": "Analytics",  "description": "Anonymous usage statistics.",                   "is_required": False, "order": 2},
+    {"key": "marketing",  "name": "Marketing",  "description": "Advertising and retargeting.",                  "is_required": False, "order": 3},
+]
+
+
+def _seed_cookie_categories():
+    """Seed a sensible default category set the first time, so consent mode
+    works out of the box. Never touches categories the admin already made."""
+    if CookieCategory.select().count() > 0:
+        return
+    for c in _DEFAULT_COOKIE_CATEGORIES:
+        CookieCategory.create(**c)
 
 
 def _migrate_botflow_to_bot():
@@ -423,7 +470,8 @@ def init_db():
             Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, Setting,
             Bot, BotRule,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
-            Form, FormField, FormSubmission, DeletedVisitorArchive, CookieDefinition,
+            Form, FormField, FormSubmission, DeletedVisitorArchive,
+            CookieDefinition, CookieCategory, CookieConsentLog,
         ], safe=True)
         _migrate_botflow_to_bot()
         _safe_migrations = [
@@ -438,9 +486,13 @@ def init_db():
             "ALTER TABLE conversations ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL",
             "ALTER TABLE blacklisted_ips ADD COLUMN kind VARCHAR(16) DEFAULT 'ip'",
             "ALTER TABLE agents ADD COLUMN permissions TEXT DEFAULT '[]'",
+            "ALTER TABLE cookie_definitions ADD COLUMN category_key VARCHAR(64) DEFAULT 'necessary'",
+            "ALTER TABLE cookie_definitions ADD COLUMN provider VARCHAR(128) DEFAULT ''",
+            "ALTER TABLE cookie_definitions ADD COLUMN duration VARCHAR(64) DEFAULT ''",
         ]
         for _sql in _safe_migrations:
             try:
                 database.execute_sql(_sql)
             except Exception:
                 pass
+        _seed_cookie_categories()

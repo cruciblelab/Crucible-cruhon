@@ -218,19 +218,51 @@ class FieldOrderRequest(BaseModel):
 
 class CookieNoticeSettingsUpdate(BaseModel):
     enabled: Optional[bool] = None
-    text: Optional[str] = None
-    policy_url: Optional[str] = None
+    consent_mode: Optional[str] = None         # "notice" | "consent"
+    text: Optional[str] = None                 # legacy single-language text
+    text_tr: Optional[str] = None
+    text_en: Optional[str] = None
+    policy_url: Optional[str] = None           # legacy single link
     policy_label: Optional[str] = None
+    links: Optional[List[Dict[str, Any]]] = None   # [{label, url}, ...]
+    accept_label: Optional[str] = None
+    reject_label: Optional[str] = None
+    customize_label: Optional[str] = None
+    save_label: Optional[str] = None
+    banner_position: Optional[str] = None      # "bottom" | "corner"
 
 
 class CookieDefCreate(BaseModel):
     name: str
     description: str = ""
     is_mandatory: bool = False
+    category_key: str = "necessary"
+    provider: str = ""
+    duration: str = ""
 
 
 class CookieDefUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_mandatory: Optional[bool] = None
+    category_key: Optional[str] = None
+    provider: Optional[str] = None
+    duration: Optional[str] = None
+
+
+class CookieCategoryCreate(BaseModel):
+    key: Optional[str] = None
+    name: str
+    description: str = ""
+    is_required: bool = False
+
+
+class CookieCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_required: Optional[bool] = None
+
+
+class CookieReorder(BaseModel):
+    ids: List[int]
 

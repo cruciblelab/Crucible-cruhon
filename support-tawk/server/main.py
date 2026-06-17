@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 from server.config import config
-from server.database import database, Agent, Conversation, Message, Setting, CookieDefinition, init_db
+from server.database import database, Agent, Conversation, Message, Setting, CookieDefinition, CookieCategory, init_db
 from server.auth import hash_password
 from server.ws_manager import manager
 from server.routes.chat import router as chat_router
@@ -209,6 +209,23 @@ def public_config():
     if active_lang not in _SUPPORTED_LANGS:
         active_lang = "en"
 
+    # Cookie consent: bilingual text, multiple links, categories + cookies
+    cookie_text = overrides.get("cookie_notice_text_" + active_lang, "") or overrides.get("cookie_notice_text", "")
+    try:
+        cookie_links = json.loads(overrides.get("cookie_links_json", "[]"))
+        if not isinstance(cookie_links, list):
+            cookie_links = []
+    except Exception:
+        cookie_links = []
+    cookie_links = [{"label": str(l.get("label", "")), "url": str(l.get("url", ""))}
+                    for l in cookie_links if isinstance(l, dict) and l.get("url")]
+    if not cookie_links and overrides.get("cookie_policy_url"):
+        cookie_links = [{"label": overrides.get("cookie_policy_label", ""), "url": overrides.get("cookie_policy_url", "")}]
+    cookie_categories = [
+        {"key": c.key, "name": c.name, "description": c.description, "is_required": c.is_required}
+        for c in CookieCategory.select().order_by(CookieCategory.order, CookieCategory.id)
+    ]
+
     return {
         "site_name": overrides.get("site_name", config.site.name),
         "widget_color": overrides.get("widget_color", config.chat.widget_color),
@@ -227,14 +244,49 @@ def public_config():
         "widget_texts": widget_texts,
         "bubble_dismiss_days": bubble_dismiss_days,
         "cookie_notice_enabled": overrides.get("cookie_notice_enabled", "true") != "false",
-        "cookie_notice_text": overrides.get("cookie_notice_text", ""),
+        "cookie_consent_mode": overrides.get("cookie_consent_mode", "notice"),
+        "cookie_notice_text": cookie_text,
         "cookie_policy_url": overrides.get("cookie_policy_url", ""),
         "cookie_policy_label": overrides.get("cookie_policy_label", ""),
+        "cookie_links": cookie_links,
+        "cookie_accept_label": overrides.get("cookie_accept_label", ""),
+        "cookie_reject_label": overrides.get("cookie_reject_label", ""),
+        "cookie_customize_label": overrides.get("cookie_customize_label", ""),
+        "cookie_save_label": overrides.get("cookie_save_label", ""),
+        "cookie_banner_position": overrides.get("cookie_banner_position", "bottom"),
+        "cookie_categories": cookie_categories,
         "cookies": [
-            {"name": c.name, "description": c.description, "is_mandatory": c.is_mandatory}
+            {"name": c.name, "description": c.description, "is_mandatory": c.is_mandatory,
+             "category_key": getattr(c, "category_key", "necessary"),
+             "provider": getattr(c, "provider", ""), "duration": getattr(c, "duration", "")}
             for c in CookieDefinition.select().order_by(CookieDefinition.order, CookieDefinition.created_at)
         ],
     }
+
+
+@app.post("/api/cookie-consent")
+async def log_cookie_consent(request: Request):
+    """Public endpoint: record a visitor's cookie consent choices for compliance."""
+    from server.database import CookieConsentLog
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    visitor_id = str(body.get("visitor_id", ""))[:64]
+    if not visitor_id:
+        raise HTTPException(400, "visitor_id required")
+    choices = body.get("choices", {})
+    if not isinstance(choices, dict):
+        choices = {}
+    accepted = ",".join(sorted(k for k, v in choices.items() if v))[:512]
+    ip = request.client.host if request.client else ""
+    ua = request.headers.get("user-agent", "")[:512]
+    CookieConsentLog.create(
+        visitor_id=visitor_id,
+        choices_json=json.dumps(choices, ensure_ascii=False),
+        accepted_categories=accepted, ip_address=ip, user_agent=ua,
+    )
+    return {"ok": True}
 
 
 if __name__ == "__main__":

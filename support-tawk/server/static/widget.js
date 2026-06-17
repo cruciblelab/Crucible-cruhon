@@ -38,9 +38,17 @@
     texts: {},
     bubble_dismiss_days: 0,
     cookie_notice_enabled: true,
+    cookie_consent_mode: "notice",
     cookie_notice_text: "",
     cookie_policy_url: "",
     cookie_policy_label: "",
+    cookie_links: [],
+    cookie_accept_label: "",
+    cookie_reject_label: "",
+    cookie_customize_label: "",
+    cookie_save_label: "",
+    cookie_banner_position: "bottom",
+    cookie_categories: [],
     cookies: [],
   };
 
@@ -100,6 +108,12 @@
       cookie_mandatory: "Zorunlu",
       cookie_optional: "İsteğe bağlı",
       cookie_policy_default_label: "Çerez Politikası",
+      cookie_accept: "Tümünü kabul et",
+      cookie_reject: "İsteğe bağlıları reddet",
+      cookie_customize: "Özelleştir",
+      cookie_save: "Tercihleri kaydet",
+      cookie_always_on: "Her zaman açık",
+      cookie_prefs_title: "Çerez tercihleri",
     },
     en: {
       aria_chat: "Support Chat",
@@ -155,6 +169,12 @@
       cookie_mandatory: "Required",
       cookie_optional: "Optional",
       cookie_policy_default_label: "Cookie Policy",
+      cookie_accept: "Accept all",
+      cookie_reject: "Reject optional",
+      cookie_customize: "Customize",
+      cookie_save: "Save preferences",
+      cookie_always_on: "Always on",
+      cookie_prefs_title: "Cookie preferences",
     },
   };
 
@@ -311,19 +331,37 @@
     ".fw-success p { font-size:13.5px; color:#64748b; margin-top:6px; }",
     ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
     "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
-    "#st-cookie-bar { display:flex; flex-direction:column; gap:6px; padding:7px 12px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b; line-height:1.4; }",
+    "#st-cookie-bar { display:flex; flex-direction:column; gap:6px; padding:8px 12px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b; line-height:1.4; }",
+    "#st-cookie-bar.st-corner { position:fixed; bottom:24px; left:24px; z-index:999998; width:340px; max-width:calc(100vw - 48px); border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.16); padding:12px 14px; }",
     "#st-cookie-main { display:flex; align-items:center; gap:8px; }",
     "#st-cookie-bar #st-cookie-text { flex:1; }",
-    "#st-cookie-bar #st-cookie-link { color:#2563eb; text-decoration:underline; flex-shrink:0; }",
-    "#st-cookie-bar #st-cookie-details-btn { background:none; border:none; color:#94a3b8; text-decoration:underline; cursor:pointer; font-size:11px; flex-shrink:0; padding:2px 0; }",
-    "#st-cookie-bar #st-cookie-details-btn:hover { color:#475569; }",
     "#st-cookie-bar #st-cookie-close { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:13px; line-height:1; padding:2px 4px; border-radius:4px; flex-shrink:0; }",
     "#st-cookie-bar #st-cookie-close:hover { color:#475569; background:#e2e8f0; }",
-    "#st-cookie-details { display:none; flex-direction:column; gap:4px; padding-top:6px; border-top:1px solid #e2e8f0; max-height:120px; overflow-y:auto; }",
+    "#st-cookie-links { display:flex; flex-wrap:wrap; gap:8px; }",
+    "#st-cookie-links a { color:#2563eb; text-decoration:underline; }",
+    "#st-cookie-actions { display:flex; flex-wrap:wrap; gap:6px; }",
+    ".st-cookie-btn { border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:7px; padding:5px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; }",
+    ".st-cookie-btn:hover { background:#f1f5f9; }",
+    ".st-cookie-btn.primary { background:var(--st-color); border-color:var(--st-color); color:#fff; }",
+    ".st-cookie-btn.primary:hover { opacity:.9; }",
+    ".st-cookie-btn.link { background:none; border:none; text-decoration:underline; color:#94a3b8; padding:5px 2px; }",
+    "#st-cookie-details { display:none; flex-direction:column; gap:8px; padding-top:8px; border-top:1px solid #e2e8f0; max-height:200px; overflow-y:auto; }",
     "#st-cookie-details.open { display:flex; }",
-    ".st-cookie-item { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }",
+    ".st-cookie-cat { display:flex; flex-direction:column; gap:3px; }",
+    ".st-cookie-cat-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }",
+    ".st-cookie-cat-head .st-cookie-cat-name { font-weight:700; color:#334155; font-size:11.5px; }",
+    ".st-cookie-cat-head .st-cookie-always { font-size:10px; color:#16a34a; font-weight:600; }",
+    ".st-cookie-cat-desc { color:#94a3b8; }",
+    ".st-cookie-switch { position:relative; width:34px; height:18px; flex-shrink:0; }",
+    ".st-cookie-switch input { opacity:0; width:0; height:0; }",
+    ".st-cookie-switch .sl { position:absolute; inset:0; background:#cbd5e1; border-radius:18px; transition:.2s; cursor:pointer; }",
+    ".st-cookie-switch .sl:before { content:''; position:absolute; height:14px; width:14px; left:2px; bottom:2px; background:#fff; border-radius:50%; transition:.2s; }",
+    ".st-cookie-switch input:checked + .sl { background:var(--st-color); }",
+    ".st-cookie-switch input:checked + .sl:before { transform:translateX(16px); }",
+    ".st-cookie-switch input:disabled + .sl { opacity:.55; cursor:default; }",
+    ".st-cookie-item { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding-left:6px; }",
     ".st-cookie-item .st-cookie-item-name { font-weight:600; color:#475569; }",
-    ".st-cookie-item .st-cookie-item-desc { color:#94a3b8; }",
+    ".st-cookie-item .st-cookie-item-meta { color:#94a3b8; }",
     ".st-cookie-item .st-cookie-item-badge { font-size:10px; padding:1px 6px; border-radius:8px; flex-shrink:0; white-space:nowrap; }",
     ".st-cookie-item .st-cookie-item-badge.mandatory { background:#fee2e2; color:#b91c1c; }",
     ".st-cookie-item .st-cookie-item-badge.optional { background:#e0f2fe; color:#0369a1; }",
@@ -408,11 +446,11 @@
     '  <div id="st-cookie-bar" style="display:none">',
     '    <div id="st-cookie-main">',
     '      <span id="st-cookie-text"></span>',
-    '      <a id="st-cookie-link" href="#" target="_blank" rel="noopener" style="display:none"></a>',
-    '      <button id="st-cookie-details-btn" type="button" style="display:none"></button>',
     '      <button id="st-cookie-close" aria-label="Kapat">✕</button>',
     '    </div>',
+    '    <div id="st-cookie-links"></div>',
     '    <div id="st-cookie-details"></div>',
+    '    <div id="st-cookie-actions"></div>',
     '  </div>',
     '</div>',
   ].join("");
@@ -453,43 +491,176 @@
   var cancelWaitBtn = document.getElementById("st-cancel-wait");
   var cookieBar = document.getElementById("st-cookie-bar");
   var cookieClose = document.getElementById("st-cookie-close");
-  var cookieLink = document.getElementById("st-cookie-link");
-  var cookieDetailsBtn = document.getElementById("st-cookie-details-btn");
+  var cookieLinksEl = document.getElementById("st-cookie-links");
   var cookieDetailsPanel = document.getElementById("st-cookie-details");
+  var cookieActionsEl = document.getElementById("st-cookie-actions");
 
-  // ── Cookie / data notice (admin-configurable: on/off, text, link, per-cookie list) ──
-  function renderCookieDetails() {
-    var list = Array.isArray(cfg.cookies) ? cfg.cookies : [];
-    if (!list.length) { cookieDetailsBtn.style.display = "none"; cookieDetailsPanel.classList.remove("open"); return; }
-    cookieDetailsBtn.style.display = "";
-    var esc = function(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
-    cookieDetailsPanel.innerHTML = list.map(function(c) {
-      var badgeClass = c.is_mandatory ? "mandatory" : "optional";
-      var badgeText = c.is_mandatory ? t("cookie_mandatory") : t("cookie_optional");
-      var desc = c.description ? '<span class="st-cookie-item-desc"> — ' + esc(c.description) + '</span>' : "";
-      return '<div class="st-cookie-item"><span><span class="st-cookie-item-name">' + esc(c.name) + '</span>' + desc + '</span>' +
-        '<span class="st-cookie-item-badge ' + badgeClass + '">' + badgeText + '</span></div>';
+  // ── Cookie consent (admin-configurable: on/off, notice vs consent mode,
+  //    bilingual text, multiple links, categories + per-cookie list) ───────────
+  function _esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function _isConsentMode() { return cfg.cookie_consent_mode === "consent"; }
+
+  function _optionalCatKeys() {
+    return (cfg.cookie_categories || []).filter(function(c){ return !c.is_required; }).map(function(c){ return c.key; });
+  }
+
+  function _storedConsent() {
+    try { return JSON.parse(localStorage.getItem("st_cookie_consent") || "null"); }
+    catch (e) { return null; }
+  }
+
+  function _consentNeeded() {
+    if (cfg.cookie_notice_enabled === false) return false;
+    if (!_isConsentMode()) return localStorage.getItem("st_cookie_ack") !== "1";
+    var stored = _storedConsent();
+    if (!stored || !stored.categories) return true;
+    // Re-ask if a new optional category appeared that the visitor never answered.
+    var opt = _optionalCatKeys();
+    for (var i = 0; i < opt.length; i++) {
+      if (!(opt[i] in stored.categories)) return true;
+    }
+    return false;
+  }
+
+  function _cookiesForCategory(key) {
+    return (cfg.cookies || []).filter(function(c){ return (c.category_key || "necessary") === key; });
+  }
+
+  function _cookieMeta(c) {
+    var bits = [];
+    if (c.provider) bits.push(c.provider);
+    if (c.duration) bits.push(c.duration);
+    if (c.description) bits.push(c.description);
+    return bits.length ? '<span class="st-cookie-item-meta"> — ' + _esc(bits.join(" · ")) + '</span>' : "";
+  }
+
+  function _renderCookieItem(c) {
+    var badgeClass = c.is_mandatory ? "mandatory" : "optional";
+    var badgeText = c.is_mandatory ? t("cookie_mandatory") : t("cookie_optional");
+    return '<div class="st-cookie-item"><span><span class="st-cookie-item-name">' + _esc(c.name) + '</span>' +
+      _cookieMeta(c) + '</span><span class="st-cookie-item-badge ' + badgeClass + '">' + badgeText + '</span></div>';
+  }
+
+  function _renderCookieDetails() {
+    var cats = cfg.cookie_categories || [];
+    var consent = _isConsentMode();
+    var stored = _storedConsent();
+    var html = "";
+    if (cats.length) {
+      cats.forEach(function(cat) {
+        var items = _cookiesForCategory(cat.key);
+        var checked = cat.is_required ? true : (stored && stored.categories && cat.key in stored.categories ? !!stored.categories[cat.key] : false);
+        var toggle = consent
+          ? '<label class="st-cookie-switch"><input type="checkbox" data-cat-key="' + _esc(cat.key) + '" ' +
+            (checked ? "checked " : "") + (cat.is_required ? "disabled " : "") + '><span class="sl"></span></label>'
+          : '';
+        var always = (consent && cat.is_required) ? '<span class="st-cookie-always">' + t("cookie_always_on") + '</span>' : '';
+        html += '<div class="st-cookie-cat">' +
+          '<div class="st-cookie-cat-head"><span class="st-cookie-cat-name">' + _esc(cat.name) + '</span>' + always + toggle + '</div>' +
+          (cat.description ? '<div class="st-cookie-cat-desc">' + _esc(cat.description) + '</div>' : '') +
+          items.map(_renderCookieItem).join("") +
+          '</div>';
+      });
+    } else {
+      html = (cfg.cookies || []).map(_renderCookieItem).join("");
+    }
+    if (consent) {
+      html += '<button class="st-cookie-btn primary" id="st-cookie-save" style="align-self:flex-start">' + (cfg.cookie_save_label || t("cookie_save")) + '</button>';
+    }
+    cookieDetailsPanel.innerHTML = html;
+    var saveBtn = document.getElementById("st-cookie-save");
+    if (saveBtn) saveBtn.addEventListener("click", function() { _saveConsent(_readSwitches()); });
+  }
+
+  function _readSwitches() {
+    var choices = {};
+    (cfg.cookie_categories || []).forEach(function(cat) {
+      if (cat.is_required) { choices[cat.key] = true; return; }
+      var inp = cookieDetailsPanel.querySelector('input[data-cat-key="' + cat.key + '"]');
+      choices[cat.key] = inp ? inp.checked : false;
+    });
+    return choices;
+  }
+
+  function _allChoices(value) {
+    var choices = {};
+    (cfg.cookie_categories || []).forEach(function(cat) {
+      choices[cat.key] = cat.is_required ? true : value;
+    });
+    return choices;
+  }
+
+  function _saveConsent(choices) {
+    localStorage.setItem("st_cookie_consent", JSON.stringify({ categories: choices, ts: new Date().toISOString() }));
+    localStorage.setItem("st_cookie_ack", "1");
+    try {
+      fetch(SERVER + "/api/cookie-consent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitor_id: VISITOR_ID, choices: choices }),
+      }).catch(function(){});
+    } catch (e) {}
+    cookieBar.style.display = "none";
+  }
+
+  function _renderCookieActions() {
+    cookieActionsEl.innerHTML = "";
+    var consent = _isConsentMode();
+    var hasDetails = (cfg.cookie_categories && cfg.cookie_categories.length) || (cfg.cookies && cfg.cookies.length);
+
+    function mkBtn(cls, label, handler) {
+      var b = document.createElement("button");
+      b.className = "st-cookie-btn " + cls;
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", handler);
+      cookieActionsEl.appendChild(b);
+      return b;
+    }
+
+    if (hasDetails) {
+      mkBtn("link", cfg.cookie_customize_label || (consent ? t("cookie_customize") : t("cookie_details_toggle")), function() {
+        cookieDetailsPanel.classList.toggle("open");
+      });
+    }
+    if (consent) {
+      mkBtn("", cfg.cookie_reject_label || t("cookie_reject"), function() { _saveConsent(_allChoices(false)); });
+      mkBtn("primary", cfg.cookie_accept_label || t("cookie_accept"), function() { _saveConsent(_allChoices(true)); });
+    }
+  }
+
+  function _renderCookieLinks() {
+    var links = cfg.cookie_links || [];
+    if (!links.length) { cookieLinksEl.style.display = "none"; return; }
+    cookieLinksEl.style.display = "flex";
+    cookieLinksEl.innerHTML = links.map(function(l) {
+      return '<a href="' + _esc(l.url) + '" target="_blank" rel="noopener">' + _esc(l.label || t("cookie_policy_default_label")) + '</a>';
     }).join("");
   }
+
   function maybeShowCookieBar() {
-    if (cfg.cookie_notice_enabled === false) return;
-    if (localStorage.getItem("st_cookie_ack") === "1") return;
+    if (!_consentNeeded()) return;
     document.getElementById("st-cookie-text").textContent = cfg.cookie_notice_text || t("cookie_notice");
-    if (cfg.cookie_policy_url) {
-      cookieLink.href = cfg.cookie_policy_url;
-      cookieLink.textContent = cfg.cookie_policy_label || t("cookie_policy_default_label");
-      cookieLink.style.display = "";
-    } else {
-      cookieLink.style.display = "none";
-    }
-    cookieDetailsBtn.textContent = t("cookie_details_toggle");
-    renderCookieDetails();
+    _renderCookieLinks();
+    _renderCookieDetails();
+    _renderCookieActions();
+    cookieDetailsPanel.classList.remove("open");
     cookieBar.style.display = "flex";
   }
-  cookieDetailsBtn.addEventListener("click", function() {
-    cookieDetailsPanel.classList.toggle("open");
-  });
+
+  // Corner mode: float the bar over the page and show it on load (not tied to
+  // the widget being open). Applied once config arrives.
+  function applyCookiePlacement() {
+    if (cfg.cookie_banner_position === "corner") {
+      cookieBar.classList.add("st-corner");
+      if (cookieBar.parentNode !== document.body) document.body.appendChild(cookieBar);
+      maybeShowCookieBar();
+    }
+  }
+
   cookieClose.addEventListener("click", function() {
+    // In consent mode, closing without choosing = reject optional (safe default).
+    if (_isConsentMode()) { _saveConsent(_allChoices(false)); return; }
     localStorage.setItem("st_cookie_ack", "1");
     cookieBar.style.display = "none";
   });
@@ -803,13 +974,22 @@
       setTimeout(showProactiveBubbles, 1500);
     }
 
-    // Çerez bildirimi (admin panelinden ayarlanabilir)
+    // Çerez onayı (admin panelinden ayarlanabilir — bildirim/onay modu)
     cfg.cookie_notice_enabled = data.cookie_notice_enabled !== false;
+    cfg.cookie_consent_mode = data.cookie_consent_mode === "consent" ? "consent" : "notice";
     cfg.cookie_notice_text = data.cookie_notice_text || "";
     cfg.cookie_policy_url = data.cookie_policy_url || "";
     cfg.cookie_policy_label = data.cookie_policy_label || "";
+    cfg.cookie_links = Array.isArray(data.cookie_links) ? data.cookie_links : [];
+    cfg.cookie_accept_label = data.cookie_accept_label || "";
+    cfg.cookie_reject_label = data.cookie_reject_label || "";
+    cfg.cookie_customize_label = data.cookie_customize_label || "";
+    cfg.cookie_save_label = data.cookie_save_label || "";
+    cfg.cookie_banner_position = data.cookie_banner_position === "corner" ? "corner" : "bottom";
+    cfg.cookie_categories = Array.isArray(data.cookie_categories) ? data.cookie_categories : [];
     cfg.cookies = Array.isArray(data.cookies) ? data.cookies : [];
-    if (state.open) maybeShowCookieBar();
+    applyCookiePlacement();
+    if (state.open && cfg.cookie_banner_position !== "corner") maybeShowCookieBar();
   }).catch(function () {});
 
   // Fetch default bot greeting

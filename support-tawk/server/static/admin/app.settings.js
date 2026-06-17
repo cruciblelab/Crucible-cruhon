@@ -234,29 +234,141 @@ function saveSettings(silent) {
   }).catch(function() { toast("An error occurred", "error"); });
 }
 
-// ── Cookie Notice ────────────────────────────────────────────────────────────
+// ── Cookie Consent ───────────────────────────────────────────────────────────
 var cookieDefs = [];
+var cookieCategories = [];
+var cookieLinks = [];
 
 function loadCookieSettings() {
   api("GET", "/cookies/settings").then(function(data) {
     document.getElementById("ck-enabled").checked = data.enabled !== false;
-    document.getElementById("ck-text").value = data.text || "";
-    document.getElementById("ck-policy-url").value = data.policy_url || "";
-    document.getElementById("ck-policy-label").value = data.policy_label || "";
+    document.getElementById("ck-mode").value = data.consent_mode === "consent" ? "consent" : "notice";
+    document.getElementById("ck-position").value = data.banner_position === "corner" ? "corner" : "bottom";
+    document.getElementById("ck-text-tr").value = data.text_tr || "";
+    document.getElementById("ck-text-en").value = data.text_en || data.text || "";
+    document.getElementById("ck-accept-label").value = data.accept_label || "";
+    document.getElementById("ck-reject-label").value = data.reject_label || "";
+    document.getElementById("ck-customize-label").value = data.customize_label || "";
+    document.getElementById("ck-save-label").value = data.save_label || "";
+    cookieLinks = Array.isArray(data.links) ? data.links : [];
+    renderCookieLinks();
   }).catch(function() {});
+  loadCookieCategories();
   loadCookieDefs();
+  loadCookieConsents();
 }
 
 function saveCookieSettings() {
   var payload = {
     enabled: document.getElementById("ck-enabled").checked,
-    text: document.getElementById("ck-text").value.trim(),
-    policy_url: document.getElementById("ck-policy-url").value.trim(),
-    policy_label: document.getElementById("ck-policy-label").value.trim(),
+    consent_mode: document.getElementById("ck-mode").value,
+    banner_position: document.getElementById("ck-position").value,
+    text_tr: document.getElementById("ck-text-tr").value.trim(),
+    text_en: document.getElementById("ck-text-en").value.trim(),
+    accept_label: document.getElementById("ck-accept-label").value.trim(),
+    reject_label: document.getElementById("ck-reject-label").value.trim(),
+    customize_label: document.getElementById("ck-customize-label").value.trim(),
+    save_label: document.getElementById("ck-save-label").value.trim(),
   };
   api("PUT", "/cookies/settings", payload).then(function() {
-    toast("Cookie notice saved");
+    toast("Cookie settings saved");
   }).catch(function() { toast("An error occurred", "error"); });
+}
+
+// ── Links ──
+function renderCookieLinks() {
+  var el = document.getElementById("ck-links-list");
+  if (!cookieLinks.length) {
+    el.innerHTML = '<div style="font-size:12px;color:#94a3b8">No links added yet.</div>';
+    return;
+  }
+  el.innerHTML = cookieLinks.map(function(l, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px">' +
+      '<span style="font-weight:600;font-size:13px">' + escHtml(l.label || "(no label)") + '</span>' +
+      '<span style="flex:1;font-size:12px;color:#2563eb;word-break:break-all">' + escHtml(l.url) + '</span>' +
+      '<button onclick="removeCookieLink(' + i + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:14px">✕</button>' +
+      '</div>';
+  }).join("");
+}
+
+function addCookieLink() {
+  var label = document.getElementById("new-ck-link-label").value.trim();
+  var url = document.getElementById("new-ck-link-url").value.trim();
+  if (!url) { toast("Link URL is required", "error"); return; }
+  cookieLinks.push({ label: label, url: url });
+  document.getElementById("new-ck-link-label").value = "";
+  document.getElementById("new-ck-link-url").value = "";
+  renderCookieLinks();
+  api("PUT", "/cookies/settings", { links: cookieLinks }).then(function() { toast("Link added"); });
+}
+
+function removeCookieLink(i) {
+  cookieLinks.splice(i, 1);
+  renderCookieLinks();
+  api("PUT", "/cookies/settings", { links: cookieLinks }).then(function() { toast("Link removed"); });
+}
+
+// ── Categories ──
+function loadCookieCategories() {
+  api("GET", "/cookie-categories").then(function(data) {
+    cookieCategories = Array.isArray(data) ? data : [];
+    renderCookieCategories();
+    renderCookieCategoryOptions();
+  }).catch(function() {});
+}
+
+function renderCookieCategories() {
+  var tbody = document.getElementById("cat-tbody");
+  tbody.innerHTML = cookieCategories.map(function(c) {
+    return '<tr>' +
+      '<td style="font-weight:600">' + escHtml(c.name) + '</td>' +
+      '<td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">' + escHtml(c.key) + '</code></td>' +
+      '<td>' + escHtml(c.description || "-") + '</td>' +
+      '<td><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (c.is_required ? "checked" : "") + ' onchange="toggleCategoryRequired(' + c.id + ', this.checked)"><span class="toggle-slider"></span></label></div></td>' +
+      '<td><button class="btn-sm danger" onclick="deleteCookieCategory(' + c.id + ')">Remove</button></td>' +
+      '</tr>';
+  }).join("") || '<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:20px">No categories yet.</td></tr>';
+}
+
+function renderCookieCategoryOptions() {
+  var sel = document.getElementById("new-ck-category");
+  if (!sel) return;
+  sel.innerHTML = cookieCategories.map(function(c) {
+    return '<option value="' + escHtml(c.key) + '">' + escHtml(c.name) + '</option>';
+  }).join("") || '<option value="necessary">Necessary</option>';
+}
+
+function addCookieCategory() {
+  var name = document.getElementById("new-cat-name").value.trim();
+  var description = document.getElementById("new-cat-desc").value.trim();
+  var is_required = document.getElementById("new-cat-required").checked;
+  if (!name) { toast("Category name is required", "error"); return; }
+  api("POST", "/cookie-categories", { name, description, is_required }).then(function() {
+    document.getElementById("new-cat-name").value = "";
+    document.getElementById("new-cat-desc").value = "";
+    document.getElementById("new-cat-required").checked = false;
+    toast("Category added");
+    loadCookieCategories();
+  });
+}
+
+function toggleCategoryRequired(id, isRequired) {
+  api("PATCH", "/cookie-categories/" + id, { is_required: isRequired }).then(function() {
+    loadCookieCategories();
+  });
+}
+
+function deleteCookieCategory(id) {
+  if (!confirm("Remove this category? Its cookies move to Necessary.")) return;
+  api("DELETE", "/cookie-categories/" + id).then(function() { toast("Removed"); loadCookieCategories(); loadCookieDefs(); });
+}
+
+// ── Cookie definitions ──
+function catName(key) {
+  for (var i = 0; i < cookieCategories.length; i++) {
+    if (cookieCategories[i].key === key) return cookieCategories[i].name;
+  }
+  return key || "-";
 }
 
 function loadCookieDefs() {
@@ -271,21 +383,29 @@ function renderCookieDefs() {
   tbody.innerHTML = cookieDefs.map(function(c) {
     return '<tr>' +
       '<td style="font-weight:600">' + escHtml(c.name) + '</td>' +
+      '<td>' + escHtml(catName(c.category_key)) + '</td>' +
+      '<td>' + escHtml(c.provider || "-") + '</td>' +
+      '<td>' + escHtml(c.duration || "-") + '</td>' +
       '<td>' + escHtml(c.description || "-") + '</td>' +
       '<td><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (c.is_mandatory ? "checked" : "") + ' onchange="toggleCookieMandatory(' + c.id + ', this.checked)"><span class="toggle-slider"></span></label></div></td>' +
       '<td><button class="btn-sm danger" onclick="deleteCookieDef(' + c.id + ')">Remove</button></td>' +
       '</tr>';
-  }).join("") || '<tr><td colspan="4" style="color:#94a3b8;text-align:center;padding:20px">No cookies defined yet.</td></tr>';
+  }).join("") || '<tr><td colspan="7" style="color:#94a3b8;text-align:center;padding:20px">No cookies defined yet.</td></tr>';
 }
 
 function addCookieDef() {
   var name = document.getElementById("new-ck-name").value.trim();
   var description = document.getElementById("new-ck-desc").value.trim();
+  var category_key = document.getElementById("new-ck-category").value || "necessary";
+  var provider = document.getElementById("new-ck-provider").value.trim();
+  var duration = document.getElementById("new-ck-duration").value.trim();
   var is_mandatory = document.getElementById("new-ck-mandatory").checked;
   if (!name) { toast("Cookie name is required", "error"); return; }
-  api("POST", "/cookies", { name, description, is_mandatory }).then(function() {
+  api("POST", "/cookies", { name, description, category_key, provider, duration, is_mandatory }).then(function() {
     document.getElementById("new-ck-name").value = "";
     document.getElementById("new-ck-desc").value = "";
+    document.getElementById("new-ck-provider").value = "";
+    document.getElementById("new-ck-duration").value = "";
     document.getElementById("new-ck-mandatory").checked = false;
     toast("Cookie added");
     loadCookieDefs();
@@ -301,6 +421,27 @@ function toggleCookieMandatory(id, isMandatory) {
 function deleteCookieDef(id) {
   if (!confirm("Remove this cookie definition?")) return;
   api("DELETE", "/cookies/" + id).then(function() { toast("Removed"); loadCookieDefs(); });
+}
+
+// ── Consent log ──
+function loadCookieConsents() {
+  api("GET", "/cookie-consents").then(function(data) {
+    var list = Array.isArray(data) ? data : [];
+    var tbody = document.getElementById("ck-consent-tbody");
+    tbody.innerHTML = list.map(function(r) {
+      var d = r.created_at ? new Date(r.created_at).toLocaleString() : "";
+      return '<tr>' +
+        '<td style="font-family:monospace;font-size:11px;word-break:break-all">' + escHtml(r.visitor_id) + '</td>' +
+        '<td style="font-size:12px">' + escHtml(r.accepted_categories || "(none)") + '</td>' +
+        '<td style="font-size:12px">' + d + '</td>' +
+        '</tr>';
+    }).join("") || '<tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:20px">No consent records yet.</td></tr>';
+  }).catch(function() {});
+}
+
+function clearCookieConsents() {
+  if (!confirm("Clear all consent log records? This cannot be undone.")) return;
+  api("DELETE", "/cookie-consents").then(function() { toast("Consent log cleared"); loadCookieConsents(); });
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────────
