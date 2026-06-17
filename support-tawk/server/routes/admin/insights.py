@@ -431,7 +431,7 @@ def _restore_visitor(visitor_id: str, payload: dict):
 
 
 @router.delete("/visitors/{visitor_id}/data")
-def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permission("delete_data"))):
+async def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permission("delete_data"))):
     # Snapshot first so an accidental wipe can be undone within the retention window.
     snapshot, count = _snapshot_visitor(visitor_id)
     if count > 0:
@@ -456,6 +456,9 @@ def delete_visitor_data(visitor_id: str, admin: Agent = Depends(require_permissi
     _purge_expired_archives()
     _audit(admin.display_name or admin.username, "delete_visitor_data", "visitor", None,
            f"{visitor_id} ({count} satır arşivlendi)")
+    # If the visitor's widget is currently open, tell it live so the chat closes
+    # and the local cookie-consent state resets immediately — not just on next refresh.
+    await manager.send_to_visitor(visitor_id, {"type": "visitor_data_deleted"})
     return {"ok": True, "archived_items": count}
 
 

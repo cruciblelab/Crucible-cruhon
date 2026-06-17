@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -225,6 +226,17 @@ def public_config():
         {"key": c.key, "name": c.name, "description": c.description, "is_required": c.is_required}
         for c in CookieCategory.select().order_by(CookieCategory.order, CookieCategory.id)
     ]
+    cookie_defs = list(CookieDefinition.select().order_by(CookieDefinition.order, CookieDefinition.created_at))
+    # Fingerprint of every field visitors see in the consent UI. Any admin edit
+    # (rename, re-categorize, mandatory flip, add/remove) changes this value, so
+    # the widget can tell stored consent is for a stale configuration and re-ask.
+    fingerprint_src = "|".join(
+        [f"cat:{c.key}:{c.name}:{c.description}:{c.is_required}" for c in
+         CookieCategory.select().order_by(CookieCategory.order, CookieCategory.id)] +
+        [f"ck:{c.id}:{c.name}:{c.description}:{c.is_mandatory}:{getattr(c, 'category_key', '')}:"
+         f"{getattr(c, 'provider', '')}:{getattr(c, 'duration', '')}" for c in cookie_defs]
+    )
+    cookie_config_version = hashlib.sha1(fingerprint_src.encode("utf-8")).hexdigest()[:16]
 
     return {
         "site_name": overrides.get("site_name", config.site.name),
@@ -255,11 +267,12 @@ def public_config():
         "cookie_save_label": overrides.get("cookie_save_label", ""),
         "cookie_banner_position": overrides.get("cookie_banner_position", "bottom"),
         "cookie_categories": cookie_categories,
+        "cookie_config_version": cookie_config_version,
         "cookies": [
             {"name": c.name, "description": c.description, "is_mandatory": c.is_mandatory,
              "category_key": getattr(c, "category_key", "necessary"),
              "provider": getattr(c, "provider", ""), "duration": getattr(c, "duration", "")}
-            for c in CookieDefinition.select().order_by(CookieDefinition.order, CookieDefinition.created_at)
+            for c in cookie_defs
         ],
     }
 

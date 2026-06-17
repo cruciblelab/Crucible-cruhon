@@ -49,6 +49,7 @@
     cookie_save_label: "",
     cookie_banner_position: "bottom",
     cookie_categories: [],
+    cookie_config_version: "",
     cookies: [],
   };
 
@@ -102,6 +103,7 @@
       forget_me: "Verilerimi sil",
       forget_confirm: "İsim, e-posta ve geçmiş oturum bilgileriniz bu cihazdan silinecek. Sunucudaki konuşmalar 2 hafta daha saklanır. Devam edilsin mi?",
       forget_done: "Verileriniz silindi.",
+      data_deleted_msg: "Verileriniz bir yönetici tarafından silindi. Bu sohbet sona erdi, sayfa yenileniyor...",
       form_thanks: "Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede sizinle ilgilenecek.",
       cookie_notice: "Sohbeti çalıştırmak için zorunlu çerezler ve girdiğiniz bilgiler saklanır.",
       cookie_details_toggle: "Detaylar",
@@ -163,6 +165,7 @@
       forget_me: "Clear my data",
       forget_confirm: "Your name, email and session info will be removed from this device. Server-side conversations are kept for 2 weeks. Continue?",
       forget_done: "Your data has been cleared.",
+      data_deleted_msg: "Your data was deleted by an admin. This chat has ended, reloading...",
       form_thanks: "Thank you! Your information has been received. Our support team will assist you shortly.",
       cookie_notice: "We use essential cookies and store the info you enter to run this chat.",
       cookie_details_toggle: "Details",
@@ -512,10 +515,15 @@
 
   function _consentNeeded() {
     if (cfg.cookie_notice_enabled === false) return false;
-    if (!_isConsentMode()) return localStorage.getItem("st_cookie_ack") !== "1";
+    var ver = cfg.cookie_config_version || "";
+    if (!_isConsentMode()) return localStorage.getItem("st_cookie_ack") !== ver;
     var stored = _storedConsent();
     if (!stored || !stored.categories) return true;
-    // Re-ask if a new optional category appeared that the visitor never answered.
+    // Re-ask whenever the admin changed the cookie/category config since this
+    // consent was given (rename, re-categorize, mandatory flip, add/remove) —
+    // a stored "version" fingerprint mismatch means we can't trust the old choices.
+    if (stored.version !== ver) return true;
+    // Also re-ask if a new optional category appeared that the visitor never answered.
     var opt = _optionalCatKeys();
     for (var i = 0; i < opt.length; i++) {
       if (!(opt[i] in stored.categories)) return true;
@@ -592,8 +600,9 @@
   }
 
   function _saveConsent(choices) {
-    localStorage.setItem("st_cookie_consent", JSON.stringify({ categories: choices, ts: new Date().toISOString() }));
-    localStorage.setItem("st_cookie_ack", "1");
+    var ver = cfg.cookie_config_version || "";
+    localStorage.setItem("st_cookie_consent", JSON.stringify({ categories: choices, version: ver, ts: new Date().toISOString() }));
+    localStorage.setItem("st_cookie_ack", ver);
     try {
       fetch(SERVER + "/api/cookie-consent", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -661,7 +670,7 @@
   cookieClose.addEventListener("click", function() {
     // In consent mode, closing without choosing = reject optional (safe default).
     if (_isConsentMode()) { _saveConsent(_allChoices(false)); return; }
-    localStorage.setItem("st_cookie_ack", "1");
+    localStorage.setItem("st_cookie_ack", cfg.cookie_config_version || "");
     cookieBar.style.display = "none";
   });
 
@@ -987,6 +996,7 @@
     cfg.cookie_save_label = data.cookie_save_label || "";
     cfg.cookie_banner_position = data.cookie_banner_position === "corner" ? "corner" : "bottom";
     cfg.cookie_categories = Array.isArray(data.cookie_categories) ? data.cookie_categories : [];
+    cfg.cookie_config_version = data.cookie_config_version || "";
     cfg.cookies = Array.isArray(data.cookies) ? data.cookies : [];
     applyCookiePlacement();
     if (state.open && cfg.cookie_banner_position !== "corner") maybeShowCookieBar();
@@ -1453,6 +1463,25 @@
 
   // ── Handle incoming messages ───────────────────────────────────────────────
   function handleMessage(data) {
+    if (data.type === "visitor_data_deleted") {
+      // An admin wiped this visitor's data server-side. Reflect that live
+      // instead of letting the visitor keep typing into a conversation that
+      // no longer exists, and reset local consent state so the cookie
+      // notice is shown fresh next load.
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+      appendSystemMsg(t("data_deleted_msg"));
+      scrollBottom();
+      ["st_visitor_id", "st_visitor_name", "st_visitor_email",
+       "st_widget_width", "st_bubble_dismiss_until",
+       "st_cookie_consent", "st_cookie_ack"].forEach(function (k) {
+        localStorage.removeItem(k);
+      });
+      sessionStorage.removeItem("st_bubbles_dismissed");
+      if (state.ws) { try { state.ws.close(); } catch (e) {} }
+      setTimeout(function () { location.reload(); }, 1500);
+      return;
+    }
     if (data.type === "banned") {
       state.banned = true;
       state.ban_reason = data.reason || "";
