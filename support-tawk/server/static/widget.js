@@ -90,6 +90,7 @@
       forget_confirm: "İsim, e-posta ve geçmiş oturum bilgileriniz bu cihazdan silinecek. Sunucudaki konuşmalar 2 hafta daha saklanır. Devam edilsin mi?",
       forget_done: "Verileriniz silindi.",
       form_thanks: "Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede sizinle ilgilenecek.",
+      cookie_notice: "Sohbeti çalıştırmak için zorunlu çerezler ve girdiğiniz bilgiler saklanır.",
     },
     en: {
       aria_chat: "Support Chat",
@@ -140,6 +141,7 @@
       forget_confirm: "Your name, email and session info will be removed from this device. Server-side conversations are kept for 2 weeks. Continue?",
       forget_done: "Your data has been cleared.",
       form_thanks: "Thank you! Your information has been received. Our support team will assist you shortly.",
+      cookie_notice: "We use essential cookies and store the info you enter to run this chat.",
     },
   };
 
@@ -296,6 +298,10 @@
     ".fw-success p { font-size:13.5px; color:#64748b; margin-top:6px; }",
     ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
     "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
+    "#st-cookie-bar { display:flex; align-items:center; gap:8px; padding:7px 12px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b; line-height:1.4; }",
+    "#st-cookie-bar #st-cookie-text { flex:1; }",
+    "#st-cookie-bar #st-cookie-close { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:13px; line-height:1; padding:2px 4px; border-radius:4px; flex-shrink:0; }",
+    "#st-cookie-bar #st-cookie-close:hover { color:#475569; background:#e2e8f0; }",
     "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-wrapper.st-chat-open #st-btn { display:none; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
   ].join("\n");
   document.head.appendChild(style);
@@ -374,6 +380,10 @@
     '      </div>',
     '    </div>',
     '  </div>',
+    '  <div id="st-cookie-bar" style="display:none">',
+    '    <span id="st-cookie-text"></span>',
+    '    <button id="st-cookie-close" aria-label="Kapat">✕</button>',
+    '  </div>',
     '</div>',
   ].join("");
 
@@ -411,6 +421,19 @@
   var olSubmitBtn = document.getElementById("st-ol-submit");
   var olWaitBtn = document.getElementById("st-ol-wait");
   var cancelWaitBtn = document.getElementById("st-cancel-wait");
+  var cookieBar = document.getElementById("st-cookie-bar");
+  var cookieClose = document.getElementById("st-cookie-close");
+
+  // ── Cookie / data notice (mandatory cookies) ──────────────────────────────
+  document.getElementById("st-cookie-text").textContent = t("cookie_notice");
+  function maybeShowCookieBar() {
+    if (localStorage.getItem("st_cookie_ack") === "1") return;
+    cookieBar.style.display = "flex";
+  }
+  cookieClose.addEventListener("click", function() {
+    localStorage.setItem("st_cookie_ack", "1");
+    cookieBar.style.display = "none";
+  });
 
   // Smart scroll tracking
   messagesEl.addEventListener("scroll", function() {
@@ -743,6 +766,7 @@
     wrapper.classList.add("st-chat-open");
     hideProactiveBubbles();
     clearUnread();
+    maybeShowCookieBar();
     // Herkes anında sohbet edebilir — form/bekleme zorunlu değil.
     showChat();
     if (!state.ws || state.ws.readyState > 1) {
