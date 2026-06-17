@@ -12,6 +12,7 @@ from ..ai_handler import handle_ai_reply
 from .. import bot_matcher
 from ..auth import verify_ws_token
 from ..geoip import lookup as geo_lookup
+from ..settings_cache import get_settings
 
 router = APIRouter()
 
@@ -240,14 +241,15 @@ async def visitor_ws(ws: WebSocket, visitor_id: str):
 
     # Send history (empty when the conversation hasn't started yet)
     history = list(conv.messages.order_by(Message.created_at)) if conv else []
+    overrides = get_settings()
     await ws.send_text(json.dumps({
         "type": "history",
         "messages": [_msg_dict(m) for m in history],
         "conversation_id": conv.id if conv else None,
         "config": {
-            "color": config.chat.widget_color,
-            "welcome_message": config.chat.welcome_message,
-            "site_name": config.site.name,
+            "color": overrides.get("widget_color", config.chat.widget_color),
+            "welcome_message": overrides.get("welcome_message", config.chat.welcome_message),
+            "site_name": overrides.get("site_name", config.site.name),
             "agents_online": manager.agent_count() > 0,
         }
     }, ensure_ascii=False))
