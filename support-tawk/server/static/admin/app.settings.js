@@ -234,6 +234,75 @@ function saveSettings(silent) {
   }).catch(function() { toast("An error occurred", "error"); });
 }
 
+// ── Cookie Notice ────────────────────────────────────────────────────────────
+var cookieDefs = [];
+
+function loadCookieSettings() {
+  api("GET", "/cookies/settings").then(function(data) {
+    document.getElementById("ck-enabled").checked = data.enabled !== false;
+    document.getElementById("ck-text").value = data.text || "";
+    document.getElementById("ck-policy-url").value = data.policy_url || "";
+    document.getElementById("ck-policy-label").value = data.policy_label || "";
+  }).catch(function() {});
+  loadCookieDefs();
+}
+
+function saveCookieSettings() {
+  var payload = {
+    enabled: document.getElementById("ck-enabled").checked,
+    text: document.getElementById("ck-text").value.trim(),
+    policy_url: document.getElementById("ck-policy-url").value.trim(),
+    policy_label: document.getElementById("ck-policy-label").value.trim(),
+  };
+  api("PUT", "/cookies/settings", payload).then(function() {
+    toast("Cookie notice saved");
+  }).catch(function() { toast("An error occurred", "error"); });
+}
+
+function loadCookieDefs() {
+  api("GET", "/cookies").then(function(data) {
+    cookieDefs = Array.isArray(data) ? data : [];
+    renderCookieDefs();
+  }).catch(function() {});
+}
+
+function renderCookieDefs() {
+  var tbody = document.getElementById("ck-tbody");
+  tbody.innerHTML = cookieDefs.map(function(c) {
+    return '<tr>' +
+      '<td style="font-weight:600">' + escHtml(c.name) + '</td>' +
+      '<td>' + escHtml(c.description || "-") + '</td>' +
+      '<td><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (c.is_mandatory ? "checked" : "") + ' onchange="toggleCookieMandatory(' + c.id + ', this.checked)"><span class="toggle-slider"></span></label></div></td>' +
+      '<td><button class="btn-sm danger" onclick="deleteCookieDef(' + c.id + ')">Remove</button></td>' +
+      '</tr>';
+  }).join("") || '<tr><td colspan="4" style="color:#94a3b8;text-align:center;padding:20px">No cookies defined yet.</td></tr>';
+}
+
+function addCookieDef() {
+  var name = document.getElementById("new-ck-name").value.trim();
+  var description = document.getElementById("new-ck-desc").value.trim();
+  var is_mandatory = document.getElementById("new-ck-mandatory").checked;
+  if (!name) { toast("Cookie name is required", "error"); return; }
+  api("POST", "/cookies", { name, description, is_mandatory }).then(function() {
+    document.getElementById("new-ck-name").value = "";
+    document.getElementById("new-ck-desc").value = "";
+    document.getElementById("new-ck-mandatory").checked = false;
+    toast("Cookie added");
+    loadCookieDefs();
+  });
+}
+
+function toggleCookieMandatory(id, isMandatory) {
+  api("PATCH", "/cookies/" + id, { is_mandatory: isMandatory }).then(function() {
+    loadCookieDefs();
+  });
+}
+
+function deleteCookieDef(id) {
+  if (!confirm("Remove this cookie definition?")) return;
+  api("DELETE", "/cookies/" + id).then(function() { toast("Removed"); loadCookieDefs(); });
+}
+
 // ── Notes ────────────────────────────────────────────────────────────────────
 var notesCollapsed = false;
 

@@ -37,6 +37,11 @@
     radius: 16,
     texts: {},
     bubble_dismiss_days: 0,
+    cookie_notice_enabled: true,
+    cookie_notice_text: "",
+    cookie_policy_url: "",
+    cookie_policy_label: "",
+    cookies: [],
   };
 
   // ── i18n ──────────────────────────────────────────────────────────────────
@@ -91,6 +96,10 @@
       forget_done: "Verileriniz silindi.",
       form_thanks: "Teşekkürler! Bilgileriniz alındı. Destek ekibimiz en kısa sürede sizinle ilgilenecek.",
       cookie_notice: "Sohbeti çalıştırmak için zorunlu çerezler ve girdiğiniz bilgiler saklanır.",
+      cookie_details_toggle: "Detaylar",
+      cookie_mandatory: "Zorunlu",
+      cookie_optional: "İsteğe bağlı",
+      cookie_policy_default_label: "Çerez Politikası",
     },
     en: {
       aria_chat: "Support Chat",
@@ -142,6 +151,10 @@
       forget_done: "Your data has been cleared.",
       form_thanks: "Thank you! Your information has been received. Our support team will assist you shortly.",
       cookie_notice: "We use essential cookies and store the info you enter to run this chat.",
+      cookie_details_toggle: "Details",
+      cookie_mandatory: "Required",
+      cookie_optional: "Optional",
+      cookie_policy_default_label: "Cookie Policy",
     },
   };
 
@@ -298,10 +311,22 @@
     ".fw-success p { font-size:13.5px; color:#64748b; margin-top:6px; }",
     ".st-bubble-pop .st-bubble-x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:#64748b; color:#fff; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }",
     "@keyframes st-pop { from { opacity:0; transform:translateY(10px) scale(.92); } to { opacity:1; transform:none; } }",
-    "#st-cookie-bar { display:flex; align-items:center; gap:8px; padding:7px 12px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b; line-height:1.4; }",
+    "#st-cookie-bar { display:flex; flex-direction:column; gap:6px; padding:7px 12px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b; line-height:1.4; }",
+    "#st-cookie-main { display:flex; align-items:center; gap:8px; }",
     "#st-cookie-bar #st-cookie-text { flex:1; }",
+    "#st-cookie-bar #st-cookie-link { color:#2563eb; text-decoration:underline; flex-shrink:0; }",
+    "#st-cookie-bar #st-cookie-details-btn { background:none; border:none; color:#94a3b8; text-decoration:underline; cursor:pointer; font-size:11px; flex-shrink:0; padding:2px 0; }",
+    "#st-cookie-bar #st-cookie-details-btn:hover { color:#475569; }",
     "#st-cookie-bar #st-cookie-close { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:13px; line-height:1; padding:2px 4px; border-radius:4px; flex-shrink:0; }",
     "#st-cookie-bar #st-cookie-close:hover { color:#475569; background:#e2e8f0; }",
+    "#st-cookie-details { display:none; flex-direction:column; gap:4px; padding-top:6px; border-top:1px solid #e2e8f0; max-height:120px; overflow-y:auto; }",
+    "#st-cookie-details.open { display:flex; }",
+    ".st-cookie-item { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }",
+    ".st-cookie-item .st-cookie-item-name { font-weight:600; color:#475569; }",
+    ".st-cookie-item .st-cookie-item-desc { color:#94a3b8; }",
+    ".st-cookie-item .st-cookie-item-badge { font-size:10px; padding:1px 6px; border-radius:8px; flex-shrink:0; white-space:nowrap; }",
+    ".st-cookie-item .st-cookie-item-badge.mandatory { background:#fee2e2; color:#b91c1c; }",
+    ".st-cookie-item .st-cookie-item-badge.optional { background:#e0f2fe; color:#0369a1; }",
     "@media (max-width: 480px) { #st-btn { bottom:16px; right:16px; } #st-wrapper.st-chat-open #st-btn { display:none; } #st-window { width:100vw !important; height:100vh; height:100dvh; right:0; left:0; bottom:0; top:0; border-radius:0; } #st-resize { display:none; } #st-bubbles { bottom:80px; right:16px; left:16px; max-width:none; align-items:flex-end; } }",
   ].join("\n");
   document.head.appendChild(style);
@@ -381,8 +406,13 @@
     '    </div>',
     '  </div>',
     '  <div id="st-cookie-bar" style="display:none">',
-    '    <span id="st-cookie-text"></span>',
-    '    <button id="st-cookie-close" aria-label="Kapat">✕</button>',
+    '    <div id="st-cookie-main">',
+    '      <span id="st-cookie-text"></span>',
+    '      <a id="st-cookie-link" href="#" target="_blank" rel="noopener" style="display:none"></a>',
+    '      <button id="st-cookie-details-btn" type="button" style="display:none"></button>',
+    '      <button id="st-cookie-close" aria-label="Kapat">✕</button>',
+    '    </div>',
+    '    <div id="st-cookie-details"></div>',
     '  </div>',
     '</div>',
   ].join("");
@@ -423,13 +453,42 @@
   var cancelWaitBtn = document.getElementById("st-cancel-wait");
   var cookieBar = document.getElementById("st-cookie-bar");
   var cookieClose = document.getElementById("st-cookie-close");
+  var cookieLink = document.getElementById("st-cookie-link");
+  var cookieDetailsBtn = document.getElementById("st-cookie-details-btn");
+  var cookieDetailsPanel = document.getElementById("st-cookie-details");
 
-  // ── Cookie / data notice (mandatory cookies) ──────────────────────────────
-  document.getElementById("st-cookie-text").textContent = t("cookie_notice");
+  // ── Cookie / data notice (admin-configurable: on/off, text, link, per-cookie list) ──
+  function renderCookieDetails() {
+    var list = Array.isArray(cfg.cookies) ? cfg.cookies : [];
+    if (!list.length) { cookieDetailsBtn.style.display = "none"; cookieDetailsPanel.classList.remove("open"); return; }
+    cookieDetailsBtn.style.display = "";
+    var esc = function(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    cookieDetailsPanel.innerHTML = list.map(function(c) {
+      var badgeClass = c.is_mandatory ? "mandatory" : "optional";
+      var badgeText = c.is_mandatory ? t("cookie_mandatory") : t("cookie_optional");
+      var desc = c.description ? '<span class="st-cookie-item-desc"> — ' + esc(c.description) + '</span>' : "";
+      return '<div class="st-cookie-item"><span><span class="st-cookie-item-name">' + esc(c.name) + '</span>' + desc + '</span>' +
+        '<span class="st-cookie-item-badge ' + badgeClass + '">' + badgeText + '</span></div>';
+    }).join("");
+  }
   function maybeShowCookieBar() {
+    if (cfg.cookie_notice_enabled === false) return;
     if (localStorage.getItem("st_cookie_ack") === "1") return;
+    document.getElementById("st-cookie-text").textContent = cfg.cookie_notice_text || t("cookie_notice");
+    if (cfg.cookie_policy_url) {
+      cookieLink.href = cfg.cookie_policy_url;
+      cookieLink.textContent = cfg.cookie_policy_label || t("cookie_policy_default_label");
+      cookieLink.style.display = "";
+    } else {
+      cookieLink.style.display = "none";
+    }
+    cookieDetailsBtn.textContent = t("cookie_details_toggle");
+    renderCookieDetails();
     cookieBar.style.display = "flex";
   }
+  cookieDetailsBtn.addEventListener("click", function() {
+    cookieDetailsPanel.classList.toggle("open");
+  });
   cookieClose.addEventListener("click", function() {
     localStorage.setItem("st_cookie_ack", "1");
     cookieBar.style.display = "none";
@@ -743,6 +802,14 @@
     if (cfg.proactive_bubbles.length) {
       setTimeout(showProactiveBubbles, 1500);
     }
+
+    // Çerez bildirimi (admin panelinden ayarlanabilir)
+    cfg.cookie_notice_enabled = data.cookie_notice_enabled !== false;
+    cfg.cookie_notice_text = data.cookie_notice_text || "";
+    cfg.cookie_policy_url = data.cookie_policy_url || "";
+    cfg.cookie_policy_label = data.cookie_policy_label || "";
+    cfg.cookies = Array.isArray(data.cookies) ? data.cookies : [];
+    if (state.open) maybeShowCookieBar();
   }).catch(function () {});
 
   // Fetch default bot greeting

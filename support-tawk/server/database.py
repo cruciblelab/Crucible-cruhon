@@ -387,6 +387,19 @@ class DeletedVisitorArchive(BaseModel):
 ARCHIVE_RETENTION_DAYS = 14
 
 
+class CookieDefinition(BaseModel):
+    """A single cookie/storage item the admin documents for the visitor-facing
+    cookie notice (e.g. "session_id" — mandatory, "analytics" — optional)."""
+    id = AutoField()
+    name = CharField(max_length=128)
+    description = TextField(default="")
+    is_mandatory = BooleanField(default=False)
+    order = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.utcnow)
+    class Meta:
+        table_name = "cookie_definitions"
+
+
 def _migrate_botflow_to_bot():
     """One-time, best-effort copy of the old single BotFlow row into the new
     Bot model as the default bot. Never overwrites bots a user already made."""
@@ -410,7 +423,7 @@ def init_db():
             Tag, ConversationTag, BlacklistedIP, BanAppeal, Rating, WorkSchedule, Setting,
             Bot, BotRule,
             Note, WebhookConfig, VisitorPageView, VisitorField, AuditLog, OfflineMessage,
-            Form, FormField, FormSubmission, DeletedVisitorArchive,
+            Form, FormField, FormSubmission, DeletedVisitorArchive, CookieDefinition,
         ], safe=True)
         _migrate_botflow_to_bot()
         _safe_migrations = [

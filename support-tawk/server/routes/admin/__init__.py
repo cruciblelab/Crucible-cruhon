@@ -15,6 +15,7 @@ from . import (  # noqa: F401  (imported for side-effect: route registration)
     insights,
     bots,
     forms,
+    cookies,
 )
 
 __all__ = ["router"]

@@ -33,6 +33,7 @@ function applyNavVisibility() {
   var map = {
     "agents-btn": "manage_agents",
     "nav-settings": "manage_settings",
+    "nav-cookies": "manage_settings",
     "nav-webhooks": "manage_webhooks",
     "nav-audit": "view_audit",
     "nav-departments": "manage_departments",
@@ -169,6 +170,7 @@ function showPage(name) {
   if (name === "schedule") loadScheduleAgents();
   if (name === "profile") loadProfile();
   if (name === "settings") loadSiteSettings();
+  if (name === "cookies") loadCookieSettings();
   if (name === "visitors") loadLiveVisitors();
   if (name === "webhooks") loadWebhooks();
   if (name === "offline-msgs") loadOfflineMsgs();

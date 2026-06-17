@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 from server.config import config
-from server.database import database, Agent, Conversation, Message, Setting, init_db
+from server.database import database, Agent, Conversation, Message, Setting, CookieDefinition, init_db
 from server.auth import hash_password
 from server.ws_manager import manager
 from server.routes.chat import router as chat_router
@@ -226,6 +226,14 @@ def public_config():
         "widget_radius": widget_radius,
         "widget_texts": widget_texts,
         "bubble_dismiss_days": bubble_dismiss_days,
+        "cookie_notice_enabled": overrides.get("cookie_notice_enabled", "true") != "false",
+        "cookie_notice_text": overrides.get("cookie_notice_text", ""),
+        "cookie_policy_url": overrides.get("cookie_policy_url", ""),
+        "cookie_policy_label": overrides.get("cookie_policy_label", ""),
+        "cookies": [
+            {"name": c.name, "description": c.description, "is_mandatory": c.is_mandatory}
+            for c in CookieDefinition.select().order_by(CookieDefinition.order, CookieDefinition.created_at)
+        ],
     }
 
 

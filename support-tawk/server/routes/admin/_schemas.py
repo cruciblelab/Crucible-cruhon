@@ -215,3 +215,22 @@ class FormFieldUpdate(BaseModel):
 class FieldOrderRequest(BaseModel):
     field_ids: List[int]
 
+
+class CookieNoticeSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    text: Optional[str] = None
+    policy_url: Optional[str] = None
+    policy_label: Optional[str] = None
+
+
+class CookieDefCreate(BaseModel):
+    name: str
+    description: str = ""
+    is_mandatory: bool = False
+
+
+class CookieDefUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_mandatory: Optional[bool] = None
+
