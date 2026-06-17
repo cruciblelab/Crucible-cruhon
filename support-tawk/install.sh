@@ -47,6 +47,14 @@ APP_PORT="${APP_PORT:-8000}"    # port the app listens on
 
 GENERATED_PASS=0
 
+# Re-running on a directory that already has a .env means this is an update,
+# not a fresh install — the password prompt and blank-input behavior differ
+# below (blank should mean "keep current", not "generate a new one").
+IS_UPDATE=0
+if [ -f "$APP_DIR/.env" ] || { [ -f "$(pwd)/server/main.py" ] && [ -f "$(pwd)/.env" ]; }; then
+  IS_UPDATE=1
+fi
+
 # ── 0. Pre-checks ─────────────────────────────────────────────────────────────
 step "Pre-checks"
 if [ "$(id -u)" -ne 0 ]; then
@@ -80,14 +88,21 @@ if [ -z "$SITE_NAME" ]; then
   SITE_NAME="${SITE_NAME:-Support Desk}"
 fi
 if [ -z "$ADMIN_PASS" ]; then
-  read -rsp "Admin password (leave blank to auto-generate): " ADMIN_PASS; echo
+  if [ "$IS_UPDATE" = "1" ]; then
+    read -rsp "Admin password (leave blank to keep the current one): " ADMIN_PASS; echo
+  else
+    read -rsp "Admin password (leave blank to auto-generate): " ADMIN_PASS; echo
+  fi
 fi
-if [ -z "$ADMIN_PASS" ]; then
+if [ -z "$ADMIN_PASS" ] && [ "$IS_UPDATE" = "0" ]; then
   ADMIN_PASS="$(head -c 9 /dev/urandom | base64 | tr -d '/+=' | head -c 12)"
   GENERATED_PASS=1
 fi
 if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
   read -rp "Email for SSL certificate (Let's Encrypt) — leave blank to skip: " EMAIL
+fi
+if [ -z "$ADMIN_IP" ]; then
+  read -rp "Restrict admin panel to specific IPs (comma-separated) — leave blank to allow from anywhere: " ADMIN_IP
 fi
 SECRET_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
 DATA_ENCRYPTION_KEY="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
@@ -136,6 +151,17 @@ if [ -f "$APP_DIR/.env" ]; then
   # Reuse existing keys so we never re-encrypt data with a different key.
   # shellcheck disable=SC1091
   set -a; . "$APP_DIR/.env"; set +a
+  # A blank prompt above means "keep current"; a non-blank ADMIN_PASS means
+  # the operator typed a new one and expects it to actually take effect.
+  if [ -n "$ADMIN_PASS" ]; then
+    if grep -q '^ADMIN_PASSWORD=' "$APP_DIR/.env"; then
+      sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$ADMIN_PASS/" "$APP_DIR/.env"
+    else
+      echo "ADMIN_PASSWORD=$ADMIN_PASS" >> "$APP_DIR/.env"
+    fi
+    export ADMIN_PASSWORD="$ADMIN_PASS"
+    ok "Admin password updated"
+  fi
 else
   cat > "$APP_DIR/.env" <<EOF
 # Support Tawk secrets — keep this file private (chmod 600).
@@ -651,8 +677,10 @@ echo "  ${W}Admin panel:${X}   $PANEL_URL"
 echo "  ${W}Username:${X}      admin"
 if [ "${GENERATED_PASS:-0}" = "1" ]; then
   echo "  ${W}Password:${X}      ${Y}$ADMIN_PASS${X}   ${R}← save this! auto-generated${X}"
-else
+elif [ -n "$ADMIN_PASS" ]; then
   echo "  ${W}Password:${X}      (the password you set)"
+else
+  echo "  ${W}Password:${X}      (unchanged)"
 fi
 echo "  ${W}Language:${X}      $LANG_CHOICE"
 if [ -n "$ADMIN_IP" ]; then
