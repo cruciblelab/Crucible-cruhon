@@ -1,0 +1,60 @@
+site:
+  name: "Destek Merkezi"
+  domain: "example.com"
+  logo: ""
+  widget_color: "#2563eb"
+  widget_position: "right"       # right veya left
+  welcome_message: "Merhaba! Size nasıl yardımcı olabilirim?"
+  offline_message: "Şu anda çevrimdışıyız. Mesajınızı bırakın, en kısa sürede geri döneceğiz."
+  slide_notification: "Merhaba! Bir sorunuz mu var? Size yardımcı olmaktan memnuniyet duyarız."
+  show_notification_delay_ms: 3000
+
+admin:
+  default_username: "admin"
+  default_password: "admin123"   # İlk girişte değiştirin!
+
+chat:
+  require_name: true
+  require_email: false
+  show_agent_name: true
+  show_agent_avatar: true
+  typing_indicator: true
+
+limits:
+  max_file_size_mb: 5
+  max_image_size_mb: 2
+  allowed_file_types:
+    - jpg
+    - jpeg
+    - png
+    - gif
+    - pdf
+    - doc
+    - docx
+    - txt
+    - zip
+
+ai:
+  enabled: false
+  provider: "openai"             # openai / anthropic / none
+  api_key: ""
+  model: "gpt-3.5-turbo"         # openai: gpt-3.5-turbo, gpt-4 | anthropic: claude-haiku-4-5-20251001
+  system_prompt: "Sen yardımcı bir müşteri destek asistanısın. Kısa, net ve kibarca cevap ver."
+  fallback_to_queue: true        # AI başarısız olursa havuza at
+
+database:
+  type: "sqlite"                 # sqlite / postgres / mysql
+  path: "./data/chat.db"
+  # PostgreSQL veya MySQL için:
+  # host: "localhost"
+  # port: 5432
+  # name: "livechat"
+  # user: "livechat"
+  # password: ""
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  secret_key: "CHANGE-THIS-SECRET-KEY-IN-PRODUCTION-REPLACE-ME"
+  cors_origins:
+    - "*"
