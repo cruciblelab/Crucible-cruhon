@@ -6,10 +6,22 @@ Async backends: SQLite (aiosqlite) ·  PostgreSQL (asyncpg)   ·  MySQL (aiomysq
 
 ━━━ CONNECTION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @db.connect["sqlite:///data.db"]      — also :memory: / postgres:// / mysql://
+  @db.connect_env[]       — connect using $DATABASE_URL
+  @db.connect_env[VAR]    — connect using a custom env var name
   @db.close[]
   @db.ping[]              → bool
   @db.reconnect[]
   @db.in_transaction[]    → bool
+  @db.dsn_safe[]          → active DSN with the password masked
+
+━━━ MIGRATIONS & SEEDING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.migrate[dir]              — apply every *.sql file in dir once, in order
+  @db.seed[table; file.json]    — bulk-insert rows from JSON (list of objects)
+  @db.seed[table; file.csv]     — bulk-insert rows from CSV (header → columns)
+
+━━━ LIVE PANEL BRIDGE (requires cruhon-panel) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  @db.attach_panel[]      — stream every query to a running @panel dashboard
+  @db.detach_panel[]      — stop streaming
 
 ━━━ CONNECTION INFO & RAW ACCESS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @db.connection[]        → raw connection object  (full Python freedom)
@@ -255,12 +267,24 @@ class _DB:
         self._async_last_id: Optional[Any] = None
         self._async_last_rowcount: int = 0
         self._async_last_cols: list = []
+        # Optional live-panel bridge (see attach_panel / _notify_panel)
+        self._panel_hook = None
 
     # ── Internal helpers ───────────────────────────────────────
 
     def _require_conn(self):
         if self._conn is None:
             raise RuntimeError("[cruhon-db] No active connection. Call @db.connect first.")
+
+    def _notify_panel(self, sql: str, params=None, rowcount=None):
+        """Push a query event to the attached @panel, if any. Never raises —
+        a broken panel connection must never break a database call."""
+        if self._panel_hook is None:
+            return
+        try:
+            self._panel_hook(sql, params, rowcount)
+        except Exception:
+            pass
 
     def _require_sqlite(self, cmd: str):
         self._require_conn()
@@ -398,6 +422,44 @@ class _DB:
 
     def in_transaction(self, args: list):
         return self._in_transaction
+
+    # ── LIVE PANEL BRIDGE ──────────────────────────────────────
+
+    def attach_panel(self, args: list):
+        """@db.attach_panel[]  — stream every query on this connection to
+        the live @panel dashboard as it runs (SQL, row count, backend).
+
+        Requires the cruhon-panel plugin to be loaded and started first
+        (@panel.start[]). Never raises if the panel goes away mid-run —
+        a lost dashboard connection must never break a database call.
+        """
+        from cruhon.core.namespace_runtime import get_namespace_registry
+        panel_ns = get_namespace_registry().get("panel")
+        if panel_ns is None:
+            raise RuntimeError(
+                "[cruhon-db] @db.attach_panel: the cruhon-panel plugin is not "
+                "loaded. Add mods/cruhon-panel to your project's mods/ folder."
+            )
+        if not panel_ns.call("running"):
+            raise RuntimeError(
+                "[cruhon-db] @db.attach_panel: the panel is not running. "
+                "Call @panel.start[] before @db.attach_panel[]."
+            )
+
+        def _hook(sql, params, rowcount):
+            preview = sql if len(sql) <= 160 else sql[:157] + "..."
+            panel_ns.call("event", "db", {
+                "sql": preview,
+                "params": list(params) if params else [],
+                "rowcount": rowcount,
+                "backend": self._db_type,
+            })
+
+        self._panel_hook = _hook
+
+    def detach_panel(self, args: list):
+        """@db.detach_panel[]  — stop streaming queries to the panel."""
+        self._panel_hook = None
 
     # ── MIGRATIONS & SEEDING ──────────────────────────────────
 
@@ -712,6 +774,7 @@ class _DB:
         self._last_id = self._cursor.lastrowid
         self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
+        self._notify_panel(sql, params, self._last_rowcount)
         return self._last_id
 
     def execmany(self, args: list):
@@ -723,6 +786,7 @@ class _DB:
         self._cursor.executemany(sql, rows)
         self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
+        self._notify_panel(sql, None, self._last_rowcount)
 
     def query(self, args: list):
         self._require_conn()
@@ -731,7 +795,9 @@ class _DB:
         sql = str(args[0])
         params = tuple(args[1:]) if len(args) > 1 else ()
         self._cursor.execute(sql, params)
-        return self._store_result(self._cursor.fetchall())
+        result = self._store_result(self._cursor.fetchall())
+        self._notify_panel(sql, params, len(result))
+        return result
 
     def fetchone(self, args: list):
         self._require_conn()
@@ -765,6 +831,7 @@ class _DB:
         self._last_id = self._cursor.lastrowid
         self._last_rowcount = 1
         self._auto_commit()
+        self._notify_panel(sql, list(data.values()), 1)
         return self._last_id
 
     def insertmany(self, args: list):
@@ -783,6 +850,7 @@ class _DB:
         self._cursor.executemany(sql, [tuple(r[c] for c in cols) for r in rows])
         self._last_rowcount = len(rows)
         self._auto_commit()
+        self._notify_panel(sql, None, self._last_rowcount)
 
     def update(self, args: list):
         self._require_conn()
@@ -796,6 +864,7 @@ class _DB:
         self._cursor.execute(sql, list(data.values()) + where_params)
         self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
+        self._notify_panel(sql, list(data.values()) + where_params, self._last_rowcount)
         return self._last_rowcount
 
     def delete(self, args: list):
@@ -804,9 +873,11 @@ class _DB:
             raise RuntimeError("[cruhon-db] @db.delete requires table and where.")
         table, where = str(args[0]), str(args[1])
         params = list(args[2:])
-        self._cursor.execute(f"DELETE FROM {table} WHERE {where}", params)
+        sql = f"DELETE FROM {table} WHERE {where}"
+        self._cursor.execute(sql, params)
         self._last_rowcount = max(self._cursor.rowcount or 0, 0)
         self._auto_commit()
+        self._notify_panel(sql, params, self._last_rowcount)
         return self._last_rowcount
 
     def get(self, args: list):
@@ -815,10 +886,12 @@ class _DB:
             raise RuntimeError("[cruhon-db] @db.get requires table and where.")
         table, where = str(args[0]), str(args[1])
         params = tuple(args[2:])
-        self._cursor.execute(f"SELECT * FROM {table} WHERE {where} LIMIT 1", params)
+        sql = f"SELECT * FROM {table} WHERE {where} LIMIT 1"
+        self._cursor.execute(sql, params)
         row = self._cursor.fetchone()
         result = [self._row_to_dict(row)] if row is not None else []
         self._store_result(result)
+        self._notify_panel(sql, params, len(result))
         return result[0] if result else None
 
     def getall(self, args: list):
@@ -828,10 +901,15 @@ class _DB:
         table = str(args[0])
         if len(args) > 1:
             where, params = str(args[1]), tuple(args[2:])
-            self._cursor.execute(f"SELECT * FROM {table} WHERE {where}", params)
+            sql = f"SELECT * FROM {table} WHERE {where}"
+            self._cursor.execute(sql, params)
         else:
-            self._cursor.execute(f"SELECT * FROM {table}")
-        return self._store_result(self._cursor.fetchall())
+            params = None
+            sql = f"SELECT * FROM {table}"
+            self._cursor.execute(sql)
+        result = self._store_result(self._cursor.fetchall())
+        self._notify_panel(sql, params, len(result))
+        return result
 
     def truncate(self, args: list):
         self._require_conn()
@@ -1950,6 +2028,8 @@ _SYNC_METHODS = (
     # Connection
     "connect", "connect_env", "close", "ping", "reconnect", "in_transaction",
     "dsn_safe",
+    # Live panel bridge
+    "attach_panel", "detach_panel",
     # Migrations & seeding
     "migrate", "seed",
     # Connection info & raw access

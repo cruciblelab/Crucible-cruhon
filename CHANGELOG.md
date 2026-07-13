@@ -26,12 +26,13 @@ A single, safe surface for configuration. 18 commands:
 @env.load[]
 @var[port; @env.int["PORT"; 8080]]
 @var[key;  @env.require["API_KEY"]]
-@print[key = {@env.mask[key]}]
+@var[safe; @env.mask[key]]
+@print[key = {safe}]
 ```
 
-### cruhon-db — env-aware connection, migrations, seeding
+### cruhon-db — env-aware connection, migrations, seeding, live panel
 
-Four new commands on the `@db.*` plugin:
+Six new commands on the `@db.*` plugin:
 
 | Command | Does |
 |---|---|
@@ -39,6 +40,8 @@ Four new commands on the `@db.*` plugin:
 | `@db.migrate[dir]` | Apply every `*.sql` file in order, once each, tracked in a `_cruhon_migrations` table (idempotent) |
 | `@db.seed[table; file]` | Bulk-insert rows from a `.json` or `.csv` file |
 | `@db.dsn_safe[]` | The active DSN with the password masked — safe to print/log |
+| `@db.attach_panel[]` | Stream every query on this connection to a running `@panel` dashboard (SQL, row count, backend) — requires `@panel.start[]` first |
+| `@db.detach_panel[]` | Stop streaming |
 
 ### New plugin — `@panel.*` (live log-stream dashboard)
 
@@ -60,15 +63,49 @@ Server-Sent Events — pure standard library, no pip installs.
 @panel.attach_logging["INFO"]
 @log.info["server warming up"]
 @panel.metric["users online"; 42]
+@db.attach_panel[]
 @panel.wait[]
 ```
 
+### Bug fixes — found by dogfooding a real `pip install cruhon`
+
+Building the package, installing it into a clean venv, and running a real
+database-backed demo project end to end surfaced three real transpiler/
+runner bugs:
+
+- **f-string misdetected as dict literal** — `{u["id"]}: {u["name"]}` (an
+  f-string template with multiple `{}` groups followed by literal text
+  containing `:`) was misdetected as a single dict literal `{key: val}`
+  and passed through unwrapped, producing invalid Python. Fixed with a
+  proper single-brace-group check before treating a leading `{` as a
+  dict/set literal.
+- **Bare text ending in `.` broke `@print`** — `@print[Done.]` (an
+  extremely common pattern under the documented "bare text → string"
+  rule) was misdetected as Python attribute access (`obj.attr`) because
+  any `.` in the text triggered pass-through. Now requires an identifier
+  character on *both* sides of the dot.
+- **Local `mods/` were never discovered from the documented workflow** —
+  `cruhon run src/main.clpy` resolved `mods/` relative to the script's own
+  directory (`src/mods/`) instead of the project root, so the standard
+  `cruhon new myproject && cd myproject && cruhon run src/main.clpy` flow
+  could never load `@db`, `@panel`, or any other local plugin. Fixed to
+  check the current working directory first (matching every other CLI
+  subcommand), then walk up from the script looking for `mods/`.
+
+### CI
+
+Added `.github/workflows/test.yml` — runs the full test suite plus a
+build/`twine check` on every push and pull request across Python
+3.10/3.11/3.12. `publish.yml` (tag-triggered PyPI release) now also runs
+the test suite and `twine check` before publishing, so a broken build can
+never reach PyPI.
+
 ### Counts
 
-- **128 stdlib namespaces** (was 127) · **1839 handlers** (was 1821)
-- cruhon-db: **170+ commands** (was 166)
+- **128 stdlib namespaces** · **1839 handlers**
+- cruhon-db: **172+ commands** (was 166) — now includes the live-panel bridge
 - New plugin: cruhon-panel
-- **4034 tests** passing (was 3999)
+- **4038 tests** passing (was 3999)
 
 ---
 

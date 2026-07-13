@@ -1182,13 +1182,18 @@ These ship in `mods/` and load automatically:
 ### `@db.*` — multi-backend database (cruhon-db)
 
 SQLite, PostgreSQL, MySQL with full CRUD, transactions, and async — 170+
-commands. Now also env-aware connection, migrations, and seeding:
+commands. Also env-aware connection, migrations, seeding, and a live
+`@panel` bridge:
 
 ```clpy
 @db.connect_env["DATABASE_URL"]        # DSN from the environment
 @db.migrate["./migrations"]            # apply *.sql files once, in order
 @db.seed["users"; "fixtures/users.json"]   # bulk-load JSON or CSV
-@print[Connected to {@db.dsn_safe[]}]  # DSN with the password masked
+@var[safe; @db.dsn_safe[]]
+@print[Connected to {safe}]            # DSN with the password masked
+
+@panel.start[8787]
+@db.attach_panel[]                     # every query now streams to the panel
 ```
 
 ### `@panel.*` — live log-stream dashboard (cruhon-panel)
@@ -1202,6 +1207,7 @@ browser over Server-Sent Events — pure standard library.
 @log.info["server warming up"]         # …shows up live in the browser
 @panel.metric["users online"; 42]      # update a metric tile
 @panel.event["deploy"; {"version": "2.10"}]
+@db.attach_panel[]                     # stream every SQL query too (needs @db)
 @panel.open[]                          # open the dashboard in a browser
 @panel.wait[]                          # keep the panel alive
 ```
