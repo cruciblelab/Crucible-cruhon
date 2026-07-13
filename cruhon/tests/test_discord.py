@@ -1606,3 +1606,57 @@ class TestTextArgHardening:
     def test_bare_multiword_text_still_repr_literal(self):
         code = _compile("@discord.reply[ctx; Admin Role]")
         assert "'Admin Role'" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# TYPED PREFIX-COMMAND PARAMS — "name:type" on @discord.command /
+# @discord.hybrid extra params, so discord.py converts the raw text into
+# a real Member/int/channel/etc. before the command body runs, instead
+# of everything arriving as a plain string.
+# ─────────────────────────────────────────────────────────────
+
+class TestTypedPrefixParams:
+    def test_untyped_param_stays_plain(self):
+        code = _compile('@discord.command[greet; ctx; user]\n    @discord.reply[ctx; "hi"]\n@end')
+        assert "async def greet(ctx, user):" in code
+
+    def test_member_type(self):
+        src = '@discord.command[ban; ctx; member:member]\n    @discord.ban[member]\n@end'
+        code = _compile(src)
+        assert "async def ban(ctx, member: discord.Member):" in code
+
+    def test_user_type_alias(self):
+        src = '@discord.command[dmuser; ctx; target:user]\n    @discord.dm[target; "hi"]\n@end'
+        code = _compile(src)
+        assert "target: discord.Member" in code
+
+    def test_int_type(self):
+        src = '@discord.command[purge; ctx; count:int]\n    @discord.purge[ctx.channel; count]\n@end'
+        code = _compile(src)
+        assert "async def purge(ctx, count: int):" in code
+
+    def test_channel_and_role_types(self):
+        src = '@discord.command[move; ctx; ch:channel; r:role]\n    @discord.log["ok"]\n@end'
+        code = _compile(src)
+        assert "ch: discord.TextChannel" in code
+        assert "r: discord.Role" in code
+
+    def test_multiple_typed_params(self):
+        src = (
+            '@discord.command[timeoutuser; ctx; member:member; minutes:int]\n'
+            '    @discord.timeout[member; minutes=minutes]\n'
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def timeoutuser(ctx, member: discord.Member, minutes: int):" in code
+
+    def test_hybrid_typed_params(self):
+        src = '@discord.hybrid[ban; ctx; member:member]\n    @discord.ban[member]\n@end'
+        code = _compile(src)
+        assert "async def ban(ctx, member: discord.Member):" in code
+
+    def test_unknown_type_passed_through_as_annotation(self):
+        # Not in _OPTION_TYPES → treated as a raw annotation (e.g. a custom converter)
+        src = '@discord.command[thing; ctx; x:MyConverter]\n    @discord.log["ok"]\n@end'
+        code = _compile(src)
+        assert "x: MyConverter" in code

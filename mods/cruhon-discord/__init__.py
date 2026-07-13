@@ -26,8 +26,11 @@ Discord bot plugin for Cruhon.
 
   @discord.command[ping; ctx]                       — prefix command (!ping)
   @discord.command[greet; ctx; user]                — command with parameters
-  @discord.command[ban; ctx; member; perms="ban_members"; check=is_admin]
-  @discord.hybrid[userinfo; ctx; member]            — BOTH prefix and slash
+  @discord.command[ban; ctx; member:member; perms="ban_members"; check=is_admin]
+      — "name:type" annotates a param (member/user/int/channel/role/...)
+      so discord.py converts the raw text into a real object/number —
+      untyped params (like "user" above) arrive as plain strings.
+  @discord.hybrid[userinfo; ctx; member:member]     — BOTH prefix and slash
   @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
   @discord.slash[roll; "Roll dice"; ctx; sides]
   @discord.task[cleanup; minutes=30]            — background task
@@ -552,19 +555,51 @@ def _check_decorators(kwargs, indent, mode="command"):
     return out
 
 
+def _typed_param(raw: str) -> str:
+    """
+    Prefix-command parameter → Python parameter, optionally annotated.
+
+      "member"       → "member"                  (untyped — arrives as the
+                                                    raw text the user typed)
+      "member:member"→ "member: discord.Member"   (discord.py resolves a
+                                                    mention/ID/name to a real
+                                                    Member — required for
+                                                    calls like member.ban())
+      "count:int"    → "count: int"               (discord.py converts and
+                                                    raises a friendly
+                                                    BadArgument on bad input
+                                                    instead of the command
+                                                    crashing deeper in)
+
+    Reuses the same type names as slash-command @param[...] (string, int,
+    member, channel, role, ...) via _OPTION_TYPES.
+    """
+    if ":" not in raw:
+        return raw
+    pname, _, ptype = raw.partition(":")
+    pname = pname.strip()
+    ptype = ptype.strip()
+    anno = _OPTION_TYPES.get(ptype.lower(), ptype)
+    return f"{pname}: {anno}"
+
+
 def _visit_dc_command(transpiler, node):
     """
     @discord.command[ping; ctx]
     @discord.command[greet; ctx; user; aliases="hi,hey"]
-    @discord.command[ban; ctx; member; perms="ban_members"; cooldown=5]
+    @discord.command[ban; ctx; member:member; perms="ban_members"; cooldown=5]
     → @__bot__.command(name=...) + check decorators + async def <name>(ctx, ...):
+
+    Extra params may be typed with "name:type" (member, int, channel, role,
+    ...) so discord.py converts the raw text into a real object/number
+    before the command body runs — untyped params stay plain strings.
     """
     args = node.args
     kwargs = node.kwargs
 
     name = args[0].strip() if args else "my_command"
     ctx = args[1].strip() if len(args) > 1 else "ctx"
-    extra_params = [a.strip() for a in args[2:]]
+    extra_params = [_typed_param(a.strip()) for a in args[2:]]
     params_str = ", ".join([ctx] + extra_params)
 
     # Build decorator kwargs from node.kwargs
@@ -593,16 +628,17 @@ def _visit_dc_command(transpiler, node):
 
 def _visit_dc_hybrid(transpiler, node):
     """
-    @discord.hybrid[userinfo; ctx; member]
-    @discord.hybrid[ban; ctx; member; description="Ban a user"; perms="ban_members"]
+    @discord.hybrid[userinfo; ctx; member:member]
+    @discord.hybrid[ban; ctx; member:member; description="Ban a user"; perms="ban_members"]
     → @__bot__.hybrid_command(...) — works as BOTH a prefix and a slash command.
+    Extra params support the same "name:type" typing as @discord.command.
     """
     args = node.args
     kwargs = node.kwargs
 
     name = args[0].strip() if args else "my_command"
     ctx = args[1].strip() if len(args) > 1 else "ctx"
-    extra_params = [a.strip() for a in args[2:]]
+    extra_params = [_typed_param(a.strip()) for a in args[2:]]
     params_str = ", ".join([ctx] + extra_params)
 
     dec_kw_parts = []

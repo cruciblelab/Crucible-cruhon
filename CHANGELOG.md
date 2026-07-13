@@ -6,6 +6,32 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### Discord plugin — typed prefix-command params (live-bot bug)
+
+Running the demo bot above against a real Discord server surfaced a
+second real bug: `@discord.command[ban; ctx; member]`'s extra params
+(`member`, `count`, `minutes`, ...) had no way to be typed, so
+discord.py always passed them as the raw text the user typed —
+`!ban @someone` gave `member` the literal mention *string*, never a
+resolved `discord.Member`. `member.ban()` then crashed with
+`AttributeError: 'str' object has no attribute 'ban'`, silently, since
+nothing was listening for `on_command_error` — the command author saw
+nothing happen in Discord at all, only a traceback in the bot's own
+console. Same failure mode for `!purge <count>` (`channel.purge(limit="10")`)
+and `!timeoutuser <member> <minutes>` (`timedelta(minutes="5")`).
+
+**Fix:** extra params on `@discord.command`/`@discord.hybrid` now accept
+`name:type` (reusing the same type names as slash `@param[...]` — member,
+user, int, float, bool, channel, role, ...), e.g.
+`@discord.command[ban; ctx; member:member]` → `async def ban(ctx, member:
+discord.Member):`, letting discord.py resolve/convert before the command
+body runs. Untyped params are unchanged (still plain strings). Also added
+a global `@discord.on[error; ctx; error]` handler to the demo bot so
+future command failures reply in Discord instead of vanishing into the
+console, and exempted anyone with Manage Messages from the profanity
+filter (it was deleting moderators' own messages during testing). 8 new
+regression tests (`TestTypedPrefixParams`). Full suite: 6204 passed.
+
 ### Discord plugin hardening — `{}` interpolation and variable passthrough
 
 Built a real Discord bot in Cruhon (webhooks, roles, channel management,
