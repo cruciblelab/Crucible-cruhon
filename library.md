@@ -1,6 +1,6 @@
 # Cruhon Library Reference
 
-**v2.10.0 — 128 namespaces · 1875+ commands**
+**v2.10.0 — 128 namespaces · 1880+ commands**
 
 All built-in namespaces are available without `@import`. Just call them.
 
@@ -56,7 +56,7 @@ Third-party packages not in the stdlib must be registered explicitly (see below)
 | `@crypto.*` | `hashlib` / `hmac` / `secrets` / `base64` / `uuid` | b64_decode, b64_encode, b64url_decode, b64url_encode, blake2b, blake2s, compare, hash, hash_bytes, hash_file, hex_decode, hex_encode, hmac, md5, pbkdf2, random_bytes, random_int, scrypt, sha1, sha256, sha3_256, sha3_512, sha512, token, token_bytes, token_url, uuid, uuid1, uuid3, uuid5 |
 | `@log.*` | `logging` | child, clear, critical, debug, disable, enable, error, exception, format, get, handlers, info, set_level, setup, to_file, warning |
 | `@config.*` | `json` / `tomllib` / `configparser` / `os.environ` | dotenv, env, env_all, env_del, env_set, get, has, keys, load, reload, save, sections, set |
-| `@shell.*` | `subprocess` / `os` / `sys` / `shutil` | args, bg, bg_stdin, cd, code, communicate, cpu_count, cwd, env, env_all, env_del, env_set, exists, exit, home, hostname, kill, lines, ok, output, pid, pipe, platform, poll, python_version, returncode, run, terminate, username, wait, which |
+| `@shell.*` | `subprocess` / `os` / `sys` / `shutil` | args, bg, bg_stdin, cd, code, communicate, cpu_count, cwd, env, env_all, env_del, env_set, exec, exec_bg, exec_code, exec_ok, exec_output, exists, exit, home, hostname, kill, lines, ok, output, pid, pipe, platform, poll, python_version, returncode, run, terminate, username, wait, which |
 | `@archive.*` | `zipfile` / `tarfile` / `gzip` / `bz2` / `lzma` | bunzip2, bzip2, gunzip, gzip, is_tar, is_zip, lzma, size, tar, tar_extract_one, tar_list, unlzma, untar, unzip, zip, zip_add, zip_extract_one, zip_list, zip_read |
 | `@mail.*` | `smtplib` / `imaplib` / `email` | attach, body, close, connect, connect_tls, deliver, html_message, imap_close, imap_connect, imap_fetch, imap_fetch_all, imap_list, imap_search, imap_select, login, message, parse, send, send_html, send_with_attachment, sender, subject |
 | `@csv.*` | `csv` | append, col, count, filter, headers, read, read_string, rows, to_json, write, write_rows |

@@ -17,7 +17,7 @@ the generated Python with `cruhon run --show-python`.
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
 
-**128 stdlib namespaces · 1875+ built-in commands · 6140 tests**
+**128 stdlib namespaces · 1880+ built-in commands · 6169 tests**
 
 ---
 
@@ -159,6 +159,19 @@ Use `{varname}` inside any value to embed a variable:
 @var[msg; "Hi, {name}!"]       # f"Hi, {name}!"
 @var[info; age={user.age}]     # f"age={user.age}"
 ```
+
+> **Limitation:** `@command[...]` cannot be embedded *inside* another
+> nested Python expression — not inside `{}` interpolation
+> (`@print[{@db.dsn_safe[]}]` ✗), and not inside a list comprehension or
+> other bracketed sub-expression (`[f.name for f in @dataclasses.fields[p]]` ✗).
+> Bind the inline call to a variable first, then use the variable —
+> this always works and is the idiomatic pattern throughout this doc:
+> ```clpy
+> @var[safe; @db.dsn_safe[]]
+> @print[Connected to {safe}]
+> @var[fields; @dataclasses.fields[p]]
+> @var[names; [f.name for f in fields]]
+> ```
 
 ### Control Flow
 

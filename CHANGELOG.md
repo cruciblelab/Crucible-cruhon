@@ -6,6 +6,76 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### Second hardening pass — duplicates, security, coverage, performance
+
+A broader sweep beyond the doc/registry audit above: conflicting
+registrations, a missing safe subprocess path, untested namespaces, and
+scaling checks.
+
+**Duplicate/conflicting registration scan.** Statically found every
+`register_lib_call`/`api.lib_call` call site across core + all `mods/`
+and grouped by `(namespace, method)`. 19 keys are registered from more
+than one file. Reviewed each: `@math.*` (18 keys) legitimately duplicates
+between core and `cruhon-shortcuts-pro`'s `pro_math.py` — functionally
+equivalent, and mods overriding core is the plugin system working
+exactly as designed (documented load order: core → pip mods → local
+mods), not a bug. `@collections.deque_rotate`/`@csv.headers`/
+`@file.line_count` diverge slightly (a plugin's version is more
+defensive about edge cases) — also fine, same reasoning. No fix needed;
+noted for awareness.
+
+**No safe way to run a subprocess without `shell=True`.** Every
+`@shell.*` command (`run`, `output`, `lines`, `code`, `ok`, `bg`,
+`bg_stdin`) passed a string through `subprocess.run(cmd, shell=True,
+...)` — exactly the same shell-metacharacter injection surface as
+`os.system()` in plain Python, with no argv-list alternative. A script
+author who wanted to safely run a command built from partially-untrusted
+data (a filename from `@input`, a value from an HTTP response) had to
+drop to `@raw` + `import subprocess` — contradicting the project's own
+"nothing should need `@raw` to escape into real Python" goal. Added
+`@shell.exec[argv]`/`exec_output`/`exec_code`/`exec_ok`/`exec_bg` — the
+same five operations, but taking an argv list and never invoking a
+shell. Verified the actual safety difference with a real injection
+payload: the same string interpreted by `@shell.output` (two lines of
+output, `&&` ran a second command) stays one inert, literal argument
+under `@shell.exec_output`.
+
+**Security spot-checks that came back clean** (worth recording, not
+just silence): `@db.query[sql; params...]` correctly uses parameterized
+placeholders — an injection payload passed as a bound parameter matches
+zero rows rather than altering the query. Cruhon's own "quoted string
+containing `{}` → f-string" behavior only ever applies to literal source
+text the script author wrote, never to runtime data that happens to
+contain brace characters — external/untrusted values can't retroactively
+become executable code through that path. No `os.system`/`os.popen`/
+`shell=True` found outside `@shell.*`'s own (now-optional) string-command
+path.
+
+**Coverage audit: which namespaces had zero execution tests?** Five —
+`@contextlib.*`, `@dataclasses.*`, `@enum.*`, `@env.*`, `@typing.*` (71
+methods, previously exercised only by the generic compile-only safety
+net, never actually run). Writing real tests for all five surfaced one
+more bug: `@enum.Enum["Color"; "RED GREEN BLUE"]` silently discarded
+both arguments and returned the bare `enum.Enum` class — Python's own
+`Enum` behaves differently when *called* with args (constructs a new
+enum) vs. referenced bare (the type itself), and Cruhon only implemented
+the bare-reference half, so passing args produced no error at the call
+site, only a confusing `AttributeError` far downstream at first member
+access. Fixed `Enum`/`IntEnum`/`StrEnum`/`Flag`/`IntFlag` to match
+Python's dual behavior. Also confirmed (documented in README) that inline
+`@command[...]` calls cannot be embedded inside a nested Python
+expression like a list comprehension — the same class of limitation as
+the existing `{}`-interpolation restriction, not new, just previously
+undocumented for this shape.
+
+**Performance:** confirmed parse+transpile scales near-linearly (not
+quadratically) from 250 to 4000 statements (~2x time per 2x size at
+every step). The new engine fingerprint (previous entry) costs ~3ms
+once per process, ~0 after memoization — not a meaningful regression.
+
+Tests: `test_shell_safe_exec.py` (7), `test_previously_untested_namespaces.py`
+(17). Full suite: 6169 passing, 10 skipped, 0 regressions.
+
 ### Engine-wide hardening pass
 
 A systematic audit of the whole core — not reactive one-bug-at-a-time
