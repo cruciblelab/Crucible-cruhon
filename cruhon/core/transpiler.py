@@ -199,7 +199,7 @@ class Transpiler:
         _p = _gp()
         needs_os = _p._needs_os
         needs_requests = _p._needs_requests
-        needs_store = False
+        needs_store = _p._needs_store
         needs_types = False
         for _n in _walk_ast(ast):
             if not needs_os and isinstance(_n, EnvNode):
@@ -1180,6 +1180,10 @@ def __cruhon_store_delete(key):
     d.pop(key, None)
     with open(__cruhon_store_path(), "w") as f:
         __json.dump(d, f)
+
+def __cruhon_store_clear():
+    with open(__cruhon_store_path(), "w") as f:
+        __json.dump({}, f)
 """
 
 

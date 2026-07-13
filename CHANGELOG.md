@@ -6,6 +6,81 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### Engine-wide hardening pass
+
+A systematic audit of the whole core — not reactive one-bug-at-a-time
+fixes — triggered by a real bug report. Two mechanical, whole-registry
+scans plus what they turned up:
+
+**Scan 1 — bare unimported module references** (the `@http`/`@json`/`@os`
+bug class from the previous entry below). Every one of the then-1873
+registered handlers was invoked with dummy args, its generated code
+parsed with `ast`, and checked for any bare `Name.attr` pattern matching
+a stdlib module name outside an `__import__(...)` call. Result: **zero**
+further instances in the core registry (verified the detector itself
+first against known-bad code to rule out a silently-broken scanner).
+
+**Scan 2 — documentation vs. reality.** Cross-checked every method name
+listed in library.md's `@ns.*` tables against the actual registry.
+Result: **456 method names across 75+ namespaces did not exist** —
+`@os.*` documented 14 methods, only 2 (`env`, `path`) were real;
+`@sys.*`, `@signal.*`, `@resource.*` documented entirely different method
+*names* than what was ever registered; `@httpx.*` and `@pathlib.*` were
+100% fabricated (zero real handlers under either namespace, despite full
+highlighted rows in both README and library.md).
+
+Fixed by:
+- Regenerating every method-list cell in library.md programmatically
+  from the registry (133 rows rewritten) — now provably accurate.
+- Implementing the highest-value real gaps instead of just deleting
+  claims: **34 `@math.*` methods** (`clamp`, `lerp`, `sign`, `hypot`,
+  `dist`, `gcd`, `lcm`, `factorial`, `comb`, `perm`, `prod`, `degrees`,
+  `radians`, `log2`, `log10`, `exp`, full trig, `isclose`/`isfinite`/
+  `isinf`/`isnan`, `e`/`tau`/`inf`/`nan`, `min`/`max`/`sum`), plus
+  `@store.clear[]` and `@color.dim[...]`.
+- Removing `@httpx.*`/`@pathlib.*` from the docs entirely (zero real
+  functionality existed to preserve) with a pointer to their real
+  equivalents — async HTTP is `@http.async_*` (already httpx-backed),
+  path ops are `@file.*`.
+- A **permanent regression test** (`test_docs_match_registry.py`) that
+  parses library.md the same way and generates one pytest case per
+  documented method (2011 cases) — this class of silent doc/reality
+  drift can never reappear without CI catching it immediately.
+
+**A severe bug in `cruhon-shortcuts`** (the headline, README-recommended
+shortcut plugin) surfaced while testing the fixes above: its "data"
+group registered `@store.all`/`@store.keys`/`@store.values`/`@store.has`
+against `cruhon.core.libs.store_._STORE` — an attribute that has never
+existed (`@store.*` is backed by a JSON file via injected
+`__cruhon_store_*` helpers, never an in-memory `_STORE` dict). Any real
+user who loaded `cruhon-shortcuts` had these four calls raise
+`AttributeError` on every use, and the plugin's `all` override silently
+replaced (and broke) the otherwise-correct core handler. Fixed to use
+the real `__cruhon_store_load()` helper.
+
+**`@store.*` had the same inline-call auto-injection blind spot as
+`@http.*`/`@json.*`/`@os.*`** (see below): `@var[x; @store.get[...]]`
+never triggered the runtime helper-function injection, because inline
+namespace calls resolve straight to a code string at parse time and
+never become a walkable `LibCallNode`. Fixed the same way — a
+`_needs_store` flag set directly in `_parse_namespace_inline()`.
+
+**Transpile cache could serve stale bytecode after a rebuild without a
+version bump.** The cache key hashed the `cruhon.__version__` string but
+nothing about the engine's actual code — during active development
+(or if a maintainer ships a fix without bumping `__version__`), a
+rebuilt/reinstalled wheel with genuinely different handler code would
+produce an *identical* cache key for an unchanged script, silently
+reusing pre-fix compiled bytecode. Fixed by adding a cheap engine
+fingerprint (path + size + mtime_ns of every `.py` file under
+`cruhon/core/`, no full-content hashing) as a 6th cache key input —
+any core code change now invalidates old caches regardless of the
+version string.
+
+Tests: `test_docs_match_registry.py` (2011 cases), `test_store_color_extra.py`
+(4), `test_shortcuts_store_bug.py` (6). Full suite: 6140 passing, 10 skipped,
+0 regressions. Handler count: 1873 → 1875 (store.clear, color.dim).
+
 ### @math.* — 34 methods implemented for real
 
 README/library.md always *documented* `clamp`, `lerp`, `sign`, `hypot`,

@@ -17,7 +17,7 @@ the generated Python with `cruhon run --show-python`.
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
 
-**128 stdlib namespaces · 1873+ built-in commands · 4117 tests**
+**128 stdlib namespaces · 1875+ built-in commands · 6140 tests**
 
 ---
 
@@ -566,9 +566,11 @@ See [`library.md`](library.md) for the complete method reference.
 
 ### File & Path
 
+Path manipulation is covered by `@file.*` (above) — there is no separate
+`@pathlib.*` namespace.
+
 | Namespace | Wraps | Highlights |
 |---|---|---|
-| `@pathlib.*` | `pathlib` | path, join, name, stem, suffix, exists, is_file, mkdir… |
 | `@glob.*` | `glob` | glob, iglob, recursive, escape, fnmatch… |
 | `@tempfile.*` | `tempfile` | file, dir, named, spooled, mkstemp, mkdtemp… |
 | `@fnmatch.*` | `fnmatch` | match, filter, translate, fnmatchcase… |
@@ -607,8 +609,7 @@ See [`library.md`](library.md) for the complete method reference.
 
 | Namespace | Wraps | Highlights |
 |---|---|---|
-| `@http.*` | `requests` / `httpx` | GET/POST/PUT/DELETE, upload, auth, sessions, async… |
-| `@httpx.*` | `httpx` | client, async_client, timeout, follow_redirects… |
+| `@http.*` | `requests` / `httpx` | GET/POST/PUT/DELETE, upload, auth, sessions, async_get/post/put/patch/delete (httpx-backed)… |
 | `@socket.*` | `socket` | connect, send, recv, server, bind, accept, udp, tcp… |
 | `@ssl.*` | `ssl` | wrap, context, load_cert, verify_mode, check_hostname… |
 | `@ftp.*` | `ftplib` | connect, login, list, download, upload, rename, mkdir… |

@@ -190,22 +190,26 @@ def _new_lib_calls(api) -> None:
         f"[]"
     ))
 
-    api.lib_call("store", "all", lambda a: (
-        f"dict(__import__('cruhon.core.libs.store_', fromlist=['_STORE'])._STORE)"
-    ))
-
+    # NOTE: @store.* is backed by a JSON file (.cruhon_store.json), read
+    # and written via the __cruhon_store_* helpers the transpiler injects
+    # (see transpiler.py's _STORE_HELPERS) — there has never been a
+    # cruhon.core.libs.store_._STORE in-memory dict. The three handlers
+    # below previously referenced that nonexistent attribute directly,
+    # raising AttributeError on every call; "all" duplicated (and broke)
+    # the already-correct core handler, so it's removed here rather than
+    # re-registered.
     api.lib_call("store", "keys", lambda a: (
-        f"list(__import__('cruhon.core.libs.store_', fromlist=['_STORE'])._STORE.keys())"
+        "list(__cruhon_store_load().keys())"
     ))
 
     api.lib_call("store", "values", lambda a: (
-        f"list(__import__('cruhon.core.libs.store_', fromlist=['_STORE'])._STORE.values())"
+        "list(__cruhon_store_load().values())"
     ))
 
     api.lib_call("store", "has", lambda a: (
-        f"({a[0]} in __import__('cruhon.core.libs.store_', fromlist=['_STORE'])._STORE)"
+        f"({a[0]} in __cruhon_store_load())"
         if a else
-        f"False"
+        "False"
     ))
 
     api.lib_call("log", "setup_file", lambda a: (

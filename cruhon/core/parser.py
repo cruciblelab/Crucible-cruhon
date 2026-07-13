@@ -49,6 +49,7 @@ class Parser:
         # Track inline expressions that require auto-imports
         self._needs_os: bool = False
         self._needs_requests: bool = False
+        self._needs_store: bool = False
         # Source lines preserved for @raw block reconstruction
         self._source_lines: list = []
         # Module aliases declared in the current parse — cleared each parse()
@@ -187,6 +188,7 @@ class Parser:
         self.pos = 0
         self._needs_os = False
         self._needs_requests = False
+        self._needs_store = False
         # Store source lines so @raw can reconstruct original indented content
         self._source_lines = source.splitlines()
 
@@ -324,6 +326,15 @@ class Parser:
         # 'requests' is not defined.
         if namespace in ("http", "requests"):
             self._needs_requests = True
+
+        # @store.* handlers call runtime helper functions (__cruhon_store_*)
+        # that the transpiler injects only when it detects store usage —
+        # same inline-call blind spot as above: @var[x; @store.get[...]]
+        # never becomes a walkable LibCallNode, so AST-walk-based detection
+        # misses it and the helpers never get injected, raising NameError:
+        # name '__cruhon_store_load' (or similar) is not defined.
+        if namespace == "store":
+            self._needs_store = True
 
         # Stdlib lib call
         handler = get_lib_call(namespace, method)
