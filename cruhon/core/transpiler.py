@@ -370,7 +370,11 @@ class Transpiler:
         has_operator = any(op in v for op in operators)
         has_call = "(" in v and ")" in v
         has_subscript = "[" in v and "]" in v
-        has_dot = "." in v
+        # Require an identifier char on BOTH sides of the dot (obj.attr-shaped),
+        # not just any "." — otherwise bare prose ending in a period (e.g.
+        # "@print[Done.]", extremely common with the bare-text → string rule)
+        # is misdetected as Python attribute access and fails to compile.
+        has_dot = bool(re.search(r'[a-zA-Z0-9_]\.[a-zA-Z_]', v))
 
         if context == "expr":
             if has_operator or has_call or has_subscript or has_dot:
@@ -437,8 +441,12 @@ class Transpiler:
         if re.search(r'\{["\']', value):
             return True
 
-        # Rule 3: starts with { and contains : → plain dict literal {key: val}
-        if value.startswith("{") and ":" in value:
+        # Rule 3: starts with { and contains : AND the leading { is the ONLY
+        # top-level brace group spanning the whole value → plain dict literal
+        # {key: val}. Guards against f-string templates with multiple groups
+        # that happen to have a literal ":" after them, e.g.
+        # "{u['id']}: {u['name']}" (NOT a dict — two interpolations plus text).
+        if value.startswith("{") and ":" in value and self._is_single_brace_group(value):
             return True
 
         # Rule 4: assignment (=) before the first { → var = {"key": val}
@@ -446,6 +454,39 @@ class Transpiler:
         if eq_pos != -1 and eq_pos < brace_pos:
             return True
 
+        return False
+
+    def _is_single_brace_group(self, value: str) -> bool:
+        """
+        True if value is exactly one balanced {...} span with nothing before
+        the opening brace or after its matching closing brace — i.e. a real
+        standalone dict/set literal, not an f-string template with multiple
+        {..} interpolation groups plus literal text (which merely starts
+        with { and happens to contain a ":" later on).
+        """
+        v = value.strip()
+        if not v.startswith("{"):
+            return False
+        depth = 0
+        in_str = None
+        i, n = 0, len(v)
+        while i < n:
+            ch = v[i]
+            if in_str:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == in_str:
+                    in_str = None
+            elif ch in ("'", '"'):
+                in_str = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i == n - 1
+            i += 1
         return False
 
     def visit_unknown(self, node: Node) -> str:

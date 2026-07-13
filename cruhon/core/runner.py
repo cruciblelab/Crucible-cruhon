@@ -632,7 +632,7 @@ def run_file(
     source = path.read_text(encoding="utf-8")
 
     # Load mods from project directory
-    load_all_mods(path.parent)
+    load_all_mods(_find_project_dir(path))
 
     return run_source(
         source,
@@ -645,6 +645,29 @@ def run_file(
     )
 
 
+def _find_project_dir(script_path: Path) -> Path:
+    """
+    Locate the project root whose mods/ directory should be auto-loaded.
+
+    A scaffolded project (see `cruhon new`) puts mods/ at the project root,
+    a SIBLING of src/ — not inside it. The common invocation is
+    `cd myproject && cruhon run src/main.clpy`, so the current working
+    directory is checked first. Falls back to the script's own directory
+    (and up to two parents) for scripts run from elsewhere, then to cwd.
+    """
+    cwd = Path.cwd()
+    if (cwd / "mods").is_dir():
+        return cwd
+    d = script_path.parent
+    for _ in range(3):
+        if (d / "mods").is_dir():
+            return d
+        if d.parent == d:
+            break
+        d = d.parent
+    return cwd
+
+
 def build_file(path: str | Path, output: Optional[str | Path] = None) -> Path:
     """Compile .clpy → .py file."""
     path = Path(path)
@@ -653,7 +676,7 @@ def build_file(path: str | Path, output: Optional[str | Path] = None) -> Path:
         raise RunError(f"File not found: {path}")
 
     source = path.read_text(encoding="utf-8")
-    load_all_mods(path.parent)
+    load_all_mods(_find_project_dir(path))
 
     try:
         ast = parse(source)
