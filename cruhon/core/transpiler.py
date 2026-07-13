@@ -311,9 +311,9 @@ class Transpiler:
         # Fires when value contains {} BUT is NOT a Python expression
         # with dict literals. Two helpers below make the distinction.
         if "{" in v and "}" in v:
-            if self._is_python_expression(v):
+            if self._is_python_expression(v, context):
                 return v          # pass through as Python expression (Rule 6 territory)
-            if self._is_fstring_template(v):
+            if self._is_fstring_template(v, context):
                 # Use single-quoted f-string when content contains double quotes
                 if '"' in v:
                     return f"f'{v}'"
@@ -370,7 +370,11 @@ class Transpiler:
         has_operator = any(op in v for op in operators)
         has_call = "(" in v and ")" in v
         has_subscript = "[" in v and "]" in v
-        has_dot = "." in v
+        # Require an identifier char on BOTH sides of the dot (obj.attr-shaped),
+        # not just any "." — otherwise bare prose ending in a period (e.g.
+        # "@print[Done.]", extremely common with the bare-text → string rule)
+        # is misdetected as Python attribute access and fails to compile.
+        has_dot = bool(re.search(r'[a-zA-Z0-9_]\.[a-zA-Z_]', v))
 
         if context == "expr":
             if has_operator or has_call or has_subscript or has_dot:
@@ -391,7 +395,7 @@ class Transpiler:
         # ── Rule 8: bare text → string literal ────────────────
         return f'"{v}"'
 
-    def _is_fstring_template(self, value: str) -> bool:
+    def _is_fstring_template(self, value: str, context: str = "expr") -> bool:
         """
         True if value is a genuine f-string interpolation template —
         i.e. contains {identifier} or {expression} meant for substitution.
@@ -403,7 +407,7 @@ class Transpiler:
         if "{" not in value or "}" not in value:
             return False
         # Python expressions are never f-string templates
-        if self._is_python_expression(value):
+        if self._is_python_expression(value, context):
             return False
         # Match {identifier}, {attr.path}, or {func_call(…)} patterns
         return bool(
@@ -411,7 +415,7 @@ class Transpiler:
             re.search(r'\{[a-zA-Z_][a-zA-Z0-9_.]*\(', value)       # {func( or {obj.method(
         )
 
-    def _is_python_expression(self, value: str) -> bool:
+    def _is_python_expression(self, value: str, context: str = "expr") -> bool:
         """
         True if value is a Python expression containing braces as dict
         literals or function arguments — NOT f-string interpolation templates.
@@ -437,15 +441,57 @@ class Transpiler:
         if re.search(r'\{["\']', value):
             return True
 
-        # Rule 3: starts with { and contains : → plain dict literal {key: val}
-        if value.startswith("{") and ":" in value:
+        # Rule 3: starts with { and contains : AND the leading { is the ONLY
+        # top-level brace group spanning the whole value → plain dict literal
+        # {key: val}. Guards against f-string templates with multiple groups
+        # that happen to have a literal ":" after them, e.g.
+        # "{u['id']}: {u['name']}" (NOT a dict — two interpolations plus text).
+        if value.startswith("{") and ":" in value and self._is_single_brace_group(value):
             return True
 
         # Rule 4: assignment (=) before the first { → var = {"key": val}
-        eq_pos = value.find("=")
-        if eq_pos != -1 and eq_pos < brace_pos:
-            return True
+        # Only in "expr" context. In "display" context (@print, @assert), a
+        # bare "=" before an interpolation is overwhelmingly natural-language
+        # text — "total = {total}", "5 + 3 = {result}" — not a real Python
+        # assignment, so it must NOT be passed through as raw code.
+        if context == "expr":
+            eq_pos = value.find("=")
+            if eq_pos != -1 and eq_pos < brace_pos:
+                return True
 
+        return False
+
+    def _is_single_brace_group(self, value: str) -> bool:
+        """
+        True if value is exactly one balanced {...} span with nothing before
+        the opening brace or after its matching closing brace — i.e. a real
+        standalone dict/set literal, not an f-string template with multiple
+        {..} interpolation groups plus literal text (which merely starts
+        with { and happens to contain a ":" later on).
+        """
+        v = value.strip()
+        if not v.startswith("{"):
+            return False
+        depth = 0
+        in_str = None
+        i, n = 0, len(v)
+        while i < n:
+            ch = v[i]
+            if in_str:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == in_str:
+                    in_str = None
+            elif ch in ("'", '"'):
+                in_str = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i == n - 1
+            i += 1
         return False
 
     def visit_unknown(self, node: Node) -> str:

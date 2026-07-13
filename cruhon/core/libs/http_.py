@@ -67,6 +67,28 @@ def _kw(args: list, start: int) -> str:
     return (", " + ", ".join(extra)) if extra else ""
 
 
+_KWARG_RE = __import__("re").compile(r'^[A-Za-z_][A-Za-z0-9_]*=(?!=)')
+
+
+def _is_kwarg(arg) -> bool:
+    """True if arg is a pre-formatted `key=value` fragment (produced by
+    @cmd[...; key=value] named-parameter syntax) rather than a positional
+    expression — so handlers don't mistake e.g. `reason="spam"` for the
+    positional data/body argument when the caller skips straight to named
+    params without providing one."""
+    return bool(_KWARG_RE.match(str(arg).strip()))
+
+
+def _data_arg(args: list, pos: int):
+    """Return (data_expr, kwargs_start_index) for handlers whose optional
+    positional "data" argument sits at `pos`. If args[pos] is actually a
+    key=value kwarg fragment, data was omitted — treat it as None and let
+    kwargs start at `pos` instead of `pos + 1`."""
+    if len(args) > pos and not _is_kwarg(args[pos]):
+        return args[pos], pos + 1
+    return "None", pos
+
+
 def _timeout(args: list, start: int) -> str:
     """Return timeout kwarg — use default unless user already passed timeout=."""
     has = any(str(a).startswith("timeout=") for a in args[start:])
@@ -81,21 +103,21 @@ def _handler_get(args):
 
 
 def _handler_post(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"requests.post({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"requests.post({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_put(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"requests.put({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"requests.put({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_patch(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"requests.patch({_chk(url)}, json={data}{_timeout(args,2)}{_kw(args,2)})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"requests.patch({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_delete(args):
@@ -114,9 +136,9 @@ def _handler_options(args):
 
 
 def _handler_form(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"requests.post({_chk(url)}, data={data}{_timeout(args,2)}{_kw(args,2)})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"requests.post({_chk(url)}, data={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_upload(args):
@@ -165,20 +187,20 @@ def _handler_session_get(args):
 
 def _handler_session_post(args):
     s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
-    data = args[2] if len(args) > 2 else "None"
-    return f"{s}.post({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+    data, start = _data_arg(args, 2)
+    return f"{s}.post({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_session_put(args):
     s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
-    data = args[2] if len(args) > 2 else "None"
-    return f"{s}.put({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+    data, start = _data_arg(args, 2)
+    return f"{s}.put({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_session_patch(args):
     s, url = (args[0], args[1]) if len(args) > 1 else ("s", '""')
-    data = args[2] if len(args) > 2 else "None"
-    return f"{s}.patch({_chk(url)}, json={data}{_timeout(args,3)}{_kw(args,3)})"
+    data, start = _data_arg(args, 2)
+    return f"{s}.patch({_chk(url)}, json={data}{_timeout(args,start)}{_kw(args,start)})"
 
 
 def _handler_session_delete(args):
@@ -251,22 +273,21 @@ def _handler_async_get(args):
 
 
 def _handler_async_post(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    kw   = _kw(args, 2)
-    return f"await __import__('httpx').AsyncClient().post({_chk(url)}, json={data}{kw})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"await __import__('httpx').AsyncClient().post({_chk(url)}, json={data}{_kw(args,start)})"
 
 
 def _handler_async_put(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"await __import__('httpx').AsyncClient().put({_chk(url)}, json={data})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"await __import__('httpx').AsyncClient().put({_chk(url)}, json={data}{_kw(args,start)})"
 
 
 def _handler_async_patch(args):
-    url  = args[0] if args else '""'
-    data = args[1] if len(args) > 1 else "None"
-    return f"await __import__('httpx').AsyncClient().patch({_chk(url)}, json={data})"
+    url = args[0] if args else '""'
+    data, start = _data_arg(args, 1)
+    return f"await __import__('httpx').AsyncClient().patch({_chk(url)}, json={data}{_kw(args,start)})"
 
 
 def _handler_async_delete(args):

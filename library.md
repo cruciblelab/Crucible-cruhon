@@ -279,7 +279,7 @@ secret thanks to `@env.mask` (`"ab••••••89"`).
 | `@yaml.*` | built-in (optional) | Requires `pip install pyyaml` |
 | `@image.*` | built-in (optional) | Requires `pip install pillow` |
 | `@pdf.*` | built-in (optional) | Requires `pip install pdfplumber` |
-| `@db.*` | plugin | `mods/cruhon-db` — 170+ commands (SQLite/PostgreSQL/MySQL, sync + async). Includes `connect_env`, `migrate`, `seed`, `dsn_safe` |
+| `@db.*` | plugin | `mods/cruhon-db` — 172+ commands (SQLite/PostgreSQL/MySQL, sync + async). Includes `connect_env`, `migrate`, `seed`, `dsn_safe`, `attach_panel`/`detach_panel` |
 | `@panel.*` | plugin | `mods/cruhon-panel` — live SSE log/metric/event dashboard: `start`, `stop`, `log`, `metric`, `event`, `attach_logging`, `open`, `wait` |
 | `@discord.*` | plugin | `mods/cruhon-discord` — ~60 commands |
 

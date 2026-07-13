@@ -19,11 +19,19 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install build dependencies
-        run: pip install build twine
+      - name: Install package + test dependencies
+        run: |
+          pip install -e ".[full]"
+          pip install pytest pyyaml pillow pdfplumber build twine
+
+      - name: Run test suite (block publish on failure)
+        run: python -m pytest cruhon/tests/ -q
 
       - name: Build distribution
         run: python -m build
+
+      - name: Check distribution
+        run: twine check dist/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
