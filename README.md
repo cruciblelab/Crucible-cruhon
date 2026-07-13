@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.9.0**
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.10.0**
 
 ---
 
@@ -17,7 +17,7 @@ the generated Python with `cruhon run --show-python`.
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
 
-**127 stdlib namespaces · 1822+ built-in commands · 3999 tests**
+**128 stdlib namespaces · 1839+ built-in commands · 4039 tests**
 
 ---
 
@@ -209,12 +209,16 @@ Use `{varname}` inside any value to embed a variable:
 @match[command.split()]
     @case[["quit"]]
         @print[Quitting]
-    @case[["go"; direction]]
+    @case[["go", direction]]
         @print[Going {direction}]
     @default
         @print[Unknown command]
 @end
 ```
+
+> Case patterns are raw Python match-pattern syntax passed straight through
+> — use a real comma `,` for structural list/tuple patterns like
+> `["go", direction]`, not Cruhon's `;` argument separator.
 
 ### Functions
 
@@ -491,7 +495,8 @@ cruhon run app.clpy --no-cache  # bypass for one run
 # Stack-based scope
 @ctx.push[]
     @ctx.set["x"; "inner"]
-    @print[{@ctx["x"]}]
+    @var[inner_x; @ctx["x"]]
+    @print[{inner_x}]
 @ctx.pop[]
 ```
 
@@ -694,7 +699,8 @@ See [`library.md`](library.md) for the complete method reference.
 @var[port; @env.int["PORT"; 8080]]          # typed, with a default
 @var[debug; @env.bool["DEBUG"]]             # 1/true/yes/on → True
 @var[key; @env.require["API_KEY"]]          # raises if missing
-@print[Using key {@env.mask[key]}]          # "ab••••••89" — safe to log
+@var[safe; @env.mask[key]]                  # "ab••••••89" — safe to log
+@print[Using key {safe}]
 ```
 
 ### Utilities
@@ -758,7 +764,7 @@ See [`library.md`](library.md) for the complete method reference.
 
 ```clpy
 @var[rows; @csv.read["sales.csv"]]
-@var[filtered; @csv.filter[rows; lambda r: float(r["amount"]) > 100]]
+@var[filtered; [r for r in rows if float(r["amount"]) > 100]]
 @file.write["big_sales.json"; @json.dump[filtered]]
 @print[Exported {len(filtered)} rows]
 ```
@@ -1048,10 +1054,24 @@ api.token_hook(lambda toks: [t for t in toks if t.type != "COMMENT"])
 
 ## Complete Plugin Example
 
+> Pick a namespace your plugin doesn't already share with a stdlib
+> namespace (`@log.*`, `@http.*`, `@file.*`, … are all reserved — see
+> [`library.md`](library.md) for the full list). This example uses
+> `applog` to stay clear of the built-in `@log.*` namespace.
+>
+> `api.block_command(name, ...)` names must not contain a `.` — a
+> dotted name is only reachable when it exactly matches a stdlib
+> namespace method, never a custom block command. Use an underscore
+> (`applog_timed`) instead.
+>
+> `api.command(name, parser_fn, visitor_fn)` expects a matching AST
+> node class named `name.title() + "Node"` — for `"applog"` that's
+> `ApplogNode`.
+
 ```python
 """
-mods/cruhon-logger/__init__.py
-Adds @log["msg"] and @log.timed[label] ... @end
+mods/cruhon-applog/__init__.py
+Adds @applog["msg"] and @applog_timed[label] ... @end
 """
 import datetime
 
@@ -1075,48 +1095,51 @@ def parse_log(parser):
     from dataclasses import dataclass
 
     @dataclass
-    class LogNode(Node):
+    class ApplogNode(Node):
         msg: str = ""
 
     parser.advance()
     args = parser.parse_args()
-    return LogNode(msg=args[0] if args else '""', line=0)
+    return ApplogNode(msg=args[0] if args else '""', line=0)
 
 
 def visit_log(transpiler, node):
-    return transpiler._line(f'logger.log({node.msg})', node.line)
+    # Route the message through Cruhon's own value evaluator so
+    # {variable} interpolation works exactly like it does in @print.
+    msg = transpiler._eval_value(node.msg, "display")
+    return transpiler._line(f'logger.log({msg})', node.line)
 
 
 def visit_timed(transpiler, node):
-    label = node.args[0] if node.args else '"block"'
+    label = (node.args[0] if node.args else '"block"').strip('"')
     body = "\n".join(r for n in node.body if (r := n.accept(transpiler)))
     t = transpiler
     return "\n".join([
-        t._line('__t0__ = __import__("time").monotonic()'),
+        t._line("__t0__ = __import__('time').monotonic()"),
         body or t._line("pass"),
-        t._line(f'logger.log(f"{label} took {{__import__(\"time\").monotonic()-__t0__:.3f}}s")'),
+        t._line(f'logger.log(f"{label} took {{__import__(\'time\').monotonic()-__t0__:.3f}}s")'),
     ])
 
 
 def register(api):
     api.inject("logger", lambda: _logger)
-    api.command("log", parse_log, visit_log)
-    api.block_command("log.timed", visit_timed)
+    api.command("applog", parse_log, visit_log)
+    api.block_command("applog_timed", visit_timed)
     api.expose("get_log_lines", lambda: _logger.lines)
 ```
 
 Usage:
 
 ```clpy
-@log["Script started"]
+@applog["Script started"]
 
-@log.timed["data processing"]
-    @var[data; load_data()]
-    @var[result; process(data)]
-    @log["Processed {len(result)} items"]
+@applog_timed["data processing"]
+    @var[data; [1, 2, 3]]
+    @var[result; sum(data)]
+    @applog["Processed {result} items"]
 @end
 
-@log["Done"]
+@applog["Done"]
 ```
 
 ---

@@ -311,9 +311,9 @@ class Transpiler:
         # Fires when value contains {} BUT is NOT a Python expression
         # with dict literals. Two helpers below make the distinction.
         if "{" in v and "}" in v:
-            if self._is_python_expression(v):
+            if self._is_python_expression(v, context):
                 return v          # pass through as Python expression (Rule 6 territory)
-            if self._is_fstring_template(v):
+            if self._is_fstring_template(v, context):
                 # Use single-quoted f-string when content contains double quotes
                 if '"' in v:
                     return f"f'{v}'"
@@ -395,7 +395,7 @@ class Transpiler:
         # ── Rule 8: bare text → string literal ────────────────
         return f'"{v}"'
 
-    def _is_fstring_template(self, value: str) -> bool:
+    def _is_fstring_template(self, value: str, context: str = "expr") -> bool:
         """
         True if value is a genuine f-string interpolation template —
         i.e. contains {identifier} or {expression} meant for substitution.
@@ -407,7 +407,7 @@ class Transpiler:
         if "{" not in value or "}" not in value:
             return False
         # Python expressions are never f-string templates
-        if self._is_python_expression(value):
+        if self._is_python_expression(value, context):
             return False
         # Match {identifier}, {attr.path}, or {func_call(…)} patterns
         return bool(
@@ -415,7 +415,7 @@ class Transpiler:
             re.search(r'\{[a-zA-Z_][a-zA-Z0-9_.]*\(', value)       # {func( or {obj.method(
         )
 
-    def _is_python_expression(self, value: str) -> bool:
+    def _is_python_expression(self, value: str, context: str = "expr") -> bool:
         """
         True if value is a Python expression containing braces as dict
         literals or function arguments — NOT f-string interpolation templates.
@@ -450,9 +450,14 @@ class Transpiler:
             return True
 
         # Rule 4: assignment (=) before the first { → var = {"key": val}
-        eq_pos = value.find("=")
-        if eq_pos != -1 and eq_pos < brace_pos:
-            return True
+        # Only in "expr" context. In "display" context (@print, @assert), a
+        # bare "=" before an interpolation is overwhelmingly natural-language
+        # text — "total = {total}", "5 + 3 = {result}" — not a real Python
+        # assignment, so it must NOT be passed through as raw code.
+        if context == "expr":
+            eq_pos = value.find("=")
+            if eq_pos != -1 and eq_pos < brace_pos:
+                return True
 
         return False
 
