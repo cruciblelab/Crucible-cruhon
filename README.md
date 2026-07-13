@@ -1057,21 +1057,19 @@ api.token_hook(lambda toks: [t for t in toks if t.type != "COMMENT"])
 > Pick a namespace your plugin doesn't already share with a stdlib
 > namespace (`@log.*`, `@http.*`, `@file.*`, … are all reserved — see
 > [`library.md`](library.md) for the full list). This example uses
-> `applog` to stay clear of the built-in `@log.*` namespace.
+> `applog` to stay clear of the built-in `@log.*` namespace. Even when a
+> custom `api.block_command`/`api.command` registration *does* share a
+> prefix with a stdlib namespace, the plugin's own registration always
+> wins for that exact dotted name — but picking a distinct name avoids
+> the confusion of two different things answering to `@log.*`.
 >
-> `api.block_command(name, ...)` names must not contain a `.` — a
-> dotted name is only reachable when it exactly matches a stdlib
-> namespace method, never a custom block command. Use an underscore
-> (`applog_timed`) instead.
->
-> `api.command(name, parser_fn, visitor_fn)` expects a matching AST
-> node class named `name.title() + "Node"` — for `"applog"` that's
-> `ApplogNode`.
+> `api.command(name, parser_fn, visitor_fn)` expects a matching AST node
+> class named `name.title() + "Node"` — for `"applog"` that's `ApplogNode`.
 
 ```python
 """
 mods/cruhon-applog/__init__.py
-Adds @applog["msg"] and @applog_timed[label] ... @end
+Adds @applog["msg"] and @applog.timed[label] ... @end
 """
 import datetime
 
@@ -1124,7 +1122,7 @@ def visit_timed(transpiler, node):
 def register(api):
     api.inject("logger", lambda: _logger)
     api.command("applog", parse_log, visit_log)
-    api.block_command("applog_timed", visit_timed)
+    api.block_command("applog.timed", visit_timed)
     api.expose("get_log_lines", lambda: _logger.lines)
 ```
 
@@ -1133,7 +1131,7 @@ Usage:
 ```clpy
 @applog["Script started"]
 
-@applog_timed["data processing"]
+@applog.timed["data processing"]
     @var[data; [1, 2, 3]]
     @var[result; sum(data)]
     @applog["Processed {result} items"]

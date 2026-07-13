@@ -6,6 +6,37 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### Parser fix — dotted plugin command names
+
+`api.command("ns.method", ...)` and `api.block_command("ns.method", ...)`
+— registering a plugin command whose name contains a `.` — were silently
+unreachable via `@ns.method[...]` syntax. The lexer always splits a dotted
+identifier into `NAMESPACE + DOT + AT_CMD` tokens, and the parser's
+namespace-call path never checked for a matching custom registration
+before falling through to generic stdlib/mod namespace dispatch. The
+practical impact:
+
+- The block body was silently dropped (no error — just missing code).
+- If the dotted prefix happened to match an existing stdlib namespace
+  (e.g. a plugin registering `"log.timed"`, with `@log.*` already a
+  built-in namespace), the call produced `NameError: name 'log' is not
+  defined` instead of ever reaching the plugin.
+
+This is exactly the pattern `mods/*/register(api)` docstrings and the
+README's own "Complete Plugin Example" demonstrate (`api.command("db.get",
+...)` in `ModAPI`'s own docstring, `api.block_command("log.timed", ...)`
+in the README) — the flagship example never actually ran end to end.
+
+Fixed in `_parse_statement()`: dotted `@ns.method[...]` calls are now
+checked against `self._block_commands`/`self._commands` for an exact
+match *before* falling through to namespace-call routing, so a plugin's
+own registration always takes priority over a same-prefixed stdlib
+namespace. Verified with a new dedicated regression suite
+(`test_dotted_block_commands.py`) plus the corrected README example
+running end to end through the real mod loader.
+
+
+
 This release rounds out real-world deployment: read configuration safely,
 connect databases from the environment, and watch everything live in a
 browser.

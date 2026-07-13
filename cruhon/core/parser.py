@@ -249,6 +249,32 @@ class Parser:
                 method = self.peek(2).value
                 if method in ("for", "with"):
                     return self._parse_async_block()
+
+            # Custom plugin commands registered with a "." in their name
+            # (api.command("ns.method", ...) / api.block_command("ns.method",
+            # ...)) must be checked before falling through to generic
+            # namespace-call routing below. The lexer always splits "a.b"
+            # into NAMESPACE + DOT + AT_CMD tokens regardless of whether
+            # "a.b" was registered as one dotted command name — without this
+            # check, a dotted plugin command is silently unreachable and
+            # gets misparsed as a stdlib/mod namespace method call instead,
+            # producing wrong code with no error.
+            if self.peek(2).type == "AT_CMD":
+                dotted = f"{self.current.value}.{self.peek(2).value}"
+                if dotted in self._block_commands:
+                    line = self.current.line
+                    self.advance()  # NAMESPACE
+                    self.advance()  # DOT
+                    self.advance()  # AT_CMD (method)
+                    return self._finish_plugin_block(dotted, line)
+                if dotted in self._commands:
+                    self.advance()  # NAMESPACE
+                    self.advance()  # DOT
+                    # AT_CMD (method) is left as self.current — the
+                    # registered parser_fn consumes it itself via its own
+                    # parser.advance() call, per the api.command() contract.
+                    return self._commands[dotted]()
+
             return self._parse_namespace_call()
 
         # @ command
@@ -675,6 +701,17 @@ class Parser:
         """
         line = self.current.line
         self.advance()  # consume the command token
+        return self._finish_plugin_block(plugin_name, line)
+
+    def _finish_plugin_block(self, plugin_name: str, line: int) -> "PluginBlockNode":
+        """
+        Shared tail of plugin-block parsing: args + body + @end.
+
+        Split out from parse_plugin_block() so callers that consume the
+        leading command token(s) themselves — e.g. dotted block-command
+        names spread across NAMESPACE + DOT + AT_CMD tokens, see
+        _parse_statement() — can reuse this without a redundant advance().
+        """
         args, kwargs = self.parse_named_args()
 
         self.skip_newlines()
