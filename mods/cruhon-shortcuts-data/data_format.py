@@ -62,7 +62,9 @@ METHOD_ALIASES: dict[str, str] = {
     "@diff.match[":  "@diff.best_match[",
 }
 
-_TL = "__import__('tomllib')"
+# tomllib is stdlib only since Python 3.11 — fall back to the tomli
+# backport on 3.10 (same helper cruhon.core.libs.toml_ uses).
+_TL = "__import__('cruhon.core.libs.toml_', fromlist=['_x'])._get_tomllib()"
 
 
 def _new_lib_calls(api) -> None:

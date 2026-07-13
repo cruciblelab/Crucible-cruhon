@@ -367,7 +367,13 @@ class TestZipapp:
 
 class TestRunpy:
     def test_module_ns(self):
-        g = run('@var[ns; @runpy.module_ns["os.path"]]')
+        # Not os.path: on Python 3.10, os.path is an alias for posixpath/
+        # ntpath, and runpy.run_module("os.path") raises "loader for
+        # posixpath cannot handle os.path" — a real CPython 3.10 quirk,
+        # not a Cruhon bug. urllib.parse is a plain dotted submodule with
+        # no such aliasing and exercises the same "dotted module name"
+        # code path.
+        g = run('@var[ns; @runpy.module_ns["urllib.parse"]]')
         assert isinstance(g["ns"], dict)
         assert "__spec__" in g["ns"] or "__name__" in g["ns"]
 

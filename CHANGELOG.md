@@ -4,7 +4,62 @@ All notable changes are documented here.
 
 ---
 
-## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
+## v2.10.1 (current) — CI green, Python 3.10 compatibility, real-bot fixes
+
+The 2.10.0 release commits were pushed without anyone checking the GitHub
+Actions tab — CI had been failing on every single push since the Tests
+workflow was added, for four unrelated reasons. All fixed and verified
+directly against Python 3.10/3.11/3.12 interpreters (not just this
+sandbox's default), plus the actual sdist+wheel build and `twine check`
+steps CI runs.
+
+**Test suite: locale-dependent UnicodeDecodeError.** `cruhon bundle`
+writes its output with `encoding="utf-8"` (its header comment has an
+em dash), but two tests read it back with a bare `.read_text()` — no
+encoding, so it falls back to the platform's locale-preferred encoding,
+which is ASCII on the GitHub Actions runner. Fixed those two tests, then
+swept the whole suite for the same latent pattern (bare `.read_text()`
+with no explicit encoding) and pinned all of them to `encoding="utf-8"`.
+Verified against the exact CI failure by reproducing it locally with
+`LC_ALL=C LANG=C PYTHONUTF8=0`.
+
+**`@toml.*` was broken on Python 3.10.** `tomllib` is stdlib only since
+Python 3.11 — Cruhon's `pyproject.toml` claims `requires-python = ">=3.10"`,
+but every `@toml.*`/`@toml_load` call unconditionally did
+`__import__('tomllib')`, so anything using it crashed with
+`ModuleNotFoundError` on 3.10. Added a `_get_tomllib()` fallback (tomllib
+→ tomli backport, same pattern `@config.load` already used for `.toml`
+files) in both `cruhon/core/libs/toml_.py` and the duplicate `_TL`
+constant in `cruhon-shortcuts-data/data_format.py`'s `@toml.flatten`.
+Declared `tomli>=2.0; python_version < "3.11"` as a real dependency in
+`pyproject.toml` so it installs automatically where it's needed.
+
+**`@pickle.save_gz` could write a truncated file.** It did
+`gzip.open(path, 'wb').write(data)` with no explicit `.close()` — gzip's
+CRC32/size trailer is only written on close, and relying on GC
+finalization timing to call it is not guaranteed across Python versions.
+On Python 3.12 a `@pickle.load_gz` immediately after a `@pickle.save_gz`
+could read a file missing its trailer and fail with `EOFError: Ran out
+of input`. Fixed by closing the GzipFile explicitly.
+
+**A test used a Python-3.10-specific interpreter quirk as its example.**
+`TestRunpy::test_module_ns` used `@runpy.module_ns["os.path"]` — on
+Python 3.10, `os.path` is aliased to `posixpath`/`ntpath` internally, and
+`runpy.run_module` chokes on that aliasing with `ImportError: loader for
+posixpath cannot handle os.path`. This is a genuine CPython 3.10 quirk
+unrelated to Cruhon's `@runpy.*` wrapper (which just calls
+`runpy.run_module` correctly) — switched the test to `urllib.parse`,
+a plain dotted submodule that exercises the same code path without the
+aliasing issue.
+
+Also includes the Discord plugin fixes below (interpolation, variable
+passthrough, typed prefix-command params), found and fixed by building
+and live-testing a real Discord bot. Full suite verified at 6204-6205
+passed (count varies slightly by Python version due to environment-gated
+skips) on 3.10, 3.11, and 3.12, plus a clean `python -m build` +
+`twine check`.
+
+## v2.10.0 — Config & Secrets, Env-aware DB, Live Panel
 
 ### Discord plugin — typed prefix-command params (live-bot bug)
 

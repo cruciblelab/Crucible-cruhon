@@ -5385,6 +5385,33 @@ class TestTomlLib:
         ns = _run_ns('@var[r; @toml.has["a = 1"; "a"]]')
         assert ns["r"] is True
 
+    def test_falls_back_to_tomli_when_tomllib_missing(self, monkeypatch):
+        # tomllib is stdlib only since Python 3.11 — Cruhon claims 3.10+
+        # support, so @toml.* must fall back to the tomli backport there.
+        # Simulate that by blocking the tomllib import regardless of the
+        # interpreter this test actually runs on.
+        import builtins
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "tomllib":
+                raise ImportError("no tomllib on this simulated interpreter")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        import sys
+        monkeypatch.delitem(sys.modules, "tomllib", raising=False)
+
+        from cruhon.core.libs import toml_
+        try:
+            mod = toml_._get_tomllib()
+        except ImportError as e:
+            assert "pip install tomli" in str(e)
+            import pytest
+            pytest.skip("tomli backport not installed in this environment")
+        else:
+            assert mod.loads("a = 1") == {"a": 1}
+
 
 class TestDiffLib:
     def test_ratio_identical(self):
