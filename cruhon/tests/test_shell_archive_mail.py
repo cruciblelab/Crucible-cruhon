@@ -172,7 +172,7 @@ class TestArchiveZip:
         out_dir.mkdir()
         _run(f'@archive.unzip["a.zip"; "{out_dir}"]')
         assert (out_dir / "a.txt").exists()
-        assert (out_dir / "a.txt").read_text() == "content"
+        assert (out_dir / "a.txt").read_text(encoding="utf-8") == "content"
 
     def test_zip_list(self, in_tmp):
         (in_tmp / "b.txt").write_text("b")
@@ -200,7 +200,7 @@ class TestArchiveZip:
         out_dir = in_tmp / "single"
         out_dir.mkdir()
         _run(f'@archive.zip_extract_one["e.zip"; "e.txt"; "{out_dir}"]')
-        assert (out_dir / "e.txt").read_text() == "extract me"
+        assert (out_dir / "e.txt").read_text(encoding="utf-8") == "extract me"
 
     def test_is_zip_true(self, in_tmp):
         (in_tmp / "z.txt").write_text("z")
@@ -269,7 +269,7 @@ class TestArchiveGzip:
         _run('@archive.gzip["orig.txt"; "orig.txt.gz"]')
         assert (in_tmp / "orig.txt.gz").exists()
         _run('@archive.gunzip["orig.txt.gz"; "restored.txt"]')
-        assert (in_tmp / "restored.txt").read_text() == "gzip content here"
+        assert (in_tmp / "restored.txt").read_text(encoding="utf-8") == "gzip content here"
 
 
 # ════════════════════════════════════════════════════════════

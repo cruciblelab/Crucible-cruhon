@@ -185,7 +185,7 @@ class TestLog:
         _run('@log.setup["INFO"; "app.log"]')
         _run('@log.info["test message"]')
         assert (in_tmp / "app.log").exists()
-        content = (in_tmp / "app.log").read_text()
+        content = (in_tmp / "app.log").read_text(encoding="utf-8")
         assert "test message" in content
 
     def test_set_level(self):
@@ -215,7 +215,7 @@ class TestLog:
 
     def test_to_file(self, in_tmp):
         _run('@log.setup[]\n@log.to_file["out.log"]\n@log.info["file test"]')
-        assert (in_tmp / "out.log").read_text().strip() != "" or True  # handler added
+        assert (in_tmp / "out.log").read_text(encoding="utf-8").strip() != "" or True  # handler added
 
     def test_clear(self):
         _run('@log.setup[]\n@log.clear[]')

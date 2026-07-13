@@ -5962,7 +5962,7 @@ class TestDiagnosticLog:
         p = tmp_path / "out.log"
         log.configure(str(p), "INFO")
         log.event("hello world")
-        content = p.read_text()
+        content = p.read_text(encoding="utf-8")
         assert "hello world" in content
         assert "[INFO]" in content
 
@@ -5972,7 +5972,7 @@ class TestDiagnosticLog:
         log.configure(str(p), "ERROR")  # only ERROR and above
         log.event("info msg", level="INFO")
         log.event("error msg", level="ERROR")
-        content = p.read_text()
+        content = p.read_text(encoding="utf-8")
         assert "error msg" in content
         assert "info msg" not in content
 
@@ -5987,7 +5987,7 @@ class TestDiagnosticLog:
         p = tmp_path / "out.log"
         log.configure(str(p), "ERROR")
         log.run_error("test.clpy", "✗ NameError\n  boom", "py traceback here")
-        content = p.read_text()
+        content = p.read_text(encoding="utf-8")
         assert "run failed: test.clpy" in content
         assert "NameError" in content
 

@@ -32,14 +32,14 @@ class TestShutil:
         dst = tmp_path / "b.txt"
         src.write_text("hello")
         run(f'@shutil.copy["{src}"; "{dst}"]')
-        assert dst.read_text() == "hello"
+        assert dst.read_text(encoding="utf-8") == "hello"
 
     def test_move(self, tmp_path):
         src = tmp_path / "c.txt"
         dst = tmp_path / "d.txt"
         src.write_text("move me")
         run(f'@shutil.move["{src}"; "{dst}"]')
-        assert dst.read_text() == "move me" and not src.exists()
+        assert dst.read_text(encoding="utf-8") == "move me" and not src.exists()
 
     def test_rmtree(self, tmp_path):
         d = tmp_path / "sub"
@@ -54,7 +54,7 @@ class TestShutil:
         (src / "x.txt").write_text("y")
         dst = tmp_path / "dst"
         run(f'@shutil.copy_tree["{src}"; "{dst}"]')
-        assert (dst / "x.txt").read_text() == "y"
+        assert (dst / "x.txt").read_text(encoding="utf-8") == "y"
 
     def test_disk_usage(self, tmp_path):
         g = run(f'@var[u; @shutil.disk_usage["{tmp_path}"]]')

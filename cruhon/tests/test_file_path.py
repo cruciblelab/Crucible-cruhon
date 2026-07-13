@@ -383,7 +383,7 @@ class TestFileinput:
     def test_replace_save(self, tmp_path):
         p = self._file(tmp_path, "foo bar foo\n")
         run(f'@fileinput.replace_save["{p}"; "foo"; "baz"]')
-        assert Path(str(p)).read_text() == "baz bar baz\n"
+        assert Path(str(p)).read_text(encoding="utf-8") == "baz bar baz\n"
 
     def test_strip_empty(self, tmp_path):
         p = self._file(tmp_path, "a\n\nb\n\nc\n")
