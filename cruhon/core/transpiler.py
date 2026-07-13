@@ -206,6 +206,13 @@ class Transpiler:
                 needs_os = True
             if not needs_requests and isinstance(_n, FetchNode):
                 needs_requests = True
+            if not needs_requests and isinstance(_n, LibCallNode) and _n.namespace in ("http", "requests"):
+                # @http.*/@requests.* handlers emit bare requests.get(...)
+                # etc. (matching how they read on the page) rather than
+                # __import__('requests') — without this, executing ANY
+                # @http.* call raises NameError: name 'requests' is not
+                # defined, since nothing else ever imports it for them.
+                needs_requests = True
             if not needs_store and isinstance(_n, LibCallNode) and _n.namespace == "store":
                 needs_store = True
             if isinstance(_n, ModuleNode):
@@ -368,8 +375,13 @@ class Transpiler:
             " lambda ",         # lambda expr
         ]
         has_operator = any(op in v for op in operators)
-        has_call = "(" in v and ")" in v
-        has_subscript = "[" in v and "]" in v
+        # Require the "(" / "[" to be immediately preceded by an identifier
+        # char or closing bracket (real func(...)/obj[...] syntax never has
+        # a space there) — otherwise a parenthetical aside in natural prose
+        # ("notes (joined with users)") or a literal "[" in display text
+        # gets misdetected as a call/subscript expression.
+        has_call = bool(re.search(r'[a-zA-Z0-9_)\]]\(', v)) and ")" in v
+        has_subscript = bool(re.search(r'[a-zA-Z0-9_)\]]\[', v)) and "]" in v
         # Require an identifier char on BOTH sides of the dot (obj.attr-shaped),
         # not just any "." — otherwise bare prose ending in a period (e.g.
         # "@print[Done.]", extremely common with the bare-text → string rule)
@@ -380,9 +392,15 @@ class Transpiler:
             if has_operator or has_call or has_subscript or has_dot:
                 return v
         else:
-            # display: only pass through if it has structural expression markers
-            # (call, subscript, dot) — operators alone could be inside plain text
-            if has_call or has_subscript or has_dot:
+            # display: only pass through if it has call/subscript markers.
+            # has_dot is deliberately excluded here — natural prose mentions
+            # filenames and abbreviations constantly ("saved to app.log",
+            # "see config.json"), and a bare identifier.identifier fragment
+            # anywhere in the text is far more likely to be that than a
+            # genuine attribute-access expression. Live attribute display
+            # still works via {obj.attr} interpolation, which is a separate
+            # code path unaffected by this.
+            if has_call or has_subscript:
                 return v
 
         # ── Rule 7: single identifier ─────────────────────────
@@ -432,10 +450,20 @@ class Transpiler:
         if brace_pos == -1:
             return False
 
-        # Rule 1: function call ( appears before first {  → dict inside a call
+        # Rule 1: function call ( appears before first { → dict inside a call.
+        # Requires BOTH: (a) an identifier/closing-bracket immediately before
+        # the "(" — real call syntax never has a space there, so "notes
+        # (joined with users)" (a parenthetical aside in prose) doesn't
+        # qualify — and (b) the { actually falls INSIDE that call's matching
+        # ) — otherwise natural text that merely mentions a parenthesized
+        # fragment before an unrelated, later interpolation group (e.g.
+        # "sqrt(144): {result}") gets misdetected as func({...}) call syntax.
         paren_pos = value.find("(")
         if paren_pos != -1 and paren_pos < brace_pos:
-            return True
+            _prev = value[paren_pos - 1] if paren_pos > 0 else ""
+            _looks_like_call = _prev.isalnum() or _prev in ("_", ")", "]")
+            if _looks_like_call and self._brace_inside_parens(value, paren_pos, brace_pos):
+                return True
 
         # Rule 2: { immediately followed by quote → {"key": ...} dict literal
         if re.search(r'\{["\']', value):
@@ -459,6 +487,36 @@ class Transpiler:
             if eq_pos != -1 and eq_pos < brace_pos:
                 return True
 
+        return False
+
+    def _brace_inside_parens(self, value: str, paren_pos: int, brace_pos: int) -> bool:
+        """
+        True if the "{" at brace_pos lies within the balanced (...) span
+        that opens at paren_pos — i.e. genuinely a dict/kwarg argument
+        nested inside a function call (`func({"a": 1})`), not a separate,
+        later f-string interpolation group that merely follows some
+        unrelated parenthesized text (`"sqrt(144): {result}"`).
+        """
+        depth = 0
+        in_str = None
+        i, n = paren_pos, len(value)
+        while i < n:
+            ch = value[i]
+            if in_str:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == in_str:
+                    in_str = None
+            elif ch in ("'", '"'):
+                in_str = ch
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return brace_pos < i
+            i += 1
         return False
 
     def _is_single_brace_group(self, value: str) -> bool:

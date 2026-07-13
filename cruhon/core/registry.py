@@ -231,15 +231,15 @@ def _setup_core_lib_calls():
 
     # json
     register_lib_call("json", "load",
-        lambda args: f"json.loads({args[0]})")
+        lambda args: f"__import__('json').loads({args[0]})")
     register_lib_call("json", "dump",
-        lambda args: f"json.dumps({args[0]})")
+        lambda args: f"__import__('json').dumps({args[0]})")
 
     # os
     register_lib_call("os", "env",
-        lambda args: f"os.environ.get({args[0]!r})")
+        lambda args: f"__import__('os').environ.get({args[0]!r})")
     register_lib_call("os", "path",
-        lambda args: f"os.path.join({', '.join(args)})")
+        lambda args: f"__import__('os').path.join({', '.join(args)})")
 
 
 def _setup_http_lib_calls():

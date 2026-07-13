@@ -315,6 +315,16 @@ class Parser:
         method = self.advance().value     # AT_CMD token
         args = self.parse_args()
 
+        # @http.*/@requests.* handlers emit bare requests.get(...) etc.
+        # rather than __import__('requests') — this is the ONLY chokepoint
+        # for inline usage (@var[r; @http.get[...]], the overwhelmingly
+        # common pattern), since inline calls are resolved straight to a
+        # code string here and never become a walkable LibCallNode AST
+        # node. Without this, executing the result raises NameError: name
+        # 'requests' is not defined.
+        if namespace in ("http", "requests"):
+            self._needs_requests = True
+
         # Stdlib lib call
         handler = get_lib_call(namespace, method)
         if handler:
