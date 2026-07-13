@@ -17,7 +17,7 @@ the generated Python with `cruhon run --show-python`.
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
 
-**128 stdlib namespaces · 1839+ built-in commands · 4039 tests**
+**128 stdlib namespaces · 1873+ built-in commands · 4117 tests**
 
 ---
 

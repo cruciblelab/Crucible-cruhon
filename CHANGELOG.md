@@ -6,6 +6,54 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### @math.* — 34 methods implemented for real
+
+README/library.md always *documented* `clamp`, `lerp`, `sign`, `hypot`,
+`dist`, `gcd`, `lcm`, `factorial`, `comb`, `perm`, `prod`, `degrees`,
+`radians`, `log2`, `log10`, `exp`, `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/
+`atan2`, `isclose`/`isfinite`/`isinf`/`isnan`, `e`/`tau`/`inf`/`nan`, and
+`min`/`max`/`sum` under `@math.*` — but none of them were ever actually
+registered. Calling any of them (e.g. `@math.clamp[57; 0; 50]`) silently
+fell through to a generic `namespace.method(args)` fallback that assumed
+a bare `math` global was already imported, raising `NameError: name
+'math' is not defined`. All 34 are now real, tested handlers.
+
+### Auto-import fix — a critical execution bug
+
+Found and fixed by building the actual pip package and running a full
+demo end to end (not just unit tests): `@http.*`/`@requests.*` used
+inline — `@var[r; @http.get[url]]`, the overwhelmingly common pattern —
+raised `NameError: name 'requests' is not defined` on every real
+execution. The transpiler's auto-import detection never covered inline
+namespace calls (they resolve straight to a code string at parse time,
+never becoming a walkable AST node), only the core `@fetch[...]` command
+and bare top-level statements. This made the README's very first
+non-trivial example broken for anyone actually running it — no existing
+test caught it, since every prior HTTP test either only checked the
+generated code string or manually pre-injected a fetched response object,
+bypassing the real `requests.get(...)` call path. Also fixed the same
+bare-import gap in `@json.load`/`@json.dump` and `@os.env`/`@os.path`
+(a second, forgotten registration in `registry.py` predating the
+current `json_.py`/proper handlers).
+
+### Transpiler — natural display text false positives
+
+Three more `@print[...]` edge cases found while writing prose that
+mentions parentheses/colons/filenames, all in `_is_python_expression`'s
+heuristics for "does this look like Python vs. plain text":
+- `"sqrt(144): {result}"` — a `(` followed later by an unrelated `{...}`
+  interpolation was mistaken for `func({...})` dict-argument syntax
+  purely by position; now requires the `{` to fall inside the call's
+  *matching* `)`.
+- `"notes (joined with users) ---"` — any `(`/`)` pair anywhere in the
+  text triggered "this is a function call"; now requires the `(` to be
+  immediately preceded by an identifier (real call syntax never has a
+  space there).
+- `"Log file:     app.log"` — mentioning a filename with an extension
+  triggered "this is `obj.attr` access"; dot-detection is now excluded
+  from display-context text entirely (live attribute display still
+  works via `{obj.attr}` interpolation, an unaffected code path).
+
 ### Parser fix — dotted plugin command names
 
 `api.command("ns.method", ...)` and `api.block_command("ns.method", ...)`
@@ -35,11 +83,11 @@ namespace. Verified with a new dedicated regression suite
 (`test_dotted_block_commands.py`) plus the corrected README example
 running end to end through the real mod loader.
 
+---
 
-
-This release rounds out real-world deployment: read configuration safely,
-connect databases from the environment, and watch everything live in a
-browser.
+This release also rounds out real-world deployment: read configuration
+safely, connect databases from the environment, and watch everything
+live in a browser.
 
 ### New namespace — `@env.*` (environment variables & secrets)
 
@@ -133,7 +181,7 @@ never reach PyPI.
 
 ### Counts
 
-- **128 stdlib namespaces** · **1839 handlers**
+- **128 stdlib namespaces** · **1873 handlers**
 - cruhon-db: **172+ commands** (was 166) — now includes the live-panel bridge
 - New plugin: cruhon-panel
 - **4038 tests** passing (was 3999)

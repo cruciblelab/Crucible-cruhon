@@ -1,6 +1,6 @@
 # Cruhon Library Reference
 
-**v2.10.0 — 128 namespaces · 1839+ commands**
+**v2.10.0 — 128 namespaces · 1873+ commands**
 
 All built-in namespaces are available without `@import`. Just call them.
 
@@ -71,7 +71,7 @@ Third-party packages not in the stdlib must be registered explicitly (see below)
 
 | Namespace | Wraps | Commands |
 |---|---|---|
-| `@math.*` | `math` | sqrt, floor, ceil, round, abs, pow, log, log2, log10, exp, sin, cos, tan, asin, acos, atan, atan2, degrees, radians, gcd, lcm, isclose, isfinite, isinf, isnan, factorial, comb, perm, prod, sum, min, max, clamp, lerp, sign, hypot, dist, pi, e, tau, inf, nan |
+| `@math.*` | `math` | sqrt, floor, ceil, round, abs, pow, log, log2, log10, exp, sin, cos, tan, asin, acos, atan, atan2, degrees, radians, gcd, lcm, isclose, isfinite, isinf, isnan, factorial, comb, perm, prod, sum, min, max, clamp, lerp, sign, hypot, dist, pi, e, tau, inf, nan, rand, random |
 | `@random.*` | `random` | random, randint, randrange, uniform, choice, choices, sample, shuffle, seed, gauss, normalvariate, expovariate, getrandbits, randbytes, triangular, betavariate, gammavariate, lognormvariate, weibullvariate |
 | `@cmath.*` | `cmath` | sqrt, exp, log, log10, phase, polar, rect, sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, isclose, isfinite, isinf, isnan, pi, e, tau, inf, infj, nan, nanj |
 | `@decimal.*` | `decimal` | make, to_float, to_str, to_int, add, sub, mul, div, mod, pow, sum, round, quantize, floor, ceil, sqrt, abs, compare, is_zero, is_nan, is_inf, is_finite, places, money, context, getcontext, setcontext |
