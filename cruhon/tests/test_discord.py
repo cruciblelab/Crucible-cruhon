@@ -56,12 +56,12 @@ class TestSetup:
         code = _compile('@discord.setup["TOKEN"]')
         assert "import discord" in code
         assert "from discord.ext import commands" in code
-        assert "commands.Bot(command_prefix='!'" in code
+        assert 'commands.Bot(command_prefix="!"' in code
         assert "discord.Intents.default()" in code
 
     def test_setup_prefix_and_intents(self):
         code = _compile('@discord.setup["TOKEN"; prefix="?"; intents="all"]')
-        assert "command_prefix='?'" in code
+        assert 'command_prefix="?"' in code
         assert "discord.Intents.all()" in code
 
     def test_run(self):
@@ -1506,3 +1506,103 @@ class TestSoundboardAPI:
     def test_delete_soundboard_sound(self):
         code = _compile("@discord.delete_soundboard_sound[sound]")
         assert "await sound.delete()" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# TEXT-ARGUMENT HARDENING — _as_str() interpolation & variable
+# passthrough regressions (message text, embeds, moderation reasons,
+# webhook/role/channel names, colors)
+# ─────────────────────────────────────────────────────────────
+
+class TestTextArgHardening:
+    def test_setup_prefix_variable(self):
+        src = '@var[prefix; "!"]\n@discord.setup["TOKEN"; prefix=prefix]'
+        code = _compile(src)
+        assert "command_prefix=prefix" in code
+
+    def test_reply_interpolation(self):
+        code = _compile('@discord.reply[ctx; "Hello {ctx.author.name}!"]')
+        assert 'await ctx.reply(f"Hello {ctx.author.name}!")' in code
+
+    def test_send_interpolation(self):
+        code = _compile('@discord.send[channel; "Score: {score}"]')
+        assert 'await channel.send(f"Score: {score}")' in code
+
+    def test_dm_interpolation(self):
+        code = _compile('@discord.dm[member; "Welcome {member.name}"]')
+        assert 'f"Welcome {member.name}"' in code
+
+    def test_log_interpolation(self):
+        code = _compile('@discord.log["Deleted by {ctx.author}"]')
+        assert 'print("[bot]", f"Deleted by {ctx.author}")' in code
+
+    def test_send_tts_interpolation(self):
+        code = _compile('@discord.send_tts[channel; "Alert {name}"]')
+        assert 'f"Alert {name}"' in code
+
+    def test_respond_ephemeral_interpolation(self):
+        code = _compile('@discord.respond_ephemeral[interaction; "Only you see {msg}"]')
+        assert 'f"Only you see {msg}"' in code
+
+    def test_create_webhook_variable_name(self):
+        code = _compile("@discord.create_webhook[channel; name]")
+        assert "name=name" in code
+        assert "'name'" not in code and '"name"' not in code
+
+    def test_create_role_variable_name(self):
+        code = _compile("@discord.create_role[guild; name]")
+        assert "name=name" in code
+
+    def test_ban_reason_interpolation(self):
+        code = _compile('@discord.ban[member; reason="Banned by {ctx.author}"]')
+        assert 'reason=f"Banned by {ctx.author}"' in code
+
+    def test_kick_reason_interpolation(self):
+        code = _compile('@discord.kick[member; reason="Kicked by {ctx.author}"]')
+        assert 'reason=f"Kicked by {ctx.author}"' in code
+
+    def test_unban_reason_interpolation(self):
+        code = _compile('@discord.unban[guild; user; reason="Cleared {reason}"]')
+        assert 'reason=f"Cleared {reason}"' in code
+
+    def test_nickname_variable(self):
+        code = _compile("@discord.nickname[member; new_nick]")
+        assert "nick=new_nick" in code
+
+    def test_color_from_variable_uses_runtime_helper(self):
+        code = _compile("@discord.color[hex_color]")
+        assert "__discord_color__(hex_color)" in code
+
+    def test_color_named_shortcut_unaffected(self):
+        code = _compile("@discord.color[red]")
+        assert "discord.Color.red()" in code
+
+    def test_embed_title_variable_and_description_interpolation(self):
+        code = _compile('@var[e; @embed[ctx.guild.name; "Members: {count}"]]')
+        assert "title=ctx.guild.name" in code
+        assert 'description=f"Members: {count}"' in code
+
+    def test_add_field_nested_call_expression_passthrough(self):
+        code = _compile('@discord.add_field[e; "Created"; str(ctx.guild.created_at.date())]')
+        assert "value=str(ctx.guild.created_at.date())" in code
+        assert "'str(ctx.guild.created_at.date())'" not in code
+
+    def test_send_webhook_interpolation(self):
+        code = _compile('@discord.send_webhook[wh; "Ping from {source}"]')
+        assert 'f"Ping from {source}"' in code
+
+    def test_confirm_interpolation(self):
+        code = _compile('@discord.confirm[ctx; "Delete {target}?"]')
+        assert 'f"Delete {target}?"' in code
+
+    def test_get_role_variable_name(self):
+        code = _compile("@discord.get_role[guild; name]")
+        assert "name=name" in code
+
+    def test_status_interpolation(self):
+        code = _compile('@discord.status["watching {count} users"]')
+        assert 'name=f"watching {count} users"' in code
+
+    def test_bare_multiword_text_still_repr_literal(self):
+        code = _compile("@discord.reply[ctx; Admin Role]")
+        assert "'Admin Role'" in code

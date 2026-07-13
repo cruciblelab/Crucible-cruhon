@@ -6,6 +6,64 @@ All notable changes are documented here.
 
 ## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
 
+### Discord plugin hardening — `{}` interpolation and variable passthrough
+
+Built a real Discord bot in Cruhon (webhooks, roles, channel management,
+a profanity filter, native AutoMod, moderation commands) to dogfood
+`cruhon-discord`, then inspected the transpiled Python by eye line by
+line — no `discord.py`/network access in this environment, so this was
+verified as far as "generates correct Python," not "runs against a real
+Discord server." Inspection surfaced that the plugin's own text-argument
+helper, `_as_str()`, was far weaker than core's value-evaluation engine:
+it never upgraded a quoted string containing `{}` to an f-string, and it
+`repr()`-wrapped every bare (unquoted) argument regardless of whether it
+was meant as literal display text or as a reference to the caller's own
+variable.
+
+**`{}` interpolation was silently dropped everywhere.** `@discord.reply`,
+`send`, `dm`, `respond`, `followup`, `edit`, `log`, `send_tts`,
+`respond_ephemeral`, `send_webhook`, `confirm`, `status`, and every embed
+field (`title`, `description`, `add_field`, `set_footer`, `set_image`,
+`set_thumbnail`, `set_author`) took their text argument as raw source
+text — `"Banned by {ctx.author}"` came out as the literal string
+`"Banned by {ctx.author}"`, never an f-string. This is the single
+highest-impact bug found in the plugin, since almost every real bot
+reply needs dynamic content.
+
+**Bare variable arguments were stringified into their own name.**
+`@discord.create_webhook[ctx.channel; name]` produced `name='name'`
+instead of `name=name` — any unquoted argument was always `repr()`-
+wrapped, with no way to tell "the user typed a bare word as literal
+text" from "the user typed an identifier meaning a variable." Same bug
+in `create_role`'s `name`, `get_role`/`find_member`'s lookup `name`,
+`nickname`'s `nick`, and the `reason=` kwargs on `ban`/`kick`/`unban`.
+
+**`@discord.color[a_variable]` called a nonexistent method** —
+`discord.Color.hex_color()` — because any identifier-shaped argument was
+treated as a named-color shortcut (correct for `@discord.color[red]`,
+wrong for a variable that merely happens to also be a valid identifier).
+Fixed with a fixed 36-name `_COLOR_NAMES` set for genuine shortcuts, plus
+a new runtime helper `__discord_color__` that resolves a variable's
+actual value (hex string / int / named-color string / already a
+`discord.Color`) at bot runtime, since the transpiler can't know the
+type at compile time.
+
+**Fix:** rewrote `_as_str()` to (1) upgrade `"quoted {text}"` to an
+f-string when it contains braces, and (2) detect real Python-expression
+arguments — via `ast.parse(arg, mode="eval")`, so arbitrarily nested
+expressions like `str(ctx.guild.created_at.date())` or
+`any(w in content for w in banned_words)` pass through correctly, not
+just simple `a.b.c` chains — and only fall back to `repr()` for genuine
+non-coder prose that isn't valid Python. Wired all ~30 affected handlers
+to route their text arguments through the fixed helper. One call site
+(`@choice[Label=value]` inside `@discord.slash`) intentionally keeps
+`repr()` directly instead, since a choice label is always literal text
+by the DSL's own grammar, never a variable reference. Added 22
+regression tests (`TestTextArgHardening`) covering interpolation across
+every affected handler, variable passthrough for webhook/role/channel
+names, the color-from-variable runtime path, and the literal-text
+fallback. Full suite: 6196 passed, 0 regressions.
+
 ### Second hardening pass — duplicates, security, coverage, performance
 
 A broader sweep beyond the doc/registry audit above: conflicting
