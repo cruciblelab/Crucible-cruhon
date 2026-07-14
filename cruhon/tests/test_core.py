@@ -21,7 +21,7 @@ from cruhon.core.lexer import tokenize
 from cruhon.core.ast_nodes import (
     VarNode, PrintNode, InputNode, IfNode, ForNode, WhileNode,
     FuncNode, ReturnNode, BreakNode, ContinueNode, TryNode,
-    AssertNode, RepeatNode, RawNode, FetchNode, ImportNode,
+    AssertNode, RepeatNode, RawNode, FetchNode, ImportNode, ExprNode,
 )
 
 
@@ -181,6 +181,69 @@ class TestParser:
     def test_parse_dict_odd_args_raises(self):
         with pytest.raises(ParseError):
             parse("@var[d; @dict[k1; v1; k3]]")
+
+    def test_bare_for_loop_raises_friendly_error(self):
+        # A bare (non-@) Python compound statement has no way to claim
+        # following indented lines as its body — each bare line is its
+        # own leaf statement — so this used to silently transpile to
+        # broken Python (a raw SyntaxError far from the .clpy source)
+        # instead of a clear Cruhon-level error.
+        with pytest.raises(ParseError, match="@for"):
+            parse("for i in range(3):\n    print(i)")
+
+    def test_bare_while_loop_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@while"):
+            parse("while x > 0:\n    x -= 1")
+
+    def test_bare_if_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@if"):
+            parse("if x:\n    y = 1")
+
+    def test_bare_with_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@with"):
+            parse('with open("f") as f:\n    pass')
+
+    def test_bare_def_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@func"):
+            parse("def foo():\n    pass")
+
+    def test_bare_class_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@class"):
+            parse("class Foo:\n    pass")
+
+    def test_bare_try_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@try"):
+            parse("try:\n    pass")
+
+    def test_bare_async_def_raises_friendly_error(self):
+        with pytest.raises(ParseError, match="@async"):
+            parse("async def foo():\n    pass")
+
+    def test_single_line_statement_ending_in_brace_not_flagged(self):
+        # d = {1: 2} — ends with "}", not ":" — must not be mistaken
+        # for a compound-statement header.
+        ast = parse("d = {1: 2}")
+        assert isinstance(ast.body[0], ExprNode)
+
+    def test_slice_expression_not_flagged(self):
+        ast = parse("x = a[1:2]")
+        assert isinstance(ast.body[0], ExprNode)
+
+    def test_string_literal_ending_in_colon_not_flagged(self):
+        ast = parse('label = "note:"')
+        assert isinstance(ast.body[0], ExprNode)
+
+    def test_type_annotation_not_flagged(self):
+        ast = parse("x: int = 5")
+        assert isinstance(ast.body[0], ExprNode)
+
+    def test_bare_simple_statements_still_pass_through(self):
+        # The fix must not affect simple (non-compound) bare statements —
+        # those legitimately have no body and pass through unchanged.
+        code = transpile(parse("x = 5"))
+        assert code == "x = 5"
+        code = transpile(parse('d.setdefault("a", []).append(1)'))
+        assert code == 'd.setdefault("a", []).append(1)'
 
     def test_parse_raw_block(self):
         src = "@raw\n    x = 1 + 1\n@end"

@@ -4,6 +4,96 @@ All notable changes are documented here.
 
 ---
 
+## v2.10.3 (current) — `cruhon install`, a parser hardening pass, and `cruhon check` never loaded mods
+
+### Bare compound Python statements silently produced broken code
+
+Auditing the language for places that force more ceremony than Python
+itself needs (a non-coder should never *need* `@raw` or extra
+`@var[...]` wrapping to do something plain Python already does simply)
+turned up a real, silent-failure-shaped bug in the other direction:
+bare (non-`@`) Python passthrough works line-by-line — great for
+simple statements (`x = 5`, `obj.method()`, even side-effecting calls
+like `d.setdefault(k, []).append(v)` with no `@var[...]` needed at
+all) — but a bare **compound**-statement header (`for i in
+range(3):`) has no way to claim the following indented lines as its
+body, since each bare line becomes its own independent leaf statement.
+The body printed at the wrong indent and the generated Python failed
+with a raw `SyntaxError` far removed from the actual `.clpy` source —
+exactly the kind of confusing, hard-to-connect-back error that erodes
+trust in the whole toolchain.
+
+**Fix:** the parser now recognizes a bare line shaped like a Python
+compound-statement header (`for`/`while`/`if`/`elif`/`else`/`def`/
+`class`/`with`/`try`/`except`/`finally`/`async ...`, ending in `:`)
+and raises an immediate, friendly `ParseError` pointing at the actual
+Cruhon block to use instead (`@for[...]`, `@while[...]`, etc.) —
+instead of silently emitting broken Python. 18 new regression tests,
+including several confirming legitimate single-line code that merely
+*looks* similar (`d = {1: 2}`, `x = a[1:2]`, `label = "note:"`,
+`x: int = 5`) is never mistaken for a compound header.
+
+### `cruhon check` never loaded mods at all
+
+Found while converting a test bot to slash commands: `cruhon check
+main.clpy` failed with `Unknown command: @param` on a file that
+`cruhon run`/`cruhon build` transpiled and ran without any issue.
+Root cause: `check_file()` (`cruhon/core/runner.py`) was missing the
+`load_all_mods(_find_project_dir(path))` call that `build_file()` —
+its near-identical neighbor, three lines above it in the same file —
+already had. `cruhon check` had never loaded a single mod, for any
+project, ever. This mostly went unnoticed because Cruhon's generic
+`@namespace.method[...]` call syntax parses fine without its namespace
+being registered (only `transpile` would fail on an unregistered
+method, not `parse`) — but a mod's own bare, non-namespaced one-liner
+commands, like `cruhon-discord`'s `@param[...]`/`@choice[...]` used
+inside `@discord.slash[...]` blocks, aren't namespaced calls and
+failed immediately at parse time.
+
+**Fix:** added the missing `load_all_mods()` call, matching
+`build_file()`. 2 new regression tests, run as real subprocesses (a
+fresh `cruhon check` invocation and a direct `check_file()` call) so
+they can't be masked by another test having already loaded mods into
+shared process state — confirmed both fail without the fix and pass
+with it. Full suite: 6218-6219 passed on Python 3.10/3.11/3.12.
+
+### New — `cruhon install <source>`, a real package manager
+
+Hand-copying a `mods/` folder into every project (and re-copying it on
+every update, which is exactly what led to the stale-cache bug above)
+doesn't scale. `cruhon install` fetches a mod from PyPI or GitHub with
+one command:
+
+```bash
+cruhon install cruhon-discord              # PyPI
+cruhon install owner/repo                  # GitHub, default branch
+cruhon install owner/repo@v1.2.0           # a specific branch/tag/commit
+cruhon install owner/repo#mods/cruhon-x    # a mod living in a monorepo subdirectory
+```
+
+A source with no `/` is PyPI; anything `owner/repo`-shaped is GitHub
+(optionally `github:`/`gh:`-prefixed). Every install is validated
+before anything lands in the project — the fetched thing must contain
+a real `mod.json` (name + version required) and, if it declares a
+`cruhon` version constraint, the running Cruhon must satisfy it (same
+check `load_mod_from_path()` already used for hand-copied mods).
+Nothing partial is left behind on a failed install. GitHub installs
+land in `<project>/mods/<mod-name>/`, exactly where a hand-copied mod
+would go; PyPI installs are picked up automatically by the existing
+`load_pip_mods()` mechanism once pip has installed the package.
+
+`cruhon install` deliberately never passes `--break-system-packages`
+to pip — overriding a system Python's PEP 668 protection is the user's
+call to make, not a tool's to make silently on their behalf.
+
+25 new tests: GitHub-fetching logic (archive extraction, monorepo
+subpath resolution, ambiguous-repo detection, manifest validation,
+reinstall-overwrites-existing) runs for real against in-memory zip
+archives with the network layer mocked; the PyPI path runs against a
+real local package installed via a real `pip install -e`, so pip
+invocation, importlib metadata reading, and manifest validation all
+run for real too.
+
 ## v2.10.2 — Discord cog commands were crashing at load time
 
 Building a comprehensive, modular test bot (6 files: moderation, fun,
@@ -70,69 +160,6 @@ an unchanged declared version. 9 new tests (unit-level on
 `mod_dir_fingerprint()` and `build_key()`). If you're hitting this on
 an existing project, `cruhon cache --clear` (or delete `.cruhon_cache/`)
 clears it immediately; this fix prevents it from recurring.
-
-## v2.10.3 (current) — `cruhon install`, and `cruhon check` never loaded mods
-
-### `cruhon check` never loaded mods at all
-
-Found while converting a test bot to slash commands: `cruhon check
-main.clpy` failed with `Unknown command: @param` on a file that
-`cruhon run`/`cruhon build` transpiled and ran without any issue.
-Root cause: `check_file()` (`cruhon/core/runner.py`) was missing the
-`load_all_mods(_find_project_dir(path))` call that `build_file()` —
-its near-identical neighbor, three lines above it in the same file —
-already had. `cruhon check` had never loaded a single mod, for any
-project, ever. This mostly went unnoticed because Cruhon's generic
-`@namespace.method[...]` call syntax parses fine without its namespace
-being registered (only `transpile` would fail on an unregistered
-method, not `parse`) — but a mod's own bare, non-namespaced one-liner
-commands, like `cruhon-discord`'s `@param[...]`/`@choice[...]` used
-inside `@discord.slash[...]` blocks, aren't namespaced calls and
-failed immediately at parse time.
-
-**Fix:** added the missing `load_all_mods()` call, matching
-`build_file()`. 2 new regression tests, run as real subprocesses (a
-fresh `cruhon check` invocation and a direct `check_file()` call) so
-they can't be masked by another test having already loaded mods into
-shared process state — confirmed both fail without the fix and pass
-with it. Full suite: 6218-6219 passed on Python 3.10/3.11/3.12.
-
-### New — `cruhon install <source>`, a real package manager
-
-Hand-copying a `mods/` folder into every project (and re-copying it on
-every update, which is exactly what led to the stale-cache bug above)
-doesn't scale. `cruhon install` fetches a mod from PyPI or GitHub with
-one command:
-
-```bash
-cruhon install cruhon-discord              # PyPI
-cruhon install owner/repo                  # GitHub, default branch
-cruhon install owner/repo@v1.2.0           # a specific branch/tag/commit
-cruhon install owner/repo#mods/cruhon-x    # a mod living in a monorepo subdirectory
-```
-
-A source with no `/` is PyPI; anything `owner/repo`-shaped is GitHub
-(optionally `github:`/`gh:`-prefixed). Every install is validated
-before anything lands in the project — the fetched thing must contain
-a real `mod.json` (name + version required) and, if it declares a
-`cruhon` version constraint, the running Cruhon must satisfy it (same
-check `load_mod_from_path()` already used for hand-copied mods).
-Nothing partial is left behind on a failed install. GitHub installs
-land in `<project>/mods/<mod-name>/`, exactly where a hand-copied mod
-would go; PyPI installs are picked up automatically by the existing
-`load_pip_mods()` mechanism once pip has installed the package.
-
-`cruhon install` deliberately never passes `--break-system-packages`
-to pip — overriding a system Python's PEP 668 protection is the user's
-call to make, not a tool's to make silently on their behalf.
-
-25 new tests: GitHub-fetching logic (archive extraction, monorepo
-subpath resolution, ambiguous-repo detection, manifest validation,
-reinstall-overwrites-existing) runs for real against in-memory zip
-archives with the network layer mocked; the PyPI path runs against a
-real local package installed via a real `pip install -e`, so pip
-invocation, importlib metadata reading, and manifest validation all
-run for real too.
 
 ## v2.10.1 — CI green, Python 3.10 compatibility, real-bot fixes
 

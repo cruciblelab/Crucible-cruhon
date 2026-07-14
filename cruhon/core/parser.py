@@ -8,6 +8,7 @@ Mods can add new command parsers via register_command().
 """
 
 from __future__ import annotations
+import re
 from typing import List, Optional, Callable
 from .lexer import Token, tokenize
 from .syntax_engine import get_syntax_engine
@@ -22,6 +23,44 @@ class ParseError(Exception):
     def __init__(self, msg: str, line: int = 0):
         super().__init__(f"[ParseError] Line {line} — {msg}")
         self.line = line
+
+
+# Bare (non-@) Python passthrough works line-by-line — great for simple
+# statements ("x = 5", "obj.method()"), but a bare compound-statement
+# header ("for i in range(3):") has no way to claim the following
+# indented lines as its body: each bare line becomes its own leaf
+# ExprNode, so the body prints at the wrong indent and the generated
+# Python fails with a raw, confusing SyntaxError far removed from the
+# .clpy source. Catching the header shape here turns that into an
+# immediate, friendly ParseError pointing at the real Cruhon block.
+_BARE_COMPOUND_HINTS = {
+    "for":     "@for[item; iterable] ... @end",
+    "while":   "@while[condition] ... @end",
+    "if":      "@if[condition] ... @end",
+    "elif":    "@elif[condition] ... @end (inside an @if block)",
+    "else":    "@else ... @end (inside an @if/@for/@while block)",
+    "def":     "@func[name; args] ... @end",
+    "class":   "@class[Name] ... @end",
+    "with":    "@with[expr as name] ... @end",
+    "try":     "@try ... @catch[e] ... @end",
+    "except":  "@catch[e] ... @end (inside an @try block)",
+    "finally": "@finally ... @end (inside an @try block)",
+    "async":   "@async[name] ... @end, or @async.for / @async.with inside it",
+}
+
+
+_LEADING_WORD_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _bare_compound_hint(line_text: str) -> Optional[str]:
+    stripped = line_text.strip()
+    if not stripped.endswith(":"):
+        return None
+    # split(None, 1) mis-handles a zero-argument header with no space
+    # before the colon ("try:", "else:", "finally:") — it returns the
+    # whole "try:" as one piece, never matching the bare "try" key.
+    m = _LEADING_WORD_RE.match(stripped)
+    return _BARE_COMPOUND_HINTS.get(m.group(1)) if m else None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -298,6 +337,15 @@ class Parser:
             raise ParseError(f"Unknown command: @{cmd}", self.current.line)
 
         tok = self.advance()
+        hint = _bare_compound_hint(tok.value)
+        if hint is not None:
+            raise ParseError(
+                f"Bare Python compound statements aren't supported — "
+                f"{tok.value!r} has no way to claim the following indented "
+                f"lines as its body (each bare line transpiles on its own). "
+                f"Use {hint} instead.",
+                tok.line,
+            )
         return ExprNode(expr=tok.value, line=tok.line)
 
     # ── Argument reader ───────────────────────────────────────
