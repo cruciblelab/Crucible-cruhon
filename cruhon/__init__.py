@@ -3,7 +3,7 @@ Cruhon — A modern, extensible scripting language built on Python.
 By CrucibleLab | github.com/cruciblelab/cruhon
 """
 
-__version__ = "2.10.1"
+__version__ = "2.10.2"
 __author__ = "CrucibleLab"
 
 from .core import (

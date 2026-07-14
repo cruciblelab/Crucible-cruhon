@@ -4,7 +4,48 @@ All notable changes are documented here.
 
 ---
 
-## v2.10.1 (current) — CI green, Python 3.10 compatibility, real-bot fixes
+## v2.10.2 (current) — Discord cog commands were crashing at load time
+
+Building a comprehensive, modular test bot (6 files: moderation, fun,
+utility, server management, welcome/automod, logging — each a
+`@discord.cog[...]`, wired together with `@include`) surfaced a severe
+bug: `@discord.command`/`@discord.hybrid`/`@discord.slash` **inside a
+`@discord.cog[...]` block** rendered through `_render_cog_method` — a
+separate, drifted reimplementation of the top-level command renderers
+that never received the `_typed_param()` fix from the previous release.
+`@discord.command[ban; ctx; member:member]` inside a cog produced the
+literal, broken signature `async def ban(self, ctx, member:member):` —
+`member` used as its own type annotation, referencing a name that
+doesn't exist. Since annotations are evaluated at class-definition
+time, this isn't a runtime edge case: the entire bot crashes with
+`NameError` the moment the file is imported, before it can even try to
+log in.
+
+`@discord.slash[...]` inside a cog was worse — it never parsed
+`@param[...]`/`@choice[...]` sub-blocks at all (a completely separate
+gap from the typed-param one), so a parameter declared via `@param[...]`
+was silently dropped from both the function signature and Discord's
+command schema, while the `@param[...]` line itself rendered as a dead
+`# @_dc_param block (no visitor registered)` comment.
+
+Neither bug was caught by the existing test suite because every cog
+test only ran the output through `compile()` (a syntax check) —
+`member:member` and a missing-but-unused parameter are both
+syntactically valid Python; only executing the code raises the
+NameError. Found by actually `exec()`-ing a full multi-cog bot against
+a real installed `discord.py`, not just checking it compiles.
+
+**Fix:** rewrote `_render_cog_method`'s command/hybrid/slash branches to
+match the top-level renderers exactly — extra params go through
+`_typed_param()`, and slash commands get full `_parse_slash_config()`
+handling (typed params, `@describe`, `@choice`, `@autocomplete`) instead
+of a stripped-down reimplementation. 6 new regression tests, including
+one that `exec()`s a real multi-cog bot end-to-end with discord.py
+installed — the same bar that caught the bug in the first place, not
+just a `compile()` check. Full suite: 6210-6211 passed on Python
+3.10/3.11/3.12.
+
+## v2.10.1 — CI green, Python 3.10 compatibility, real-bot fixes
 
 The 2.10.0 release commits were pushed without anyone checking the GitHub
 Actions tab — CI had been failing on every single push since the Tests

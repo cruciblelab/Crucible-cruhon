@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 
 
-CRUHON_VERSION = "2.10.1"
+CRUHON_VERSION = "2.10.2"
 
 BANNER = f"""
   \033[36m╔═══════════════════════════╗

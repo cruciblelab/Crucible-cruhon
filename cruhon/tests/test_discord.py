@@ -1660,3 +1660,122 @@ class TestTypedPrefixParams:
         src = '@discord.command[thing; ctx; x:MyConverter]\n    @discord.log["ok"]\n@end'
         code = _compile(src)
         assert "x: MyConverter" in code
+
+
+# ─────────────────────────────────────────────────────────────
+# COG METHOD RENDERING — @discord.command/@discord.hybrid/@discord.slash
+# inside a @discord.cog block used to render through a completely
+# separate, drifted code path (_render_cog_method) that ignored typed
+# "name:type" params (left the literal text "member:member" as a type
+# annotation — a guaranteed NameError at class-definition time) and
+# silently dropped @param[...]/@choice[...] slash options entirely.
+# Found by actually exec()-ing a full modular multi-cog bot with a
+# real discord.py installed, not just syntax-checking it.
+# ─────────────────────────────────────────────────────────────
+
+class TestCogMethodTypedParams:
+    def test_cog_command_typed_param(self):
+        src = (
+            "@discord.cog[Moderation]\n"
+            "    @discord.command[ban; ctx; member:member]\n"
+            "        @discord.ban[member]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def ban(self, ctx, member: discord.Member):" in code
+        assert "member:member" not in code
+
+    def test_cog_command_multiple_typed_params(self):
+        src = (
+            "@discord.cog[Moderation]\n"
+            "    @discord.command[timeout; ctx; member:member; minutes:int]\n"
+            "        @discord.timeout[member; minutes=minutes]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def timeout(self, ctx, member: discord.Member, minutes: int):" in code
+
+    def test_cog_hybrid_typed_param(self):
+        src = (
+            "@discord.cog[Moderation]\n"
+            "    @discord.hybrid[ban; ctx; member:member]\n"
+            "        @discord.ban[member]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def ban(self, ctx, member: discord.Member):" in code
+
+    def test_cog_slash_param_block_produces_typed_arg(self):
+        src = (
+            "@discord.cog[Utility]\n"
+            '    @discord.slash[say; "Say something"; interaction]\n'
+            '        @param[message; string; "What to say"]\n'
+            "        @discord.respond[interaction; message]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "async def say(self, interaction, message: str):" in code
+        assert "await interaction.response.send_message(message)" in code
+        assert "@_dc_param block" not in code
+
+    def test_cog_slash_choice_block(self):
+        src = (
+            "@discord.cog[Utility]\n"
+            '    @discord.slash[mode; "Set mode"; interaction]\n'
+            "        @param[level; string; \"Level\"]\n"
+            "        @choice[level; Easy=easy; Hard=hard]\n"
+            "        @discord.respond[interaction; level]\n"
+            "    @end\n"
+            "@end"
+        )
+        code = _compile(src)
+        assert "@discord.app_commands.choices(level=[" in code
+        assert "discord.app_commands.Choice(name='Easy', value='easy')" in code
+        assert "async def mode(self, interaction, level: str):" in code
+
+    def test_full_modular_bot_actually_executes(self):
+        # Stronger than a syntax check: define every class/function for
+        # real with a live discord.py, catching load-time NameErrors that
+        # compile()/ast.parse() alone can't (an annotation referencing an
+        # undefined name is syntactically valid Python).
+        pytest.importorskip("discord")
+        src = (
+            '@discord.setup["TOKEN"; intents="all"]\n'
+            "@discord.cog[Moderation]\n"
+            "    @discord.command[ban; ctx; member:member; perms=\"ban_members\"]\n"
+            '        @discord.ban[member; reason="by {ctx.author}"]\n'
+            "    @end\n"
+            "    @discord.command[timeout; ctx; member:member; minutes:int]\n"
+            "        @discord.timeout[member; minutes=minutes]\n"
+            "    @end\n"
+            "@end\n"
+            "@discord.cog[Utility]\n"
+            '    @discord.hybrid[uptime; ctx]\n'
+            '        @discord.reply[ctx; "ok"]\n'
+            "    @end\n"
+            '    @discord.slash[say; "Say something"; interaction]\n'
+            '        @param[message; string; "What to say"]\n'
+            "        @discord.respond[interaction; message]\n"
+            "    @end\n"
+            "@end\n"
+            "@discord.on[ready]\n"
+            "    @discord.add_cog[Moderation]\n"
+            "    @discord.add_cog[Utility]\n"
+            "@end\n"
+        )
+        from cruhon.core.runner import _exec_globals
+
+        code = transpile(parse(src))
+        # __ph__/__embed__/__confirm__/etc. are normally injected by the
+        # real run_source() runtime via _exec_globals() — build the exec
+        # namespace the same way instead of a bare dict, which fails with
+        # NameError as soon as any OTHER loaded plugin has registered a
+        # block hook (block hooks are process-global state, so a bare
+        # dict is order-dependent across the full test suite).
+        ns = _exec_globals({})
+        exec(compile(code, "<bot>", "exec"), ns)  # raises on any load-time error
+        assert "Moderation" in ns and "Utility" in ns

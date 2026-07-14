@@ -1083,6 +1083,14 @@ def _render_cog_method(transpiler, child):
     """
     Inside a Cog body: render @discord.command / @discord.slash /
     @discord.hybrid / @discord.listen as class methods.
+
+    Mirrors _visit_dc_command / _visit_dc_hybrid / _render_slash (the
+    top-level renderers) so cog methods get the same "name:type" typed
+    extra-param conversion and the same @param[...]/@choice[...] slash
+    option handling — cog methods used to render with the raw, untyped
+    "name:type" text left literally in the signature (a guaranteed
+    NameError at class-definition time) and silently dropped @param[...]
+    options entirely.
     """
     args = child.args
     kw = child.kwargs
@@ -1091,7 +1099,7 @@ def _render_cog_method(transpiler, child):
     if child.plugin_name == "_dc_command":
         name = args[0].strip() if args else "cmd"
         ctx = args[1].strip() if len(args) > 1 else "ctx"
-        extra = [a.strip() for a in args[2:]]
+        extra = [_typed_param(a.strip()) for a in args[2:]]
         params = ", ".join(["self", ctx] + extra)
         body_code = transpiler._block(child.body)
         return "\n".join([
@@ -1104,7 +1112,7 @@ def _render_cog_method(transpiler, child):
     if child.plugin_name == "_dc_hybrid":
         name = args[0].strip() if args else "cmd"
         ctx = args[1].strip() if len(args) > 1 else "ctx"
-        extra = [a.strip() for a in args[2:]]
+        extra = [_typed_param(a.strip()) for a in args[2:]]
         params = ", ".join(["self", ctx] + extra)
         desc_kw = (f", description={kw['description']}") if "description" in kw else ""
         body_code = transpiler._block(child.body)
@@ -1120,14 +1128,51 @@ def _render_cog_method(transpiler, child):
         desc = args[1].strip() if len(args) > 1 else repr(name)
         ctx = args[2].strip() if len(args) > 2 else "interaction"
         extra = [a.strip() for a in args[3:]]
-        params = ", ".join(["self", ctx] + extra)
-        body_code = transpiler._block(child.body)
-        return "\n".join([
-            f"{base}@discord.app_commands.command(name={name!r}, description={desc})",
-            *_check_decorators(kw, base, "slash"),
-            f"{base}async def {name}({params}):",
+
+        typed_params, describes, choices, autocompletes, body_children = _parse_slash_config(child)
+
+        sig = ["self", ctx] + extra
+        for pname, anno, required in typed_params:
+            sig.append(f"{pname}: {anno}" if required else f"{pname}: {anno} = None")
+
+        deco = [f"{base}@discord.app_commands.command(name={name!r}, description={desc})"]
+        deco += _check_decorators(kw, base, "slash")
+        if describes:
+            parts = ", ".join(f"{n}={d}" for n, d in describes.items())
+            deco.append(f"{base}@discord.app_commands.describe({parts})")
+        for cname, clist in choices.items():
+            items = ", ".join(
+                f"discord.app_commands.Choice(name={l!r}, value={_val(v)})"
+                for l, v in clist
+            )
+            deco.append(f"{base}@discord.app_commands.choices({cname}=[{items}])")
+
+        saved = transpiler._indent
+        transpiler._indent += 1
+        try:
+            body_code = "\n".join(
+                filter(None, (n.accept(transpiler) for n in body_children))
+            )
+        finally:
+            transpiler._indent = saved
+
+        lines = deco + [
+            f"{base}async def {name}({', '.join(sig)}):",
             body_code if body_code.strip() else f"{base}    pass",
-        ])
+        ]
+
+        for apname, abody in autocompletes:
+            saved = transpiler._indent
+            transpiler._indent += 1
+            try:
+                acode = "\n".join(filter(None, (n.accept(transpiler) for n in abody)))
+            finally:
+                transpiler._indent = saved
+            lines.append(f"{base}@{name}.autocomplete({apname!r})")
+            lines.append(f"{base}async def {name}_{apname}_autocomplete(self, interaction, current: str):")
+            lines.append(acode if acode.strip() else f"{base}    pass")
+
+        return "\n".join(lines)
 
     if child.plugin_name == "_dc_listen":
         event = args[0].strip() if args else "message"
