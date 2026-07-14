@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.10.0**
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.10.1**
 
 ---
 

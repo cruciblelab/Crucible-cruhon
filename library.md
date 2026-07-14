@@ -1,6 +1,6 @@
 # Cruhon Library Reference
 
-**v2.10.0 — 128 namespaces · 1880+ commands**
+**v2.10.1 — 128 namespaces · 1880+ commands**
 
 All built-in namespaces are available without `@import`. Just call them.
 
