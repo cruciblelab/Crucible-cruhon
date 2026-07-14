@@ -120,6 +120,22 @@ def cmd_check(args):
         sys.exit(1)
 
 
+def cmd_install(args):
+    from cruhon.core.installer import install, InstallError
+
+    def _log(msg):
+        print(f"  \033[36m{msg}\033[0m")
+
+    try:
+        result = install(args.source, project_dir=Path.cwd(), log=_log)
+    except InstallError as e:
+        print(f"  \033[31m✗ {e}\033[0m")
+        sys.exit(1)
+
+    print(f"  \033[32m✓ Installed {result['name']} v{result['version']} "
+          f"({result['source']})\033[0m")
+
+
 def cmd_mods(args):
     from cruhon.core.mod_loader import (
         load_all_mods,
@@ -880,6 +896,17 @@ def main():
     p_check = sub.add_parser("check", help="Check .clpy for syntax errors")
     p_check.add_argument("file", help=".clpy file to check")
     p_check.set_defaults(fn=cmd_check)
+
+    # install
+    p_install = sub.add_parser(
+        "install",
+        help="Install a mod from PyPI or GitHub (owner/repo[@ref][#subpath])",
+    )
+    p_install.add_argument(
+        "source",
+        help="PyPI package name, or owner/repo[@ref][#subpath] (optionally github:/gh: prefixed)",
+    )
+    p_install.set_defaults(fn=cmd_install)
 
     # mods
     p_mods = sub.add_parser("mods", help="List loaded mods with load order and override chains")

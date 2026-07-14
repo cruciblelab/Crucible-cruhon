@@ -72,6 +72,10 @@ cruhon run hello.clpy
 | `cruhon build file.clpy` | Compile `.clpy` → `.py` |
 | `cruhon build file.clpy -o out.py` | Compile to a specific output file |
 | `cruhon check file.clpy` | Check for syntax errors without running |
+| `cruhon install cruhon-discord` | Install a mod from PyPI |
+| `cruhon install owner/repo` | Install a mod from a GitHub repo (default branch, whole repo) |
+| `cruhon install owner/repo@ref` | ...at a specific branch/tag/commit |
+| `cruhon install owner/repo#mods/x` | ...a mod living in a subdirectory (monorepo) |
 | `cruhon new myproject` | Create a new project scaffold |
 | `cruhon new --plugin myplugin` | Create a plugin scaffold in `mods/myplugin/` |
 | `cruhon libs` | List all supported libraries |
@@ -1183,6 +1187,44 @@ cruhon mods              # see it in the list
 ```
 
 **Load order:** core → stdlib → pip plugins (alphabetical) → local `mods/` (alphabetical)
+
+---
+
+## Installing a Mod
+
+`cruhon install <source>` fetches a mod from PyPI or GitHub — no manual
+folder copying, no cloning a repo by hand.
+
+```bash
+cruhon install cruhon-discord              # from PyPI
+cruhon install owner/repo                  # from GitHub, default branch
+cruhon install owner/repo@v1.2.0           # a specific branch/tag/commit
+cruhon install owner/repo#mods/cruhon-x    # a mod living in a monorepo subdirectory
+cruhon install owner/repo@main#mods/x      # both together
+```
+
+A bare `owner/repo` is treated as GitHub; a name with no `/` is treated
+as PyPI. `github:`/`gh:` prefixes work too if you want to be explicit.
+
+Every install is validated before anything lands in your project: the
+fetched thing must contain a real `mod.json` (name + version, same
+manifest format as any other mod) — if it doesn't, `cruhon install`
+refuses and tells you why, rather than silently dropping something
+that was never written for Cruhon into your `mods/` folder. If the
+mod declares a `cruhon` version constraint, it's checked against your
+installed Cruhon the same way `load_mod_from_path()` already does for
+hand-copied mods.
+
+GitHub installs land in `<project>/mods/<mod-name>/` — the same place
+you'd put a hand-copied mod, picked up automatically by `cruhon run`
+with no extra wiring. PyPI installs are picked up automatically once
+pip has installed the package (same mechanism as **Publishing a
+Plugin**, above).
+
+`cruhon install` never passes `--break-system-packages` to pip on your
+behalf — that's your call to make, not a tool's to make for you. If
+your system Python refuses the install for that reason, the error
+message says so plainly.
 
 ---
 

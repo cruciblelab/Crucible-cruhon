@@ -4,7 +4,7 @@ All notable changes are documented here.
 
 ---
 
-## v2.10.2 (current) — Discord cog commands were crashing at load time
+## v2.10.2 — Discord cog commands were crashing at load time
 
 Building a comprehensive, modular test bot (6 files: moderation, fun,
 utility, server management, welcome/automod, logging — each a
@@ -71,6 +71,8 @@ an unchanged declared version. 9 new tests (unit-level on
 an existing project, `cruhon cache --clear` (or delete `.cruhon_cache/`)
 clears it immediately; this fix prevents it from recurring.
 
+## v2.10.3 (current) — `cruhon install`, and `cruhon check` never loaded mods
+
 ### `cruhon check` never loaded mods at all
 
 Found while converting a test bot to slash commands: `cruhon check
@@ -94,6 +96,43 @@ fresh `cruhon check` invocation and a direct `check_file()` call) so
 they can't be masked by another test having already loaded mods into
 shared process state — confirmed both fail without the fix and pass
 with it. Full suite: 6218-6219 passed on Python 3.10/3.11/3.12.
+
+### New — `cruhon install <source>`, a real package manager
+
+Hand-copying a `mods/` folder into every project (and re-copying it on
+every update, which is exactly what led to the stale-cache bug above)
+doesn't scale. `cruhon install` fetches a mod from PyPI or GitHub with
+one command:
+
+```bash
+cruhon install cruhon-discord              # PyPI
+cruhon install owner/repo                  # GitHub, default branch
+cruhon install owner/repo@v1.2.0           # a specific branch/tag/commit
+cruhon install owner/repo#mods/cruhon-x    # a mod living in a monorepo subdirectory
+```
+
+A source with no `/` is PyPI; anything `owner/repo`-shaped is GitHub
+(optionally `github:`/`gh:`-prefixed). Every install is validated
+before anything lands in the project — the fetched thing must contain
+a real `mod.json` (name + version required) and, if it declares a
+`cruhon` version constraint, the running Cruhon must satisfy it (same
+check `load_mod_from_path()` already used for hand-copied mods).
+Nothing partial is left behind on a failed install. GitHub installs
+land in `<project>/mods/<mod-name>/`, exactly where a hand-copied mod
+would go; PyPI installs are picked up automatically by the existing
+`load_pip_mods()` mechanism once pip has installed the package.
+
+`cruhon install` deliberately never passes `--break-system-packages`
+to pip — overriding a system Python's PEP 668 protection is the user's
+call to make, not a tool's to make silently on their behalf.
+
+25 new tests: GitHub-fetching logic (archive extraction, monorepo
+subpath resolution, ambiguous-repo detection, manifest validation,
+reinstall-overwrites-existing) runs for real against in-memory zip
+archives with the network layer mocked; the PyPI path runs against a
+real local package installed via a real `pip install -e`, so pip
+invocation, importlib metadata reading, and manifest validation all
+run for real too.
 
 ## v2.10.1 — CI green, Python 3.10 compatibility, real-bot fixes
 
