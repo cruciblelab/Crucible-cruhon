@@ -713,6 +713,7 @@ def check_file(path: str | Path, rich: bool = False) -> list[str]:
 
     source = path.read_text(encoding="utf-8")
     errors = []
+    load_all_mods(_find_project_dir(path))
 
     try:
         ast = parse(source)

@@ -204,3 +204,99 @@ class TestDocsCommand:
             plugin = "does_not_exist_xyz"
         with pytest.raises(SystemExit):
             cli.cmd_docs(A())
+
+
+# ─────────────────────────────────────────────────────────────
+# check_file — must load local mods, same as build_file/run_file
+# ─────────────────────────────────────────────────────────────
+#
+# check_file() was missing the load_all_mods(_find_project_dir(path))
+# call that build_file() (right above it in runner.py) already had —
+# `cruhon check` silently never loaded any mods at all. Namespaced
+# calls like @discord.setup[...] happened to still parse (Cruhon's
+# generic @namespace.method[...] syntax doesn't require the namespace
+# to be registered just to parse), which is why this went unnoticed
+# for so long, but a mod's own bare, non-namespaced one-liner commands
+# (like cruhon-discord's @param[...]/@choice[...] used inside
+# @discord.slash[...] blocks) failed with "Unknown command" — while
+# `cruhon run`/`cruhon build` on the exact same file worked fine.
+#
+# Run as a real subprocess (not an in-process call) so this can't be
+# masked by some earlier test in the same pytest run having already
+# loaded mods into shared process-global state.
+
+class TestCheckFileLoadsLocalMods:
+    def _make_project(self, tmp_path):
+        mod_dir = tmp_path / "mods" / "greetmod"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "mod.json").write_text(
+            '{"name": "greetmod", "version": "1.0.0", "namespace": "greet"}',
+            encoding="utf-8",
+        )
+        (mod_dir / "__init__.py").write_text(
+            "from cruhon.core.ast_nodes import PluginBlockNode\n"
+            "\n"
+            "def _parse_greet(parser):\n"
+            "    line = parser.current.line\n"
+            "    parser.advance()\n"
+            "    args, kwargs = parser.parse_named_args()\n"
+            "    return PluginBlockNode(plugin_name='_greet', args=args, kwargs=kwargs, body=[], line=line)\n"
+            "\n"
+            "def _visit_greet(transpiler, node):\n"
+            "    name = node.args[0] if node.args else '\"World\"'\n"
+            "    return '    ' * transpiler._indent + f'print(\"Hello, \" + str({name}))'\n"
+            "\n"
+            "def register(api):\n"
+            "    api.command('greet', _parse_greet, _visit_greet)\n",
+            encoding="utf-8",
+        )
+        src = tmp_path / "main.clpy"
+        # Bare, non-namespaced command — only recognized if greetmod was
+        # actually loaded, same class of command as @param inside a
+        # cruhon-discord @discord.slash[...] block.
+        src.write_text('@greet["Test"]\n', encoding="utf-8")
+        return src
+
+    def test_check_subcommand_loads_local_mods(self, tmp_path):
+        import subprocess
+        import sys as _sys
+
+        src = self._make_project(tmp_path)
+        result = subprocess.run(
+            [_sys.executable, "-m", "cruhon.cli", "check", str(src)],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+        assert "Unknown command" not in result.stdout
+
+    def test_check_file_function_loads_local_mods(self, tmp_path):
+        # Same check via check_file() directly, run in a subprocess so
+        # process-global mod state from other tests can't mask a
+        # regression here.
+        import subprocess
+        import sys as _sys
+
+        src = self._make_project(tmp_path)
+        code = (
+            "import sys; sys.path.insert(0, %r)\n"
+            "from cruhon.core.runner import check_file\n"
+            "errors = check_file(%r)\n"
+            "assert errors == [], errors\n"
+            "print('OK')\n"
+        ) % (str(Path(__file__).parent.parent.parent), str(src))
+        result = subprocess.run(
+            [_sys.executable, "-c", code],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+        assert "OK" in result.stdout

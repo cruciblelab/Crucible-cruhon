@@ -71,6 +71,30 @@ an unchanged declared version. 9 new tests (unit-level on
 an existing project, `cruhon cache --clear` (or delete `.cruhon_cache/`)
 clears it immediately; this fix prevents it from recurring.
 
+### `cruhon check` never loaded mods at all
+
+Found while converting a test bot to slash commands: `cruhon check
+main.clpy` failed with `Unknown command: @param` on a file that
+`cruhon run`/`cruhon build` transpiled and ran without any issue.
+Root cause: `check_file()` (`cruhon/core/runner.py`) was missing the
+`load_all_mods(_find_project_dir(path))` call that `build_file()` —
+its near-identical neighbor, three lines above it in the same file —
+already had. `cruhon check` had never loaded a single mod, for any
+project, ever. This mostly went unnoticed because Cruhon's generic
+`@namespace.method[...]` call syntax parses fine without its namespace
+being registered (only `transpile` would fail on an unregistered
+method, not `parse`) — but a mod's own bare, non-namespaced one-liner
+commands, like `cruhon-discord`'s `@param[...]`/`@choice[...]` used
+inside `@discord.slash[...]` blocks, aren't namespaced calls and
+failed immediately at parse time.
+
+**Fix:** added the missing `load_all_mods()` call, matching
+`build_file()`. 2 new regression tests, run as real subprocesses (a
+fresh `cruhon check` invocation and a direct `check_file()` call) so
+they can't be masked by another test having already loaded mods into
+shared process state — confirmed both fail without the fix and pass
+with it. Full suite: 6218-6219 passed on Python 3.10/3.11/3.12.
+
 ## v2.10.1 — CI green, Python 3.10 compatibility, real-bot fixes
 
 The 2.10.0 release commits were pushed without anyone checking the GitHub
