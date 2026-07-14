@@ -424,18 +424,18 @@ class TestArchiveNew:
 # ════════════════════════════════════════════════════════════
 
 class TestHttpNew:
-    def test_elapsed_attribute(self):
+    def test_elapsed_attribute(self, local_httpbin):
         import requests
-        r = requests.get("https://httpbin.org/get", timeout=10)
+        r = requests.get(f"{local_httpbin}/get", timeout=10)
         code = transpile(parse('@var[__r__; @http.elapsed[__res__]]'))
         ns = {"__res__": r}
         exec(compile(code, "<t>", "exec"), ns)
         assert isinstance(ns["__r__"], float)
         assert ns["__r__"] >= 0
 
-    def test_encoding_attribute(self):
+    def test_encoding_attribute(self, local_httpbin):
         import requests
-        r = requests.get("https://httpbin.org/get", timeout=10)
+        r = requests.get(f"{local_httpbin}/get", timeout=10)
         code = transpile(parse('@var[__r__; @http.encoding[__res__]]'))
         ns = {"__res__": r}
         exec(compile(code, "<t>", "exec"), ns)

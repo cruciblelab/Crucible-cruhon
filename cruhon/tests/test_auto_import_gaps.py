@@ -25,26 +25,26 @@ from cruhon.core.runner import run_source
 
 
 class TestHttpAutoImport:
-    def test_inline_get_executes(self):
+    def test_inline_get_executes(self, local_httpbin):
         """@var[r; @http.get[...]] — the overwhelmingly common inline
         usage pattern — must not raise NameError: name 'requests'."""
-        g = _run('@var[r; @http.get["https://httpbin.org/get"]]\n'
+        g = _run(f'@var[r; @http.get["{local_httpbin}/get"]]\n'
                   '@var[s; @http.status[r]]\n'
                   '@var[ok; @http.ok[r]]')
         assert g["s"] == 200
         assert g["ok"] is True
 
-    def test_bare_statement_executes(self):
+    def test_bare_statement_executes(self, local_httpbin):
         """@http.get[...] as a bare top-level statement (not inside @var)."""
-        _run('@http.get["https://httpbin.org/get"]')
+        _run(f'@http.get["{local_httpbin}/get"]')
 
-    def test_post_executes(self):
-        g = _run('@var[r; @http.post["https://httpbin.org/post"; {"a": 1}]]\n'
+    def test_post_executes(self, local_httpbin):
+        g = _run(f'@var[r; @http.post["{local_httpbin}/post"; {{"a": 1}}]]\n'
                   '@var[s; @http.status[r]]')
         assert g["s"] == 200
 
-    def test_json_body_roundtrips(self):
-        g = _run('@var[r; @http.get["https://httpbin.org/get"]]\n'
+    def test_json_body_roundtrips(self, local_httpbin):
+        g = _run(f'@var[r; @http.get["{local_httpbin}/get"]]\n'
                   '@var[body; @http.json[r]]')
         assert isinstance(g["body"], dict)
 
