@@ -445,7 +445,8 @@ def run_source(
             _cache_dir = _src_path.parent / ".cruhon_cache"
 
             _mod_fp = "|".join(
-                f"{e['name']}:{e.get('version', '')}"
+                f"{e['name']}:{e.get('version', '')}:"
+                f"{_cache.mod_dir_fingerprint(e.get('source_path', ''))}"
                 for e in sorted(get_load_order(), key=lambda e: e["name"])
             )
             _cache_key = _cache.build_key(source, base_dir, _cruhon_ver, _mod_fp)

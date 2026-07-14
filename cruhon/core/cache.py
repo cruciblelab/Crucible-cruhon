@@ -125,6 +125,43 @@ def _engine_fingerprint() -> str:
     return h
 
 
+def mod_dir_fingerprint(source_path: str) -> str:
+    """
+    Cheap fingerprint of one mod's own source directory — same
+    (path, size, mtime_ns) approach as _engine_fingerprint(), applied
+    per mod instead of once for the whole engine.
+
+    Without this, the mod fingerprint in build_key() was just
+    "name:version", so editing a LOCAL mod's code (the normal
+    edit-reload loop while developing a plugin) without also bumping
+    mod.json's version field left every cache key identical across a
+    real behavior change — a script's cache would silently keep
+    serving stale, pre-fix bytecode indefinitely, exactly the same
+    failure mode _engine_fingerprint() exists to prevent for the core
+    engine, just never extended to mods. Not memoized (unlike
+    _engine_fingerprint): mods can differ across separate `cruhon run`
+    invocations in the same session in a way the core engine can't.
+    """
+    if not source_path:
+        return ""
+    base = Path(source_path)
+    if not base.exists():
+        return ""
+    if base.is_file():
+        base = base.parent
+    parts = []
+    try:
+        for p in sorted(base.rglob("*.py")):
+            try:
+                st = p.stat()
+                parts.append(f"{p.relative_to(base)}:{st.st_size}:{st.st_mtime_ns}")
+            except OSError:
+                parts.append(str(p))
+    except OSError:
+        pass
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
 # ─────────────────────────────────────────────────────────────
 # KEY BUILDING
 # ─────────────────────────────────────────────────────────────

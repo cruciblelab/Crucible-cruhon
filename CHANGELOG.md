@@ -45,6 +45,32 @@ installed — the same bar that caught the bug in the first place, not
 just a `compile()` check. Full suite: 6210-6211 passed on Python
 3.10/3.11/3.12.
 
+### Transpile cache — local mod edits were silently ignored
+
+Real-world consequence of the bug above: after fixing `_render_cog_method`
+and handing the user an updated `mods/cruhon-discord/` copy, their bot
+still failed to respond to any command — not because the fix was
+wrong, but because their project's `.cruhon_cache/` kept serving
+bytecode compiled from the *old*, pre-fix plugin. The cache key's mod
+fingerprint was just `"name:version"` (`cruhon/core/runner.py`); a
+local mod's `mod.json` version field doesn't change just because its
+`.py` source was edited — the normal edit-reload loop of developing or
+updating a plugin — so the cache key stayed identical across a real
+behavior change and the stale cache never invalidated. This is exactly
+the failure mode `cache.py`'s `_engine_fingerprint()` already exists to
+prevent for the *core* engine (a rebuilt wheel without a version bump);
+it just never got extended to mods.
+
+**Fix:** added `cache.mod_dir_fingerprint()` — the same cheap
+`(path, size, mtime_ns)` approach as `_engine_fingerprint()`, applied
+per mod's own source directory — and folded it into the mod fingerprint
+string in `runner.py` alongside name:version. Editing a local mod's
+code now invalidates every cache entry that depends on it, even with
+an unchanged declared version. 9 new tests (unit-level on
+`mod_dir_fingerprint()` and `build_key()`). If you're hitting this on
+an existing project, `cruhon cache --clear` (or delete `.cruhon_cache/`)
+clears it immediately; this fix prevents it from recurring.
+
 ## v2.10.1 — CI green, Python 3.10 compatibility, real-bot fixes
 
 The 2.10.0 release commits were pushed without anyone checking the GitHub

@@ -53,6 +53,31 @@ class TestBuildKey:
         k2 = _key(mods="pluginA:1.1", base_dir=tmp_path)
         assert k1 != k2
 
+    def test_local_mod_edit_invalidates_even_with_same_name_and_version(self, tmp_path):
+        # Reproduces a real bug: editing a LOCAL mod's .py source without
+        # bumping mod.json's version left the cache key ("name:version"
+        # only) unchanged, so a cached run silently kept serving
+        # pre-edit bytecode forever — the exact failure mode
+        # _engine_fingerprint() already prevents for the core engine,
+        # just never extended to mods. mod_dir_fingerprint() closes it.
+        # Different byte lengths so the fingerprint (size + mtime_ns)
+        # differs deterministically, independent of filesystem mtime
+        # resolution.
+        mod_dir = tmp_path / "mymod"
+        mod_dir.mkdir()
+        (mod_dir / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+        mods1 = f"mymod:1.0.0:{_cache.mod_dir_fingerprint(str(mod_dir))}"
+        k1 = _key(mods=mods1, base_dir=tmp_path)
+
+        (mod_dir / "__init__.py").write_text("VALUE = 'a much longer string now'\n", encoding="utf-8")
+
+        mods2 = f"mymod:1.0.0:{_cache.mod_dir_fingerprint(str(mod_dir))}"
+        k2 = _key(mods=mods2, base_dir=tmp_path)
+
+        assert mods1 != mods2  # the fingerprint itself must differ
+        assert k1 != k2
+
     def test_dep_change_invalidates(self, tmp_path):
         dep = tmp_path / "utils.clpy"
         dep.write_text("@var[x; 1]", encoding="utf-8")
@@ -68,6 +93,45 @@ class TestBuildKey:
         k = _key(base_dir=tmp_path)
         assert len(k) == 64
         assert all(c in "0123456789abcdef" for c in k)
+
+
+# ── mod_dir_fingerprint ───────────────────────────────────────────────────────
+
+class TestModDirFingerprint:
+    def test_empty_source_path_returns_empty(self):
+        assert _cache.mod_dir_fingerprint("") == ""
+
+    def test_nonexistent_path_returns_empty(self, tmp_path):
+        assert _cache.mod_dir_fingerprint(str(tmp_path / "nope")) == ""
+
+    def test_deterministic_for_unchanged_dir(self, tmp_path):
+        mod_dir = tmp_path / "mymod"
+        mod_dir.mkdir()
+        (mod_dir / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+        f1 = _cache.mod_dir_fingerprint(str(mod_dir))
+        f2 = _cache.mod_dir_fingerprint(str(mod_dir))
+        assert f1 == f2
+
+    def test_content_change_changes_fingerprint(self, tmp_path):
+        mod_dir = tmp_path / "mymod"
+        mod_dir.mkdir()
+        init_py = mod_dir / "__init__.py"
+        init_py.write_text("x = 1\n", encoding="utf-8")
+        f1 = _cache.mod_dir_fingerprint(str(mod_dir))
+
+        init_py.write_text("x = 'a completely different value'\n", encoding="utf-8")
+        f2 = _cache.mod_dir_fingerprint(str(mod_dir))
+
+        assert f1 != f2
+
+    def test_accepts_file_path_not_just_dir(self, tmp_path):
+        # source_path for a local mod is the mod's directory, but this
+        # should degrade gracefully if ever given a file path instead.
+        mod_dir = tmp_path / "mymod"
+        mod_dir.mkdir()
+        init_py = mod_dir / "__init__.py"
+        init_py.write_text("x = 1\n", encoding="utf-8")
+        assert _cache.mod_dir_fingerprint(str(init_py)) == _cache.mod_dir_fingerprint(str(mod_dir))
 
 
 # ── save + try_load ───────────────────────────────────────────────────────────
