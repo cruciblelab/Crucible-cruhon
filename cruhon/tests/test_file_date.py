@@ -61,7 +61,7 @@ class TestFileReadWrite:
 
     def test_write_creates_parent_dirs(self, in_tmp):
         _run('@file.write["deep/nested/a.txt"; "ok"]')
-        assert (in_tmp / "deep" / "nested" / "a.txt").read_text() == "ok"
+        assert (in_tmp / "deep" / "nested" / "a.txt").read_text(encoding="utf-8") == "ok"
 
     def test_utf8_roundtrip(self, in_tmp):
         _run('@file.write["t.txt"; "hello 日本"]')
@@ -75,7 +75,7 @@ class TestFileJson:
 
     def test_write_json_is_pretty(self, in_tmp):
         _run('@file.write_json["d.json"; {"k": 1}]')
-        text = (in_tmp / "d.json").read_text()
+        text = (in_tmp / "d.json").read_text(encoding="utf-8")
         assert "\n" in text  # indent=2 produces newlines
 
 
@@ -101,29 +101,29 @@ class TestFileCopyMoveDelete:
     def test_copy(self, in_tmp):
         (in_tmp / "a.txt").write_text("data")
         _run('@file.copy["a.txt"; "b.txt"]')
-        assert (in_tmp / "b.txt").read_text() == "data"
+        assert (in_tmp / "b.txt").read_text(encoding="utf-8") == "data"
 
     def test_copy_creates_parent(self, in_tmp):
         (in_tmp / "a.txt").write_text("data")
         _run('@file.copy["a.txt"; "out/b.txt"]')
-        assert (in_tmp / "out" / "b.txt").read_text() == "data"
+        assert (in_tmp / "out" / "b.txt").read_text(encoding="utf-8") == "data"
 
     def test_copytree(self, in_tmp):
         (in_tmp / "src").mkdir()
         (in_tmp / "src" / "f.txt").write_text("x")
         _run('@file.copytree["src"; "dst"]')
-        assert (in_tmp / "dst" / "f.txt").read_text() == "x"
+        assert (in_tmp / "dst" / "f.txt").read_text(encoding="utf-8") == "x"
 
     def test_move(self, in_tmp):
         (in_tmp / "a.txt").write_text("data")
         _run('@file.move["a.txt"; "b.txt"]')
         assert not (in_tmp / "a.txt").exists()
-        assert (in_tmp / "b.txt").read_text() == "data"
+        assert (in_tmp / "b.txt").read_text(encoding="utf-8") == "data"
 
     def test_rename(self, in_tmp):
         (in_tmp / "a.txt").write_text("data")
         _run('@file.rename["a.txt"; "b.txt"]')
-        assert (in_tmp / "b.txt").read_text() == "data"
+        assert (in_tmp / "b.txt").read_text(encoding="utf-8") == "data"
 
     def test_delete(self, in_tmp):
         (in_tmp / "a.txt").write_text("data")
@@ -211,7 +211,7 @@ class TestFileAnyPath:
     def test_write_absolute(self, tmp_path):
         p = str(tmp_path / "out.txt")
         _run(f'@file.write["{p}"; "ok"]')
-        assert (tmp_path / "out.txt").read_text() == "ok"
+        assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "ok"
 
 
 # ════════════════════════════════════════════════════════════

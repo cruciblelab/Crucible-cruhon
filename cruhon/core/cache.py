@@ -14,6 +14,10 @@ Cache key:       SHA-256 of:
                    + Cruhon version string
                    + Python version (major.minor)
                    + loaded mod names + versions (sorted)
+                   + core engine fingerprint (path:size:mtime_ns of every
+                     .py file under cruhon/core/) — so a rebuilt/reinstalled
+                     engine invalidates old caches even when __version__
+                     wasn't bumped between builds
 
 Invalidation:    Any change to any of the above inputs → cache miss → re-transpile.
 
@@ -77,6 +81,51 @@ def _scan_deps(source: str, base_dir: Path, visited: set) -> list[Path]:
 
 
 # ─────────────────────────────────────────────────────────────
+# ENGINE FINGERPRINT
+# ─────────────────────────────────────────────────────────────
+
+_engine_fingerprint_cache: Optional[str] = None
+
+
+def _engine_fingerprint() -> str:
+    """
+    Cheap fingerprint of the installed Cruhon core engine itself
+    (transpiler, parser, registry, and every stdlib handler under
+    cruhon/core/libs/) — (path, size, mtime_ns) tuples, not full file
+    hashing, so this stays fast on every cached run.
+
+    Without this, the cache key depended only on the `cruhon_version`
+    string. Rebuilding/reinstalling a wheel without bumping __version__
+    (routine during active development, or if a maintainer forgets to
+    bump it in a release) left the version string identical across a
+    real behavior change — a script's transpile cache would then be
+    silently reused with STALE compiled bytecode from before the fix,
+    even after a fresh `pip install --force-reinstall`. Computed once
+    per process and memoized, since the installed files can't change
+    during a single run's lifetime.
+    """
+    global _engine_fingerprint_cache
+    if _engine_fingerprint_cache is not None:
+        return _engine_fingerprint_cache
+
+    core_dir = Path(__file__).resolve().parent  # cruhon/core/
+    parts = []
+    try:
+        for p in sorted(core_dir.rglob("*.py")):
+            try:
+                st = p.stat()
+                parts.append(f"{p.relative_to(core_dir)}:{st.st_size}:{st.st_mtime_ns}")
+            except OSError:
+                parts.append(str(p))
+    except OSError:
+        pass
+
+    h = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+    _engine_fingerprint_cache = h
+    return h
+
+
+# ─────────────────────────────────────────────────────────────
 # KEY BUILDING
 # ─────────────────────────────────────────────────────────────
 
@@ -116,6 +165,10 @@ def build_key(
 
     # 5. Mod fingerprint
     h.update(mod_fingerprint.encode("utf-8"))
+
+    # 6. Core engine fingerprint — invalidates on any transpiler/parser/
+    # registry/stdlib-handler code change, independent of __version__.
+    h.update(_engine_fingerprint().encode("ascii"))
 
     return h.hexdigest()
 

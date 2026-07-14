@@ -19,7 +19,25 @@ Note: `tomllib` is read-only. Writing TOML requires a third-party package
 """
 from ..registry import register_lib, register_lib_call
 
-_TL = "__import__('tomllib')"
+# tomllib is stdlib only since Python 3.11 — Cruhon supports 3.10+, so on
+# 3.10 fall back to the tomli backport (same pattern as cruhon-config's
+# @config.load for .toml files).
+_SELF = "__import__('cruhon.core.libs.toml_', fromlist=['_x'])"
+_TL = f"{_SELF}._get_tomllib()"
+
+
+def _get_tomllib():
+    try:
+        import tomllib
+        return tomllib
+    except ImportError:
+        try:
+            import tomli
+            return tomli
+        except ImportError:
+            raise ImportError(
+                "[cruhon-toml] TOML support requires Python 3.11+ or 'pip install tomli'"
+            )
 
 
 def register():

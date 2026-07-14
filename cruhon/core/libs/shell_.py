@@ -17,6 +17,20 @@ without knowing Popen, PIPE, or communicate().
   @shell.bg_stdin[cmd]             → Popen with stdin/stdout PIPE (text mode)
   @shell.pipe[cmd1; cmd2]          → stdout of cmd1 piped into cmd2
 
+━━━ SAFE RUN (argv list, no shell=True) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Everything above passes a STRING through the shell (shell=True) — exactly
+  like os.system()/subprocess.run(cmd, shell=True) in plain Python, it
+  interprets metacharacters (;, |, &&, $(...), backticks, ...). Use the
+  argv-list form below whenever part of the command comes from data you
+  don't fully trust — a filename from @input, a value from an HTTP
+  response, etc. — since it never invokes a shell at all.
+  @shell.exec[argv]                → CompletedProcess, e.g. @shell.exec[["ls"; "-la"]]
+  @shell.exec[argv; cwd=; env=; timeout=]
+  @shell.exec_output[argv]         → stdout string (raises on error)
+  @shell.exec_code[argv]           → exit code int
+  @shell.exec_ok[argv]             → bool (exit code == 0)
+  @shell.exec_bg[argv]             → Popen handle (non-blocking)
+
 ━━━ PROCESS CONTROL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   @shell.kill[proc]                — proc.kill()
   @shell.terminate[proc]           — proc.terminate()
@@ -93,6 +107,27 @@ def register():
 
     register_lib_call("shell", "bg_stdin",
         lambda a: f"{_SP}.Popen({a[0]}, shell=True, stdin={_SP}.PIPE, stdout={_SP}.PIPE, text=True)")
+
+    # ── SAFE (no shell=True) — takes an argv list, never interprets shell
+    # metacharacters. Use these instead of @shell.run/output/bg whenever any
+    # part of the command is built from data you don't fully trust (a
+    # filename from user @input, a value from an HTTP response, etc.) —
+    # shell=True string commands are vulnerable to injection the same way
+    # os.system()/subprocess.run(cmd, shell=True) are in plain Python.
+    register_lib_call("shell", "exec",
+        lambda a: f"{_SP}.run({a[0]}, capture_output=True, text=True{', ' + ', '.join(a[1:]) if len(a)>1 else ''})")
+
+    register_lib_call("shell", "exec_output",
+        lambda a: f"{_SP}.check_output({a[0]}, text=True{', ' + ', '.join(a[1:]) if len(a)>1 else ''}).strip()")
+
+    register_lib_call("shell", "exec_code",
+        lambda a: f"{_SP}.run({a[0]}, capture_output=True).returncode")
+
+    register_lib_call("shell", "exec_ok",
+        lambda a: f"({_SP}.run({a[0]}, capture_output=True).returncode == 0)")
+
+    register_lib_call("shell", "exec_bg",
+        lambda a: f"{_SP}.Popen({a[0]})")
 
     register_lib_call("shell", "pipe",
         lambda a: _pipe_cmd(a[0], a[1]))

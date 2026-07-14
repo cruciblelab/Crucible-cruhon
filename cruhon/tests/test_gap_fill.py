@@ -60,7 +60,7 @@ class TestFileNew:
         (in_tmp / "orig.txt").write_text("original")
         _run('@file.symlink["orig.txt"; "link.txt"]')
         assert _eval('@file.is_link["link.txt"]') is True
-        assert (in_tmp / "link.txt").read_text() == "original"
+        assert (in_tmp / "link.txt").read_text(encoding="utf-8") == "original"
 
     def test_is_link_false(self, in_tmp):
         (in_tmp / "plain.txt").write_text("x")
@@ -96,7 +96,7 @@ class TestFileNew:
     def test_hardlink(self, in_tmp):
         (in_tmp / "hl_orig.txt").write_text("linked")
         _run('@file.hardlink["hl_orig.txt"; "hl_link.txt"]')
-        assert (in_tmp / "hl_link.txt").read_text() == "linked"
+        assert (in_tmp / "hl_link.txt").read_text(encoding="utf-8") == "linked"
 
 
 # ════════════════════════════════════════════════════════════
@@ -409,14 +409,14 @@ class TestArchiveNew:
         _run('@archive.bzip2["orig.txt"; "orig.txt.bz2"]')
         assert (in_tmp / "orig.txt.bz2").exists()
         _run('@archive.bunzip2["orig.txt.bz2"; "restored.txt"]')
-        assert (in_tmp / "restored.txt").read_text() == "bzip2 content here"
+        assert (in_tmp / "restored.txt").read_text(encoding="utf-8") == "bzip2 content here"
 
     def test_lzma_unlzma_roundtrip(self, in_tmp):
         (in_tmp / "lz.txt").write_text("lzma content here")
         _run('@archive.lzma["lz.txt"; "lz.txt.xz"]')
         assert (in_tmp / "lz.txt.xz").exists()
         _run('@archive.unlzma["lz.txt.xz"; "lz_out.txt"]')
-        assert (in_tmp / "lz_out.txt").read_text() == "lzma content here"
+        assert (in_tmp / "lz_out.txt").read_text(encoding="utf-8") == "lzma content here"
 
 
 # ════════════════════════════════════════════════════════════
@@ -424,18 +424,18 @@ class TestArchiveNew:
 # ════════════════════════════════════════════════════════════
 
 class TestHttpNew:
-    def test_elapsed_attribute(self):
+    def test_elapsed_attribute(self, local_httpbin):
         import requests
-        r = requests.get("https://httpbin.org/get", timeout=10)
+        r = requests.get(f"{local_httpbin}/get", timeout=10)
         code = transpile(parse('@var[__r__; @http.elapsed[__res__]]'))
         ns = {"__res__": r}
         exec(compile(code, "<t>", "exec"), ns)
         assert isinstance(ns["__r__"], float)
         assert ns["__r__"] >= 0
 
-    def test_encoding_attribute(self):
+    def test_encoding_attribute(self, local_httpbin):
         import requests
-        r = requests.get("https://httpbin.org/get", timeout=10)
+        r = requests.get(f"{local_httpbin}/get", timeout=10)
         code = transpile(parse('@var[__r__; @http.encoding[__res__]]'))
         ns = {"__res__": r}
         exec(compile(code, "<t>", "exec"), ns)

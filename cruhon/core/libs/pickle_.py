@@ -62,7 +62,13 @@ def register():
 
     register_lib_call("pickle", "save_gz",
         lambda a: (
-            f"(lambda _p, _o: __import__('gzip').open(_p, 'wb').write(__import__('pickle').dumps(_o)))({a[0]}, {a[1]})"
+            # gzip.open(...).write(...) without an explicit close() leaves
+            # the CRC32/size trailer unflushed until GC finalizes the
+            # GzipFile — timing that isn't guaranteed across Python
+            # versions, so a load_gz right after can read a truncated
+            # file ("EOFError: Ran out of input"). Close explicitly.
+            f"(lambda _p, _o: (lambda _f: (_f.write(__import__('pickle').dumps(_o)), _f.close()))"
+            f"(__import__('gzip').open(_p, 'wb')))({a[0]}, {a[1]})"
         ))
 
     register_lib_call("pickle", "load_gz",

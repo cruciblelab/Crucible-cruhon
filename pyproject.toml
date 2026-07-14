@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cruhon"
-version = "2.10.0"
+version = "2.10.1"
 description = "A modern, extensible scripting language built on Python — by CrucibleLab"
 readme = "README.md"
 license = { text = "MIT" }
@@ -22,9 +22,12 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 
-# No core dependencies — the user must have the relevant
-# library installed when using @import
-dependencies = []
+# No core dependencies for @import-based features — the user must have
+# the relevant library installed for those. tomli is the one exception:
+# @toml.* is a built-in, no-@import-needed namespace, but it wraps
+# tomllib, which is stdlib only since Python 3.11 — on 3.10 it needs the
+# tomli backport to work at all.
+dependencies = ["tomli>=2.0; python_version < '3.11'"]
 
 [project.optional-dependencies]
 # Optional — for common library integrations

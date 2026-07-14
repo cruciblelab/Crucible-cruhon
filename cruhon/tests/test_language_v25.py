@@ -370,7 +370,7 @@ class TestCliBundle:
         cmd_bundle(args)
 
         assert out.exists()
-        content = out.read_text()
+        content = out.read_text(encoding="utf-8")
         assert "__ctx__" in content
         assert "42" in content
 
@@ -385,7 +385,7 @@ class TestCliBundle:
         cmd_bundle(args)
 
         ns = {}
-        exec(compile(out.read_text(), str(out), "exec"), ns)
+        exec(compile(out.read_text(encoding="utf-8"), str(out), "exec"), ns)
         assert ns.get("result") == 42
 
 

@@ -4,7 +4,339 @@ All notable changes are documented here.
 
 ---
 
-## v2.10.0 (current) — Config & Secrets, Env-aware DB, Live Panel
+## v2.10.1 (current) — CI green, Python 3.10 compatibility, real-bot fixes
+
+The 2.10.0 release commits were pushed without anyone checking the GitHub
+Actions tab — CI had been failing on every single push since the Tests
+workflow was added, for four unrelated reasons. All fixed and verified
+directly against Python 3.10/3.11/3.12 interpreters (not just this
+sandbox's default), plus the actual sdist+wheel build and `twine check`
+steps CI runs.
+
+**Test suite: locale-dependent UnicodeDecodeError.** `cruhon bundle`
+writes its output with `encoding="utf-8"` (its header comment has an
+em dash), but two tests read it back with a bare `.read_text()` — no
+encoding, so it falls back to the platform's locale-preferred encoding,
+which is ASCII on the GitHub Actions runner. Fixed those two tests, then
+swept the whole suite for the same latent pattern (bare `.read_text()`
+with no explicit encoding) and pinned all of them to `encoding="utf-8"`.
+Verified against the exact CI failure by reproducing it locally with
+`LC_ALL=C LANG=C PYTHONUTF8=0`.
+
+**`@toml.*` was broken on Python 3.10.** `tomllib` is stdlib only since
+Python 3.11 — Cruhon's `pyproject.toml` claims `requires-python = ">=3.10"`,
+but every `@toml.*`/`@toml_load` call unconditionally did
+`__import__('tomllib')`, so anything using it crashed with
+`ModuleNotFoundError` on 3.10. Added a `_get_tomllib()` fallback (tomllib
+→ tomli backport, same pattern `@config.load` already used for `.toml`
+files) in both `cruhon/core/libs/toml_.py` and the duplicate `_TL`
+constant in `cruhon-shortcuts-data/data_format.py`'s `@toml.flatten`.
+Declared `tomli>=2.0; python_version < "3.11"` as a real dependency in
+`pyproject.toml` so it installs automatically where it's needed.
+
+**`@pickle.save_gz` could write a truncated file.** It did
+`gzip.open(path, 'wb').write(data)` with no explicit `.close()` — gzip's
+CRC32/size trailer is only written on close, and relying on GC
+finalization timing to call it is not guaranteed across Python versions.
+On Python 3.12 a `@pickle.load_gz` immediately after a `@pickle.save_gz`
+could read a file missing its trailer and fail with `EOFError: Ran out
+of input`. Fixed by closing the GzipFile explicitly.
+
+**A test used a Python-3.10-specific interpreter quirk as its example.**
+`TestRunpy::test_module_ns` used `@runpy.module_ns["os.path"]` — on
+Python 3.10, `os.path` is aliased to `posixpath`/`ntpath` internally, and
+`runpy.run_module` chokes on that aliasing with `ImportError: loader for
+posixpath cannot handle os.path`. This is a genuine CPython 3.10 quirk
+unrelated to Cruhon's `@runpy.*` wrapper (which just calls
+`runpy.run_module` correctly) — switched the test to `urllib.parse`,
+a plain dotted submodule that exercises the same code path without the
+aliasing issue.
+
+Also includes the Discord plugin fixes below (interpolation, variable
+passthrough, typed prefix-command params), found and fixed by building
+and live-testing a real Discord bot. Full suite verified at 6204-6205
+passed (count varies slightly by Python version due to environment-gated
+skips) on 3.10, 3.11, and 3.12, plus a clean `python -m build` +
+`twine check`.
+
+## v2.10.0 — Config & Secrets, Env-aware DB, Live Panel
+
+### Discord plugin — typed prefix-command params (live-bot bug)
+
+Running the demo bot above against a real Discord server surfaced a
+second real bug: `@discord.command[ban; ctx; member]`'s extra params
+(`member`, `count`, `minutes`, ...) had no way to be typed, so
+discord.py always passed them as the raw text the user typed —
+`!ban @someone` gave `member` the literal mention *string*, never a
+resolved `discord.Member`. `member.ban()` then crashed with
+`AttributeError: 'str' object has no attribute 'ban'`, silently, since
+nothing was listening for `on_command_error` — the command author saw
+nothing happen in Discord at all, only a traceback in the bot's own
+console. Same failure mode for `!purge <count>` (`channel.purge(limit="10")`)
+and `!timeoutuser <member> <minutes>` (`timedelta(minutes="5")`).
+
+**Fix:** extra params on `@discord.command`/`@discord.hybrid` now accept
+`name:type` (reusing the same type names as slash `@param[...]` — member,
+user, int, float, bool, channel, role, ...), e.g.
+`@discord.command[ban; ctx; member:member]` → `async def ban(ctx, member:
+discord.Member):`, letting discord.py resolve/convert before the command
+body runs. Untyped params are unchanged (still plain strings). Also added
+a global `@discord.on[error; ctx; error]` handler to the demo bot so
+future command failures reply in Discord instead of vanishing into the
+console, and exempted anyone with Manage Messages from the profanity
+filter (it was deleting moderators' own messages during testing). 8 new
+regression tests (`TestTypedPrefixParams`). Full suite: 6204 passed.
+
+### Discord plugin hardening — `{}` interpolation and variable passthrough
+
+Built a real Discord bot in Cruhon (webhooks, roles, channel management,
+a profanity filter, native AutoMod, moderation commands) to dogfood
+`cruhon-discord`, then inspected the transpiled Python by eye line by
+line — no `discord.py`/network access in this environment, so this was
+verified as far as "generates correct Python," not "runs against a real
+Discord server." Inspection surfaced that the plugin's own text-argument
+helper, `_as_str()`, was far weaker than core's value-evaluation engine:
+it never upgraded a quoted string containing `{}` to an f-string, and it
+`repr()`-wrapped every bare (unquoted) argument regardless of whether it
+was meant as literal display text or as a reference to the caller's own
+variable.
+
+**`{}` interpolation was silently dropped everywhere.** `@discord.reply`,
+`send`, `dm`, `respond`, `followup`, `edit`, `log`, `send_tts`,
+`respond_ephemeral`, `send_webhook`, `confirm`, `status`, and every embed
+field (`title`, `description`, `add_field`, `set_footer`, `set_image`,
+`set_thumbnail`, `set_author`) took their text argument as raw source
+text — `"Banned by {ctx.author}"` came out as the literal string
+`"Banned by {ctx.author}"`, never an f-string. This is the single
+highest-impact bug found in the plugin, since almost every real bot
+reply needs dynamic content.
+
+**Bare variable arguments were stringified into their own name.**
+`@discord.create_webhook[ctx.channel; name]` produced `name='name'`
+instead of `name=name` — any unquoted argument was always `repr()`-
+wrapped, with no way to tell "the user typed a bare word as literal
+text" from "the user typed an identifier meaning a variable." Same bug
+in `create_role`'s `name`, `get_role`/`find_member`'s lookup `name`,
+`nickname`'s `nick`, and the `reason=` kwargs on `ban`/`kick`/`unban`.
+
+**`@discord.color[a_variable]` called a nonexistent method** —
+`discord.Color.hex_color()` — because any identifier-shaped argument was
+treated as a named-color shortcut (correct for `@discord.color[red]`,
+wrong for a variable that merely happens to also be a valid identifier).
+Fixed with a fixed 36-name `_COLOR_NAMES` set for genuine shortcuts, plus
+a new runtime helper `__discord_color__` that resolves a variable's
+actual value (hex string / int / named-color string / already a
+`discord.Color`) at bot runtime, since the transpiler can't know the
+type at compile time.
+
+**Fix:** rewrote `_as_str()` to (1) upgrade `"quoted {text}"` to an
+f-string when it contains braces, and (2) detect real Python-expression
+arguments — via `ast.parse(arg, mode="eval")`, so arbitrarily nested
+expressions like `str(ctx.guild.created_at.date())` or
+`any(w in content for w in banned_words)` pass through correctly, not
+just simple `a.b.c` chains — and only fall back to `repr()` for genuine
+non-coder prose that isn't valid Python. Wired all ~30 affected handlers
+to route their text arguments through the fixed helper. One call site
+(`@choice[Label=value]` inside `@discord.slash`) intentionally keeps
+`repr()` directly instead, since a choice label is always literal text
+by the DSL's own grammar, never a variable reference. Added 22
+regression tests (`TestTextArgHardening`) covering interpolation across
+every affected handler, variable passthrough for webhook/role/channel
+names, the color-from-variable runtime path, and the literal-text
+fallback. Full suite: 6196 passed, 0 regressions.
+
+### Second hardening pass — duplicates, security, coverage, performance
+
+A broader sweep beyond the doc/registry audit above: conflicting
+registrations, a missing safe subprocess path, untested namespaces, and
+scaling checks.
+
+**Duplicate/conflicting registration scan.** Statically found every
+`register_lib_call`/`api.lib_call` call site across core + all `mods/`
+and grouped by `(namespace, method)`. 19 keys are registered from more
+than one file. Reviewed each: `@math.*` (18 keys) legitimately duplicates
+between core and `cruhon-shortcuts-pro`'s `pro_math.py` — functionally
+equivalent, and mods overriding core is the plugin system working
+exactly as designed (documented load order: core → pip mods → local
+mods), not a bug. `@collections.deque_rotate`/`@csv.headers`/
+`@file.line_count` diverge slightly (a plugin's version is more
+defensive about edge cases) — also fine, same reasoning. No fix needed;
+noted for awareness.
+
+**No safe way to run a subprocess without `shell=True`.** Every
+`@shell.*` command (`run`, `output`, `lines`, `code`, `ok`, `bg`,
+`bg_stdin`) passed a string through `subprocess.run(cmd, shell=True,
+...)` — exactly the same shell-metacharacter injection surface as
+`os.system()` in plain Python, with no argv-list alternative. A script
+author who wanted to safely run a command built from partially-untrusted
+data (a filename from `@input`, a value from an HTTP response) had to
+drop to `@raw` + `import subprocess` — contradicting the project's own
+"nothing should need `@raw` to escape into real Python" goal. Added
+`@shell.exec[argv]`/`exec_output`/`exec_code`/`exec_ok`/`exec_bg` — the
+same five operations, but taking an argv list and never invoking a
+shell. Verified the actual safety difference with a real injection
+payload: the same string interpreted by `@shell.output` (two lines of
+output, `&&` ran a second command) stays one inert, literal argument
+under `@shell.exec_output`.
+
+**Security spot-checks that came back clean** (worth recording, not
+just silence): `@db.query[sql; params...]` correctly uses parameterized
+placeholders — an injection payload passed as a bound parameter matches
+zero rows rather than altering the query. Cruhon's own "quoted string
+containing `{}` → f-string" behavior only ever applies to literal source
+text the script author wrote, never to runtime data that happens to
+contain brace characters — external/untrusted values can't retroactively
+become executable code through that path. No `os.system`/`os.popen`/
+`shell=True` found outside `@shell.*`'s own (now-optional) string-command
+path.
+
+**Coverage audit: which namespaces had zero execution tests?** Five —
+`@contextlib.*`, `@dataclasses.*`, `@enum.*`, `@env.*`, `@typing.*` (71
+methods, previously exercised only by the generic compile-only safety
+net, never actually run). Writing real tests for all five surfaced one
+more bug: `@enum.Enum["Color"; "RED GREEN BLUE"]` silently discarded
+both arguments and returned the bare `enum.Enum` class — Python's own
+`Enum` behaves differently when *called* with args (constructs a new
+enum) vs. referenced bare (the type itself), and Cruhon only implemented
+the bare-reference half, so passing args produced no error at the call
+site, only a confusing `AttributeError` far downstream at first member
+access. Fixed `Enum`/`IntEnum`/`StrEnum`/`Flag`/`IntFlag` to match
+Python's dual behavior. Also confirmed (documented in README) that inline
+`@command[...]` calls cannot be embedded inside a nested Python
+expression like a list comprehension — the same class of limitation as
+the existing `{}`-interpolation restriction, not new, just previously
+undocumented for this shape.
+
+**Performance:** confirmed parse+transpile scales near-linearly (not
+quadratically) from 250 to 4000 statements (~2x time per 2x size at
+every step). The new engine fingerprint (previous entry) costs ~3ms
+once per process, ~0 after memoization — not a meaningful regression.
+
+Tests: `test_shell_safe_exec.py` (7), `test_previously_untested_namespaces.py`
+(17). Full suite: 6169 passing, 10 skipped, 0 regressions.
+
+### Engine-wide hardening pass
+
+A systematic audit of the whole core — not reactive one-bug-at-a-time
+fixes — triggered by a real bug report. Two mechanical, whole-registry
+scans plus what they turned up:
+
+**Scan 1 — bare unimported module references** (the `@http`/`@json`/`@os`
+bug class from the previous entry below). Every one of the then-1873
+registered handlers was invoked with dummy args, its generated code
+parsed with `ast`, and checked for any bare `Name.attr` pattern matching
+a stdlib module name outside an `__import__(...)` call. Result: **zero**
+further instances in the core registry (verified the detector itself
+first against known-bad code to rule out a silently-broken scanner).
+
+**Scan 2 — documentation vs. reality.** Cross-checked every method name
+listed in library.md's `@ns.*` tables against the actual registry.
+Result: **456 method names across 75+ namespaces did not exist** —
+`@os.*` documented 14 methods, only 2 (`env`, `path`) were real;
+`@sys.*`, `@signal.*`, `@resource.*` documented entirely different method
+*names* than what was ever registered; `@httpx.*` and `@pathlib.*` were
+100% fabricated (zero real handlers under either namespace, despite full
+highlighted rows in both README and library.md).
+
+Fixed by:
+- Regenerating every method-list cell in library.md programmatically
+  from the registry (133 rows rewritten) — now provably accurate.
+- Implementing the highest-value real gaps instead of just deleting
+  claims: **34 `@math.*` methods** (`clamp`, `lerp`, `sign`, `hypot`,
+  `dist`, `gcd`, `lcm`, `factorial`, `comb`, `perm`, `prod`, `degrees`,
+  `radians`, `log2`, `log10`, `exp`, full trig, `isclose`/`isfinite`/
+  `isinf`/`isnan`, `e`/`tau`/`inf`/`nan`, `min`/`max`/`sum`), plus
+  `@store.clear[]` and `@color.dim[...]`.
+- Removing `@httpx.*`/`@pathlib.*` from the docs entirely (zero real
+  functionality existed to preserve) with a pointer to their real
+  equivalents — async HTTP is `@http.async_*` (already httpx-backed),
+  path ops are `@file.*`.
+- A **permanent regression test** (`test_docs_match_registry.py`) that
+  parses library.md the same way and generates one pytest case per
+  documented method (2011 cases) — this class of silent doc/reality
+  drift can never reappear without CI catching it immediately.
+
+**A severe bug in `cruhon-shortcuts`** (the headline, README-recommended
+shortcut plugin) surfaced while testing the fixes above: its "data"
+group registered `@store.all`/`@store.keys`/`@store.values`/`@store.has`
+against `cruhon.core.libs.store_._STORE` — an attribute that has never
+existed (`@store.*` is backed by a JSON file via injected
+`__cruhon_store_*` helpers, never an in-memory `_STORE` dict). Any real
+user who loaded `cruhon-shortcuts` had these four calls raise
+`AttributeError` on every use, and the plugin's `all` override silently
+replaced (and broke) the otherwise-correct core handler. Fixed to use
+the real `__cruhon_store_load()` helper.
+
+**`@store.*` had the same inline-call auto-injection blind spot as
+`@http.*`/`@json.*`/`@os.*`** (see below): `@var[x; @store.get[...]]`
+never triggered the runtime helper-function injection, because inline
+namespace calls resolve straight to a code string at parse time and
+never become a walkable `LibCallNode`. Fixed the same way — a
+`_needs_store` flag set directly in `_parse_namespace_inline()`.
+
+**Transpile cache could serve stale bytecode after a rebuild without a
+version bump.** The cache key hashed the `cruhon.__version__` string but
+nothing about the engine's actual code — during active development
+(or if a maintainer ships a fix without bumping `__version__`), a
+rebuilt/reinstalled wheel with genuinely different handler code would
+produce an *identical* cache key for an unchanged script, silently
+reusing pre-fix compiled bytecode. Fixed by adding a cheap engine
+fingerprint (path + size + mtime_ns of every `.py` file under
+`cruhon/core/`, no full-content hashing) as a 6th cache key input —
+any core code change now invalidates old caches regardless of the
+version string.
+
+Tests: `test_docs_match_registry.py` (2011 cases), `test_store_color_extra.py`
+(4), `test_shortcuts_store_bug.py` (6). Full suite: 6140 passing, 10 skipped,
+0 regressions. Handler count: 1873 → 1875 (store.clear, color.dim).
+
+### @math.* — 34 methods implemented for real
+
+README/library.md always *documented* `clamp`, `lerp`, `sign`, `hypot`,
+`dist`, `gcd`, `lcm`, `factorial`, `comb`, `perm`, `prod`, `degrees`,
+`radians`, `log2`, `log10`, `exp`, `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/
+`atan2`, `isclose`/`isfinite`/`isinf`/`isnan`, `e`/`tau`/`inf`/`nan`, and
+`min`/`max`/`sum` under `@math.*` — but none of them were ever actually
+registered. Calling any of them (e.g. `@math.clamp[57; 0; 50]`) silently
+fell through to a generic `namespace.method(args)` fallback that assumed
+a bare `math` global was already imported, raising `NameError: name
+'math' is not defined`. All 34 are now real, tested handlers.
+
+### Auto-import fix — a critical execution bug
+
+Found and fixed by building the actual pip package and running a full
+demo end to end (not just unit tests): `@http.*`/`@requests.*` used
+inline — `@var[r; @http.get[url]]`, the overwhelmingly common pattern —
+raised `NameError: name 'requests' is not defined` on every real
+execution. The transpiler's auto-import detection never covered inline
+namespace calls (they resolve straight to a code string at parse time,
+never becoming a walkable AST node), only the core `@fetch[...]` command
+and bare top-level statements. This made the README's very first
+non-trivial example broken for anyone actually running it — no existing
+test caught it, since every prior HTTP test either only checked the
+generated code string or manually pre-injected a fetched response object,
+bypassing the real `requests.get(...)` call path. Also fixed the same
+bare-import gap in `@json.load`/`@json.dump` and `@os.env`/`@os.path`
+(a second, forgotten registration in `registry.py` predating the
+current `json_.py`/proper handlers).
+
+### Transpiler — natural display text false positives
+
+Three more `@print[...]` edge cases found while writing prose that
+mentions parentheses/colons/filenames, all in `_is_python_expression`'s
+heuristics for "does this look like Python vs. plain text":
+- `"sqrt(144): {result}"` — a `(` followed later by an unrelated `{...}`
+  interpolation was mistaken for `func({...})` dict-argument syntax
+  purely by position; now requires the `{` to fall inside the call's
+  *matching* `)`.
+- `"notes (joined with users) ---"` — any `(`/`)` pair anywhere in the
+  text triggered "this is a function call"; now requires the `(` to be
+  immediately preceded by an identifier (real call syntax never has a
+  space there).
+- `"Log file:     app.log"` — mentioning a filename with an extension
+  triggered "this is `obj.attr` access"; dot-detection is now excluded
+  from display-context text entirely (live attribute display still
+  works via `{obj.attr}` interpolation, an unaffected code path).
 
 ### Parser fix — dotted plugin command names
 
@@ -35,11 +367,11 @@ namespace. Verified with a new dedicated regression suite
 (`test_dotted_block_commands.py`) plus the corrected README example
 running end to end through the real mod loader.
 
+---
 
-
-This release rounds out real-world deployment: read configuration safely,
-connect databases from the environment, and watch everything live in a
-browser.
+This release also rounds out real-world deployment: read configuration
+safely, connect databases from the environment, and watch everything
+live in a browser.
 
 ### New namespace — `@env.*` (environment variables & secrets)
 
@@ -133,7 +465,7 @@ never reach PyPI.
 
 ### Counts
 
-- **128 stdlib namespaces** · **1839 handlers**
+- **128 stdlib namespaces** · **1873 handlers**
 - cruhon-db: **172+ commands** (was 166) — now includes the live-panel bridge
 - New plugin: cruhon-panel
 - **4038 tests** passing (was 3999)

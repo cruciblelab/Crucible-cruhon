@@ -12,6 +12,7 @@ Supported:
   @store.get[key; default]
   @store.delete[key]
   @store.all
+  @store.clear[]
 """
 
 
@@ -37,9 +38,14 @@ def _handler_all(_args):
     return "__cruhon_store_load()"
 
 
+def _handler_clear(_args):
+    return "__cruhon_store_clear()"
+
+
 STORE_HANDLERS = {
     "set":    _handler_set,
     "get":    _handler_get,
     "delete": _handler_delete,
     "all":    _handler_all,
+    "clear":  _handler_clear,
 }

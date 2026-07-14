@@ -26,8 +26,11 @@ Discord bot plugin for Cruhon.
 
   @discord.command[ping; ctx]                       — prefix command (!ping)
   @discord.command[greet; ctx; user]                — command with parameters
-  @discord.command[ban; ctx; member; perms="ban_members"; check=is_admin]
-  @discord.hybrid[userinfo; ctx; member]            — BOTH prefix and slash
+  @discord.command[ban; ctx; member:member; perms="ban_members"; check=is_admin]
+      — "name:type" annotates a param (member/user/int/channel/role/...)
+      so discord.py converts the raw text into a real object/number —
+      untyped params (like "user" above) arrive as plain strings.
+  @discord.hybrid[userinfo; ctx; member:member]     — BOTH prefix and slash
   @discord.slash[hello; "Says hello"; ctx]  — slash command (/hello)
   @discord.slash[roll; "Roll dice"; ctx; sides]
   @discord.task[cleanup; minutes=30]            — background task
@@ -239,6 +242,7 @@ Discord bot plugin for Cruhon.
 
 from __future__ import annotations
 
+import ast
 import re
 
 
@@ -270,11 +274,55 @@ def _slug(s: str) -> str:
     return s or "button"
 
 
+def _looks_like_expr(a: str) -> bool:
+    """
+    True for a bare (unquoted) arg that is a real Python expression — a
+    variable name, an attribute/subscript/call chain, even arbitrarily
+    nested calls like str(ctx.guild.created_at.date()) or
+    any(w in content for w in banned_words). Requires an identifier-like
+    start (excludes bare numbers/dates such as "2024-01-01", which stay
+    literal text) and must parse as a valid Python expression — plain
+    multi-word text ("My Webhook") isn't valid Python and correctly
+    fails, which is exactly the "non-coder bare text" case _as_str
+    exists to support.
+    """
+    if not a or not (a[0].isalpha() or a[0] == "_"):
+        return False
+    try:
+        ast.parse(a, mode="eval")
+    except SyntaxError:
+        return False
+    return True
+
+
 def _as_str(a: str) -> str:
-    """Display text argument → string literal. Quoted/f-string: pass through.
-    Bare text (may contain spaces) → converted to string with repr."""
+    """
+    Display text argument → string literal / f-string / expression.
+
+      "already quoted"        → passed through as-is
+      f"already an f-string"  → passed through as-is
+      "quoted with {braces}"  → upgraded to an f-string (interpolated)
+      bare_variable_name      → passed through as a Python expression
+                                 (variable reference), NOT stringified —
+                                 this is what lets @discord.reply[ctx; msg]
+                                 or @discord.create_webhook[ch; name] work
+                                 with a caller's own variable/parameter.
+      member.name / ctx.guild.name / fn()
+                               → same: real expressions pass through.
+      Bare text (multiple words, not valid Python) → repr()'d as a
+      literal string — the original non-coder-friendly behavior.
+    """
     a = (a or "").strip()
-    if a[:1] in ('"', "'") or a[:2] in ('f"', "f'"):
+    if not a:
+        return '""'
+    if a[:2] in ('f"', "f'"):
+        return a
+    if a[:1] in ('"', "'") and len(a) >= 2:
+        inner = a[1:-1]
+        if "{" in inner and "}" in inner:
+            return f"f{a}"
+        return a
+    if _looks_like_expr(a):
         return a
     return repr(a)
 
@@ -507,19 +555,51 @@ def _check_decorators(kwargs, indent, mode="command"):
     return out
 
 
+def _typed_param(raw: str) -> str:
+    """
+    Prefix-command parameter → Python parameter, optionally annotated.
+
+      "member"       → "member"                  (untyped — arrives as the
+                                                    raw text the user typed)
+      "member:member"→ "member: discord.Member"   (discord.py resolves a
+                                                    mention/ID/name to a real
+                                                    Member — required for
+                                                    calls like member.ban())
+      "count:int"    → "count: int"               (discord.py converts and
+                                                    raises a friendly
+                                                    BadArgument on bad input
+                                                    instead of the command
+                                                    crashing deeper in)
+
+    Reuses the same type names as slash-command @param[...] (string, int,
+    member, channel, role, ...) via _OPTION_TYPES.
+    """
+    if ":" not in raw:
+        return raw
+    pname, _, ptype = raw.partition(":")
+    pname = pname.strip()
+    ptype = ptype.strip()
+    anno = _OPTION_TYPES.get(ptype.lower(), ptype)
+    return f"{pname}: {anno}"
+
+
 def _visit_dc_command(transpiler, node):
     """
     @discord.command[ping; ctx]
     @discord.command[greet; ctx; user; aliases="hi,hey"]
-    @discord.command[ban; ctx; member; perms="ban_members"; cooldown=5]
+    @discord.command[ban; ctx; member:member; perms="ban_members"; cooldown=5]
     → @__bot__.command(name=...) + check decorators + async def <name>(ctx, ...):
+
+    Extra params may be typed with "name:type" (member, int, channel, role,
+    ...) so discord.py converts the raw text into a real object/number
+    before the command body runs — untyped params stay plain strings.
     """
     args = node.args
     kwargs = node.kwargs
 
     name = args[0].strip() if args else "my_command"
     ctx = args[1].strip() if len(args) > 1 else "ctx"
-    extra_params = [a.strip() for a in args[2:]]
+    extra_params = [_typed_param(a.strip()) for a in args[2:]]
     params_str = ", ".join([ctx] + extra_params)
 
     # Build decorator kwargs from node.kwargs
@@ -548,16 +628,17 @@ def _visit_dc_command(transpiler, node):
 
 def _visit_dc_hybrid(transpiler, node):
     """
-    @discord.hybrid[userinfo; ctx; member]
-    @discord.hybrid[ban; ctx; member; description="Ban a user"; perms="ban_members"]
+    @discord.hybrid[userinfo; ctx; member:member]
+    @discord.hybrid[ban; ctx; member:member; description="Ban a user"; perms="ban_members"]
     → @__bot__.hybrid_command(...) — works as BOTH a prefix and a slash command.
+    Extra params support the same "name:type" typing as @discord.command.
     """
     args = node.args
     kwargs = node.kwargs
 
     name = args[0].strip() if args else "my_command"
     ctx = args[1].strip() if len(args) > 1 else "ctx"
-    extra_params = [a.strip() for a in args[2:]]
+    extra_params = [_typed_param(a.strip()) for a in args[2:]]
     params_str = ", ".join([ctx] + extra_params)
 
     dec_kw_parts = []
@@ -701,8 +782,12 @@ def _render_slash(transpiler, node, target="__bot__.tree"):
         parts = ", ".join(f"{n}={d}" for n, d in describes.items())
         deco.append(f"{indent}@discord.app_commands.describe({parts})")
     for cname, clist in choices.items():
+        # Choice labels (from `Label=value` pairs in @choice[...]) are always
+        # literal display text, never a variable reference — unlike _as_str's
+        # general rule, a bare identifier-shaped label here still means the
+        # literal word, so it's repr()'d directly rather than passed through.
         items = ", ".join(
-            f"discord.app_commands.Choice(name={_as_str(l)}, value={_val(v)})"
+            f"discord.app_commands.Choice(name={l!r}, value={_val(v)})"
             for l, v in clist
         )
         deco.append(f"{indent}@discord.app_commands.choices({cname}=[{items}])")
@@ -1379,8 +1464,46 @@ def _embed_code(args: list) -> str:
     if not kwargs:
         return "__embed__()"
 
-    parts = [f"{k}={v}" for k, v in kwargs.items()]
+    # "color"/"colour" stay raw expressions (ints, hex literals, @discord.color[...]
+    # results) — everything else is display text and gets f-string upgrading /
+    # variable-reference detection via _as_str().
+    _RAW_FIELDS = ("color", "colour")
+    parts = [
+        f"{k}={v if k in _RAW_FIELDS else _as_str(v)}"
+        for k, v in kwargs.items()
+    ]
     return f"__embed__({', '.join(parts)})"
+
+
+def _cruhon_color_helper(v):
+    """
+    Runtime helper — injected as __discord_color__ via api.inject().
+
+    Handles @discord.color[some_variable] where the variable's actual
+    runtime value could be a hex string ("#3498db"), an int, a named
+    color string ("red"), or already a discord.Color — the transpiler
+    can't know which at compile time, so this defers the decision to
+    runtime, the same way @discord.color["#3498db"]/@discord.color[red]
+    (both known at compile time) are already handled directly in the
+    color() handler below.
+    """
+    import discord as _discord
+
+    if isinstance(v, _discord.Color):
+        return v
+    if isinstance(v, int):
+        return _discord.Color(v)
+    if isinstance(v, str):
+        s = v.strip().strip("\"'")
+        if s.startswith("#"):
+            return _discord.Color(int(s[1:], 16))
+        if s.lower().startswith("0x"):
+            return _discord.Color(int(s, 16))
+        method = getattr(_discord.Color, s, None)
+        if callable(method):
+            return method()
+        return _discord.Color(int(s))
+    return _discord.Color.default()
 
 
 def _cruhon_embed_helper(**kwargs):
@@ -1547,12 +1670,17 @@ def _build_handlers() -> dict:
 
     def setup(args):
         token = args[0] if args else '""'
-        prefix = "!"
+        prefix = '"!"'
         intents_name = "default"
         for a in args[1:]:
             a = a.strip()
             if a.startswith("prefix="):
-                prefix = a[7:].strip().strip("\"'")
+                # _as_str: quoted literal ("?") stays a literal, {braces}
+                # upgrade to an f-string, and a bare variable name (the
+                # overwhelmingly likely case when prefix comes from
+                # @env.get[...]) passes through as a real reference
+                # instead of being coerced into the literal text "prefix".
+                prefix = _as_str(a[7:].strip())
             elif a.startswith("intents="):
                 intents_name = a[8:].strip().strip("\"'")
         if intents_name == "all":
@@ -1567,7 +1695,7 @@ def _build_handlers() -> dict:
             f"from discord.ext import commands\n"
             f"from discord.ext import tasks as __discord_tasks__\n"
             f"__discord_token__ = {token}\n"
-            f"__bot__ = commands.Bot(command_prefix={prefix!r}, intents={intents})"
+            f"__bot__ = commands.Bot(command_prefix={prefix}, intents={intents})"
         )
     h["setup"] = setup
 
@@ -1611,11 +1739,12 @@ def _build_handlers() -> dict:
             return f"await {channel}.send()"
         # Collect kwargs from remaining args
         extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
-        text = args[1]
+        raw_text = args[1]
         # If text is a kwarg (e.g. embed=x), shift
-        if "=" in text.strip() and text.strip().split("=")[0].isidentifier():
-            kw_str = ", ".join([text.strip()] + extra_kw)
+        if "=" in raw_text.strip() and raw_text.strip().split("=")[0].isidentifier():
+            kw_str = ", ".join([raw_text.strip()] + extra_kw)
             return f"await {channel}.send({kw_str})"
+        text = _as_str(raw_text)
         if extra_kw:
             kw_str = ", ".join(extra_kw)
             return f"await {channel}.send({text}, {kw_str})"
@@ -1630,7 +1759,7 @@ def _build_handlers() -> dict:
 
     def reply(args):
         target = args[0] if args else "ctx"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
         if extra_kw:
             return f"await {target}.reply({text}, {', '.join(extra_kw)})"
@@ -1639,13 +1768,13 @@ def _build_handlers() -> dict:
 
     def dm(args):
         user = args[0] if args else "user"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         return f"await {user}.send({text})"
     h["dm"] = dm
 
     def respond(args):
         interaction = args[0] if args else "interaction"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
         if extra_kw:
             return f"await {interaction}.response.send_message({text}, {', '.join(extra_kw)})"
@@ -1671,7 +1800,7 @@ def _build_handlers() -> dict:
 
     def followup(args):
         interaction = args[0] if args else "interaction"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
         if extra_kw:
             return f"await {interaction}.followup.send({text}, {', '.join(extra_kw)})"
@@ -1680,7 +1809,7 @@ def _build_handlers() -> dict:
 
     def edit(args):
         message = args[0] if args else "message"
-        content = args[1] if len(args) > 1 else '""'
+        content = _as_str(args[1]) if len(args) > 1 else '""'
         return f"await {message}.edit(content={content})"
     h["edit"] = edit
 
@@ -1762,8 +1891,8 @@ def _build_handlers() -> dict:
     h["quick_embed"] = quick_embed
 
     def embed(args):
-        title = args[0] if args else '""'
-        description = args[1] if len(args) > 1 else '""'
+        title = _as_str(args[0]) if args else '""'
+        description = _as_str(args[1]) if len(args) > 1 else '""'
         color_val = None
         for a in args[2:]:
             a = a.strip()
@@ -1776,8 +1905,8 @@ def _build_handlers() -> dict:
 
     def add_field(args):
         emb = args[0] if args else "embed"
-        name = args[1] if len(args) > 1 else '""'
-        value = args[2] if len(args) > 2 else '""'
+        name = _as_str(args[1]) if len(args) > 1 else '""'
+        value = _as_str(args[2]) if len(args) > 2 else '""'
         inline = True
         for a in args[3:]:
             if a.strip() == "inline=False":
@@ -1787,31 +1916,31 @@ def _build_handlers() -> dict:
 
     def set_footer(args):
         emb = args[0] if args else "embed"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         for a in args[2:]:
             if a.strip().startswith("icon="):
-                return f"{emb}.set_footer(text={text}, icon_url={a.strip()[5:]})"
+                return f"{emb}.set_footer(text={text}, icon_url={_as_str(a.strip()[5:])})"
         return f"{emb}.set_footer(text={text})"
     h["set_footer"] = set_footer
 
     def set_image(args):
         emb = args[0] if args else "embed"
-        url = args[1] if len(args) > 1 else '""'
+        url = _as_str(args[1]) if len(args) > 1 else '""'
         return f"{emb}.set_image(url={url})"
     h["set_image"] = set_image
 
     def set_thumbnail(args):
         emb = args[0] if args else "embed"
-        url = args[1] if len(args) > 1 else '""'
+        url = _as_str(args[1]) if len(args) > 1 else '""'
         return f"{emb}.set_thumbnail(url={url})"
     h["set_thumbnail"] = set_thumbnail
 
     def set_author(args):
         emb = args[0] if args else "embed"
-        name = args[1] if len(args) > 1 else '""'
+        name = _as_str(args[1]) if len(args) > 1 else '""'
         for a in args[2:]:
             if a.strip().startswith("icon="):
-                return f"{emb}.set_author(name={name}, icon_url={a.strip()[5:]})"
+                return f"{emb}.set_author(name={name}, icon_url={_as_str(a.strip()[5:])})"
         return f"{emb}.set_author(name={name})"
     h["set_author"] = set_author
 
@@ -1823,7 +1952,7 @@ def _build_handlers() -> dict:
         for a in args[1:]:
             a = a.strip()
             if a.startswith("reason="):
-                kw_parts.append(f"reason={a[7:]}")
+                kw_parts.append(f"reason={_as_str(a[7:])}")
             elif a.startswith("delete_days="):
                 kw_parts.append(f"delete_message_days={a[12:]}")
         kw = (", " + ", ".join(kw_parts)) if kw_parts else ""
@@ -1835,7 +1964,7 @@ def _build_handlers() -> dict:
         user = args[1] if len(args) > 1 else "user"
         for a in args[2:]:
             if a.strip().startswith("reason="):
-                return f"await {guild}.unban({user}, reason={a.strip()[7:]})"
+                return f"await {guild}.unban({user}, reason={_as_str(a.strip()[7:])})"
         return f"await {guild}.unban({user})"
     h["unban"] = unban
 
@@ -1843,7 +1972,7 @@ def _build_handlers() -> dict:
         member = args[0] if args else "member"
         for a in args[1:]:
             if a.strip().startswith("reason="):
-                return f"await {member}.kick(reason={a.strip()[7:]})"
+                return f"await {member}.kick(reason={_as_str(a.strip()[7:])})"
         return f"await {member}.kick()"
     h["kick"] = kick
 
@@ -1881,7 +2010,7 @@ def _build_handlers() -> dict:
 
     def nickname(args):
         member = args[0] if args else "member"
-        nick = args[1] if len(args) > 1 else '""'
+        nick = _as_str(args[1]) if len(args) > 1 else '""'
         return f"await {member}.edit(nick={nick})"
     h["nickname"] = nickname
 
@@ -1895,7 +2024,7 @@ def _build_handlers() -> dict:
 
     def create_text(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '"new-channel"'
+        name = _as_str(args[1]) if len(args) > 1 else '"new-channel"'
         for a in args[2:]:
             if a.strip().startswith("category="):
                 return f"await {guild}.create_text_channel({name}, category={a.strip()[9:]})"
@@ -1904,7 +2033,7 @@ def _build_handlers() -> dict:
 
     def create_voice(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '"new-voice"'
+        name = _as_str(args[1]) if len(args) > 1 else '"new-voice"'
         return f"await {guild}.create_voice_channel({name})"
     h["create_voice"] = create_voice
 
@@ -1928,13 +2057,13 @@ def _build_handlers() -> dict:
 
     def get_role(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '""'
+        name = _as_str(args[1]) if len(args) > 1 else '""'
         return f"discord.utils.get({guild}.roles, name={name})"
     h["get_role"] = get_role
 
     def find_member(args):
         guild = args[0] if args else "guild"
-        name = args[1] if len(args) > 1 else '""'
+        name = _as_str(args[1]) if len(args) > 1 else '""'
         return f"discord.utils.find(lambda __m__: __m__.name == {name}, {guild}.members)"
     h["find_member"] = find_member
 
@@ -1960,8 +2089,8 @@ def _build_handlers() -> dict:
 
     def require_role(args):
         ctx = args[0] if args else "ctx"
-        role = args[1] if len(args) > 1 else '"member"'
-        err = args[2] if len(args) > 2 else '"You do not have permission to use this command."'
+        role = _as_str(args[1]) if len(args) > 1 else '"member"'
+        err = _as_str(args[2]) if len(args) > 2 else '"You do not have permission to use this command."'
         return (
             f"if not discord.utils.get({ctx}.author.roles, name={role}): "
             f"await {ctx}.send({err}); return"
@@ -1979,7 +2108,7 @@ def _build_handlers() -> dict:
     # ── STATUS & MISC ──────────────────────────────────────────
 
     def status(args):
-        text = args[0] if args else '""'
+        text = _as_str(args[0]) if args else '""'
         activity_type = "game"
         for a in args[1:]:
             if a.strip().startswith("type="):
@@ -1995,7 +2124,7 @@ def _build_handlers() -> dict:
                 f"activity=discord.Activity(type=discord.ActivityType.listening, name={text}))"
             )
         if activity_type == "streaming":
-            url = args[2] if len(args) > 2 else '""'
+            url = _as_str(args[2]) if len(args) > 2 else '""'
             return (
                 f"await __bot__.change_presence("
                 f"activity=discord.Streaming(name={text}, url={url}))"
@@ -2004,7 +2133,7 @@ def _build_handlers() -> dict:
     h["status"] = status
 
     def log(args):
-        text = args[0] if args else '""'
+        text = _as_str(args[0]) if args else '""'
         return f'print("[bot]", {text})'
     h["log"] = log
 
@@ -2113,7 +2242,7 @@ def _build_handlers() -> dict:
 
     def send_webhook(args):
         wh = args[0] if args else "webhook"
-        content = args[1] if len(args) > 1 else '""'
+        content = _as_str(args[1]) if len(args) > 1 else '""'
         return _call(wh, "send", [content], args, 2)
     h["send_webhook"] = send_webhook
 
@@ -2478,7 +2607,7 @@ def _build_handlers() -> dict:
 
     def confirm(args):
         dest = args[0] if args else "ctx"
-        text = args[1] if len(args) > 1 else '"Are you sure?"'
+        text = _as_str(args[1]) if len(args) > 1 else '"Are you sure?"'
         return f"await __confirm__({dest}, {text})"
     h["confirm"] = confirm
 
@@ -2494,13 +2623,13 @@ def _build_handlers() -> dict:
     # ── MESSAGING EXTRAS ──────────────────────────────────────
     def send_tts(args):
         channel = args[0] if args else "channel"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         return f"await {channel}.send({text}, tts=True)"
     h["send_tts"] = send_tts
 
     def respond_ephemeral(args):
         interaction = args[0] if args else "interaction"
-        text = args[1] if len(args) > 1 else '""'
+        text = _as_str(args[1]) if len(args) > 1 else '""'
         extra_kw = [a.strip() for a in args[2:] if "=" in a.strip()]
         if extra_kw:
             return f"await {interaction}.response.send_message({text}, ephemeral=True, {', '.join(extra_kw)})"
@@ -2519,16 +2648,38 @@ def _build_handlers() -> dict:
     h["fetch_webhook"] = fetch_webhook
 
     # ── COLOR ─────────────────────────────────────────────────
+    # discord.Color's real classmethod names — used to tell a genuine
+    # named-color shortcut (@discord.color[red] → discord.Color.red())
+    # apart from a bare VARIABLE reference that merely happens to also
+    # be a valid identifier (@discord.color[hex_color], @discord.color[c]).
+    # Only bare text matching one of these is treated as a named color;
+    # anything else bare is a variable, routed through the __discord_color__
+    # runtime helper, which resolves a hex string/int/named string/
+    # already-a-Color value at runtime (unknowable at transpile time).
+    _COLOR_NAMES = {
+        "default", "random", "teal", "dark_teal", "green", "dark_green",
+        "blue", "dark_blue", "purple", "dark_purple", "magenta",
+        "dark_magenta", "gold", "dark_gold", "orange", "dark_orange",
+        "red", "dark_red", "lighter_grey", "lighter_gray", "dark_grey",
+        "dark_gray", "light_grey", "light_gray", "darker_grey",
+        "darker_gray", "blurple", "greyple", "dark_theme", "fuchsia",
+        "yellow", "dark_embed", "light_embed", "brand_green", "black",
+        "white",
+    }
+
     def color(args):
         # @discord.color["#3498db"]  →  discord.Color(3461339)
         # @discord.color[52; 152; 219]  →  discord.Color.from_rgb(52, 152, 219)
         # @discord.color[0x3498db]  →  discord.Color(0x3498db)
         # @discord.color[red]       →  discord.Color.red()   (named color)
+        # @discord.color[my_var]    →  __discord_color__(my_var) (variable —
+        #                               resolved to hex/int/name at runtime)
         if not args:
             return "discord.Color.default()"
         if len(args) >= 3:
             return f"discord.Color.from_rgb({args[0].strip()}, {args[1].strip()}, {args[2].strip()})"
         val = args[0].strip()
+        is_quoted = val[:1] in ('"', "'")
         stripped = val.strip('"\'')
         if stripped.startswith('#'):
             try:
@@ -2536,9 +2687,12 @@ def _build_handlers() -> dict:
                 return f"discord.Color({num})"
             except ValueError:
                 pass
-        # Named color (e.g. red, blue, green)  → discord.Color.red()
-        if stripped.isidentifier() and not stripped[:1].isdigit():
+        if stripped in _COLOR_NAMES:
             return f"discord.Color.{stripped}()"
+        if not is_quoted and _looks_like_expr(val):
+            # A bare identifier/attribute chain that ISN'T a known color
+            # name — a variable, not a literal. Defer to runtime.
+            return f"__discord_color__({val})"
         return f"discord.Color({val})"
     h["color"] = color
 
@@ -2763,6 +2917,7 @@ def register(api):
     # Inject __embed__ runtime helper so generated code can call it
     # Lazy-imports discord so transpiling works without discord.py installed
     api.inject("__embed__", _cruhon_embed_helper)
+    api.inject("__discord_color__", _cruhon_color_helper)
 
     # Power runtime helpers — pagination, confirm dialog, progress bar
     api.inject("__paginate__", _cruhon_paginate)

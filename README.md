@@ -1,7 +1,7 @@
 # Cruhon
 
 **A modern, extensible scripting language built on Python.**  
-By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.10.0**
+By [CrucibleLab](https://github.com/cruciblelab) · `.clpy` files · MIT License · **v2.10.1**
 
 ---
 
@@ -17,7 +17,7 @@ the generated Python with `cruhon run --show-python`.
 The plugin system lets you extend everything: new commands, new block types,
 new value syntax, new runtime objects — all without touching the core.
 
-**128 stdlib namespaces · 1839+ built-in commands · 4039 tests**
+**128 stdlib namespaces · 1880+ built-in commands · 6169 tests**
 
 ---
 
@@ -159,6 +159,19 @@ Use `{varname}` inside any value to embed a variable:
 @var[msg; "Hi, {name}!"]       # f"Hi, {name}!"
 @var[info; age={user.age}]     # f"age={user.age}"
 ```
+
+> **Limitation:** `@command[...]` cannot be embedded *inside* another
+> nested Python expression — not inside `{}` interpolation
+> (`@print[{@db.dsn_safe[]}]` ✗), and not inside a list comprehension or
+> other bracketed sub-expression (`[f.name for f in @dataclasses.fields[p]]` ✗).
+> Bind the inline call to a variable first, then use the variable —
+> this always works and is the idiomatic pattern throughout this doc:
+> ```clpy
+> @var[safe; @db.dsn_safe[]]
+> @print[Connected to {safe}]
+> @var[fields; @dataclasses.fields[p]]
+> @var[names; [f.name for f in fields]]
+> ```
 
 ### Control Flow
 
@@ -566,9 +579,11 @@ See [`library.md`](library.md) for the complete method reference.
 
 ### File & Path
 
+Path manipulation is covered by `@file.*` (above) — there is no separate
+`@pathlib.*` namespace.
+
 | Namespace | Wraps | Highlights |
 |---|---|---|
-| `@pathlib.*` | `pathlib` | path, join, name, stem, suffix, exists, is_file, mkdir… |
 | `@glob.*` | `glob` | glob, iglob, recursive, escape, fnmatch… |
 | `@tempfile.*` | `tempfile` | file, dir, named, spooled, mkstemp, mkdtemp… |
 | `@fnmatch.*` | `fnmatch` | match, filter, translate, fnmatchcase… |
@@ -607,8 +622,7 @@ See [`library.md`](library.md) for the complete method reference.
 
 | Namespace | Wraps | Highlights |
 |---|---|---|
-| `@http.*` | `requests` / `httpx` | GET/POST/PUT/DELETE, upload, auth, sessions, async… |
-| `@httpx.*` | `httpx` | client, async_client, timeout, follow_redirects… |
+| `@http.*` | `requests` / `httpx` | GET/POST/PUT/DELETE, upload, auth, sessions, async_get/post/put/patch/delete (httpx-backed)… |
 | `@socket.*` | `socket` | connect, send, recv, server, bind, accept, udp, tcp… |
 | `@ssl.*` | `ssl` | wrap, context, load_cert, verify_mode, check_hostname… |
 | `@ftp.*` | `ftplib` | connect, login, list, download, upload, rename, mkdir… |
